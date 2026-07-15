@@ -27,6 +27,7 @@ const state = {
   mode: "dislike", // 'dislike' or 'like'
   iconCache: {},
   showAllChannels: false,
+  renderLimit: 50,
 };
 
 // --- DOM Elements ---
@@ -263,13 +264,18 @@ function setupEventListeners() {
   // Infinite Scroll Observer
   const observer = new IntersectionObserver(
     (entries) => {
-      if (
-        entries[0].isIntersecting &&
-        state.nextPageToken &&
-        !state.loading &&
-        !state.debouncedSearchTerm
-      ) {
-        handleLoadMore();
+      if (entries[0].isIntersecting) {
+        if (state.renderLimit < state.filteredVideos.length) {
+          // Render more from local memory
+          state.renderLimit += 50;
+          renderVideoList(true);
+        } else if (
+          state.nextPageToken &&
+          !state.loading &&
+          !state.debouncedSearchTerm
+        ) {
+          handleLoadMore();
+        }
       }
     },
     { threshold: 0.1 },
@@ -657,6 +663,7 @@ function filterVideos() {
   });
 
   state.filteredVideos = results;
+  state.renderLimit = 50; // Reset render limit on filter/sort
 }
 
 function setLoading(isLoading, isLoadMore = false) {
@@ -805,7 +812,10 @@ function render() {
     }
 
     // Infinite Scroll Sentinel
-    if (state.nextPageToken && !state.debouncedSearchTerm) {
+    if (
+      state.renderLimit < state.filteredVideos.length ||
+      (state.nextPageToken && !state.debouncedSearchTerm)
+    ) {
       dom.scrollSentinel.classList.remove("hidden");
       if (state.loading && isLoadMore) {
         dom.scrollSentinel.innerHTML = `
@@ -821,10 +831,16 @@ function render() {
   }
 }
 
-function renderVideoList() {
-  dom.videoGrid.innerHTML = "";
+function renderVideoList(append = false) {
+  if (!append) {
+    dom.videoGrid.innerHTML = "";
+  }
 
-  state.filteredVideos.forEach((video) => {
+  const start = append ? state.renderLimit - 50 : 0;
+  const end = Math.min(state.renderLimit, state.filteredVideos.length);
+  const itemsToRender = state.filteredVideos.slice(start, end);
+
+  itemsToRender.forEach((video) => {
     const clone = dom.videoTemplate.content.cloneNode(true);
 
     const title = video.snippet.title;
