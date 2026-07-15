@@ -51,6 +51,7 @@ const dom = {
   emptyState: document.getElementById("empty-state"),
   videoGrid: document.getElementById("video-grid"),
   copyIdsButton: document.getElementById("copy-ids-button"),
+  exportJsonButton: document.getElementById("export-json-button"),
   loadAllButton: document.getElementById("load-all-button"),
   insightsToggle: document.getElementById("insights-toggle"),
   analyticsContainer: document.getElementById("analytics-container"),
@@ -252,6 +253,7 @@ function setupEventListeners() {
   });
 
   dom.copyIdsButton.addEventListener("click", handleCopyIds);
+  dom.exportJsonButton.addEventListener("click", handleExportJson);
   dom.loadAllButton.addEventListener("click", handleLoadAll);
   dom.insightsToggle.addEventListener("click", () => {
     state.showInsights = !state.showInsights;
@@ -546,6 +548,51 @@ async function handleCopyIds() {
     console.error("Failed to copy IDs:", err);
     showError("Failed to copy to clipboard.");
   }
+}
+
+async function handleExportJson() {
+  if (state.filteredVideos.length === 0) return;
+
+  const exportData = state.filteredVideos.map((v) => {
+    const viewCountRaw = v.statistics?.viewCount;
+    const viewsFormatted = viewCountRaw
+      ? new Intl.NumberFormat("en-US", {
+          notation: "compact",
+          compactDisplay: "short",
+        }).format(viewCountRaw) + " views"
+      : "N/A";
+
+    return {
+      title: v.snippet.title,
+      artist: v.snippet.channelTitle,
+      video_id: v.id,
+      channel_id: v.snippet.channelId,
+      views: viewsFormatted,
+    };
+  });
+
+  const dataStr =
+    "data:text/json;charset=utf-8," +
+    encodeURIComponent(JSON.stringify(exportData, null, 2));
+  const downloadAnchorNode = document.createElement("a");
+  downloadAnchorNode.setAttribute("href", dataStr);
+  const fileName = state.mode === "dislike" ? "dislikes.json" : "likes.json";
+  downloadAnchorNode.setAttribute("download", fileName);
+  document.body.appendChild(downloadAnchorNode);
+  downloadAnchorNode.click();
+  downloadAnchorNode.remove();
+
+  // Visual feedback
+  const originalBg = dom.exportJsonButton.innerHTML;
+  dom.exportJsonButton.innerHTML = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green-500"><polyline points="20 6 9 17 4 12"/></svg>
+  `;
+  dom.exportJsonButton.classList.add("border-green-500");
+
+  setTimeout(() => {
+    dom.exportJsonButton.innerHTML = originalBg;
+    dom.exportJsonButton.classList.remove("border-green-500");
+  }, 2000);
 }
 
 function filterVideos() {
