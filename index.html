@@ -30,6 +30,11 @@
 
     <!-- Tailwind CSS for utility but used minimally -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+      }
+    </script>
 
     <!-- Google Scripts -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -141,9 +146,9 @@
     </style>
   </head>
 
-  <body class="min-h-screen flex flex-col">
+  <body class="bg-white dark:bg-[#0a0a0a] text-black dark:text-gray-100 min-h-screen flex flex-col font-sans antialiased selection:bg-black selection:text-white dark:selection:bg-white dark:selection:text-black">
     <header
-      class="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100 py-4"
+      class="sticky top-0 z-50 bg-white/80 dark:bg-[#0a0a0a]/80 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 py-4"
     >
       <div class="max-w-6xl mx-auto px-6 flex justify-between items-center">
         <div class="flex items-center gap-3">
@@ -156,7 +161,7 @@
           </button>
         </div>
 
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 relative">
           <div
             id="auth-indicator"
             class="hidden flex items-center gap-4 text-sm mr-2"
@@ -164,7 +169,7 @@
             <span class="text-gray-500 hidden sm:inline">Authenticated</span>
             <button
               id="signout-button"
-              class="text-gray-900 underline hover:no-underline font-medium"
+              class="text-gray-900 dark:text-gray-100 underline hover:no-underline font-medium"
             >
               Sign out
             </button>
@@ -172,7 +177,7 @@
 
           <button
             id="settings-button"
-            class="p-2 text-gray-500 hover:text-black transition-colors rounded-full hover:bg-gray-50"
+            class="p-2 text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors rounded-full hover:bg-gray-50 dark:hover:bg-gray-800"
             title="Settings"
           >
             <svg
@@ -195,23 +200,46 @@
 
           <div
             id="settings-menu"
-            class="hidden absolute right-6 top-16 w-48 bg-white border border-gray-100 shadow-xl rounded-lg py-1 z-[60]"
+            class="hidden absolute right-0 top-12 w-56 bg-white dark:bg-[#121212] border border-gray-100 dark:border-gray-800 shadow-xl rounded-lg py-1 z-[60]"
           >
+            <div class="px-4 py-3">
+              <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Appearance</label>
+              <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm text-gray-700 dark:text-gray-200">Theme</span>
+                  <select id="theme-select" class="text-xs bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded px-1.5 py-1 text-gray-700 dark:text-gray-200 focus:outline-none cursor-pointer">
+                    <option value="system">System</option>
+                    <option value="light">Light</option>
+                    <option value="dark">Dark</option>
+                  </select>
+                </div>
+                <label class="flex items-center justify-between cursor-pointer">
+                  <span class="text-sm text-gray-700 dark:text-gray-200">Compact grid</span>
+                  <div class="relative">
+                    <input type="checkbox" id="compact-toggle" class="sr-only peer">
+                    <div class="w-8 h-4 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-black dark:peer-checked:bg-blue-600"></div>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <hr class="my-1 border-gray-50 dark:border-gray-800" />
+
             <a
               href="privacy.html"
-              class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800"
               >Privacy policy</a
             >
             <a
               href="https://github.com/jimmyorr/dislikes"
               target="_blank"
-              class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800"
               >GitHub source</a
             >
-            <hr class="my-1 border-gray-50" />
+            <hr class="my-1 border-gray-50 dark:border-gray-800" />
             <button
               id="header-reset-button"
-              class="w-full text-left block px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+              class="w-full text-left block px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
             >
               Reset app
             </button>
@@ -220,7 +248,7 @@
           <button
             id="auth-button"
             disabled
-            class="text-sm font-medium px-3 py-1.5 border border-black rounded opacity-50 cursor-not-allowed"
+            class="text-sm font-medium px-3 py-1.5 border border-black dark:border-gray-500 rounded opacity-50 cursor-not-allowed"
           >
             <span id="auth-text">Loading...</span>
           </button>
@@ -232,7 +260,7 @@
       <!-- Error -->
       <div
         id="error-container"
-        class="hidden mb-8 p-4 border border-red-200 bg-red-50 text-red-600 text-sm flex flex-col sm:flex-row justify-between items-center gap-4"
+        class="hidden mb-8 p-4 border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm flex flex-col sm:flex-row justify-between items-center gap-4"
       >
         <p id="error-message"></p>
         <button
@@ -248,17 +276,17 @@
         <h2 id="welcome-title" class="text-3xl font-semibold mb-4">
           Your YouTube disliked videos.
         </h2>
-        <p id="welcome-desc" class="text-gray-600 mb-10 max-w-md mx-auto">
+        <p id="welcome-desc" class="text-gray-600 dark:text-gray-400 mb-10 max-w-md mx-auto">
           View, filter, and sort your dislikes. Simple, private, and minimal.
         </p>
         <button
           id="hero-auth-button"
           disabled
-          class="px-8 py-3 bg-black text-white rounded font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+          class="px-8 py-3 bg-black dark:bg-white text-white dark:text-black rounded font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
         >
           Initializing...
         </button>
-        <p class="text-[10px] text-gray-500 mt-4 tracking-wider uppercase">
+        <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-4 tracking-wider uppercase">
           Local only. Data never leaves your browser.
         </p>
         <div
@@ -281,10 +309,10 @@
         >
           <div class="space-y-1">
             <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <p id="results-count" class="text-sm text-gray-600">0 videos</p>
+              <p id="results-count" class="text-sm text-gray-600 dark:text-gray-400">0 videos</p>
               <button
                 id="load-all-button"
-                class="hidden whitespace-nowrap text-[10px] font-bold uppercase tracking-wider px-2 py-1 bg-gray-100 hover:bg-black hover:text-white rounded transition-colors"
+                class="hidden whitespace-nowrap text-xs font-bold uppercase tracking-wider px-3 py-1.5 border border-gray-200 dark:border-gray-800 rounded hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition-colors flex items-center gap-2"
               >
                 Load all
               </button>
@@ -296,13 +324,13 @@
               type="text"
               id="search-input"
               placeholder="Search..."
-              class="flex-grow md:flex-grow-0 px-3 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:border-black w-full md:w-48"
+              class="flex-grow md:flex-grow-0 text-xs border border-gray-200 dark:border-gray-800 rounded px-2 py-1 bg-white dark:bg-[#121212] focus:outline-none focus:border-black dark:focus:border-gray-500 transition-colors w-full md:w-48"
             />
 
             <div class="flex items-center gap-2 flex-grow md:flex-grow-0">
               <select
                 id="sort-select"
-                class="flex-grow px-3 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:border-black bg-white min-w-[130px]"
+                class="flex-grow px-3 py-1.5 border border-gray-200 dark:border-gray-800 rounded text-sm focus:outline-none focus:border-black bg-white dark:bg-[#121212] dark:text-gray-200 min-w-[130px]"
               >
                 <option value="date-new">Recent</option>
                 <option value="views-high">Views</option>
@@ -317,7 +345,7 @@
               <button
                 id="copy-ids-button"
                 title="Copy video IDs as list"
-                class="shrink-0 p-2 border border-gray-200 rounded text-gray-600 hover:text-black hover:border-black transition-colors"
+                class="shrink-0 p-2 border border-gray-200 dark:border-gray-800 rounded text-gray-600 dark:text-gray-400 hover:text-black hover:border-black dark:hover:text-white dark:hover:border-white transition-colors"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -340,7 +368,7 @@
               <button
                 id="export-json-button"
                 title="Export list as JSON"
-                class="shrink-0 p-2 border border-gray-200 rounded text-gray-600 hover:text-black hover:border-black transition-colors"
+                class="shrink-0 p-2 border border-gray-200 dark:border-gray-800 rounded text-gray-600 dark:text-gray-400 hover:text-black hover:border-black dark:hover:text-white dark:hover:border-white transition-colors"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -362,7 +390,7 @@
               <button
                 id="clear-cache-button"
                 title="Refresh from YouTube"
-                class="shrink-0 p-2 border border-gray-200 rounded text-gray-600 hover:text-black hover:border-black transition-colors"
+                class="shrink-0 p-2 border border-gray-200 dark:border-gray-800 rounded text-gray-600 dark:text-gray-400 hover:text-black hover:border-black dark:hover:text-white dark:hover:border-white transition-colors"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"></path>
@@ -373,7 +401,7 @@
 
             <button
               id="insights-toggle"
-              class="flex items-center gap-2 px-3 py-1.5 border border-gray-200 rounded text-sm font-medium hover:border-black transition-colors"
+              class="flex items-center gap-2 px-3 py-1.5 border border-gray-200 dark:border-gray-800 dark:text-gray-200 rounded text-sm font-medium hover:border-black dark:hover:border-white transition-colors"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -398,11 +426,11 @@
         <!-- Analytics Dashboard -->
         <div
           id="analytics-container"
-          class="hidden mb-12 p-6 bg-gray-50 rounded-lg border border-gray-100 flex flex-col md:flex-row gap-8"
+          class="hidden mb-12 p-6 bg-gray-50 dark:bg-[#121212] border border-gray-100 dark:border-gray-800 rounded flex flex-col md:flex-row gap-8"
         >
           <div class="flex-1 space-y-4">
             <h3
-              class="text-xs font-bold text-gray-500 uppercase tracking-widest"
+              class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest"
             >
               Top Channels
             </h3>
@@ -425,7 +453,7 @@
 
         <div
           id="empty-state"
-          class="hidden py-20 text-center border border-dashed border-gray-200 rounded"
+          class="hidden py-20 text-center border border-dashed border-gray-200 dark:border-gray-800 rounded"
         >
           <p class="text-gray-500">No results found.</p>
         </div>
@@ -446,7 +474,7 @@
       </div>
     </main>
 
-    <footer class="py-8 border-t border-gray-50 mt-12">
+    <footer class="py-8 border-t border-gray-50 dark:border-gray-900 mt-12">
       <div
         class="max-w-6xl mx-auto px-6 flex justify-between items-center text-xs text-gray-500"
       >
@@ -472,7 +500,7 @@
     <!-- Back to Top -->
     <button
       id="back-to-top"
-      class="fixed bottom-8 right-8 w-10 h-10 bg-black text-white rounded flex items-center justify-center opacity-0 transition-opacity pointer-events-none"
+      class="fixed bottom-8 right-8 w-10 h-10 bg-black dark:bg-white text-white dark:text-black rounded flex items-center justify-center opacity-0 transition-opacity pointer-events-none"
     >
       <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -493,15 +521,15 @@
         <a
           href=""
           target="_blank"
-          class="video-link block relative w-full aspect-video"
+          class="video-link block relative w-full aspect-video [.compact-mode_&]:aspect-square"
         >
           <img
-            class="video-thumbnail w-full h-full object-cover bg-gray-100 rounded-sm"
+            class="video-thumbnail w-full h-full object-cover bg-gray-100 dark:bg-gray-800 rounded-sm"
             src=""
             alt=""
           />
           <div
-            class="deleted-overlay hidden absolute inset-0 bg-white/90 flex items-center justify-center text-[10px] font-bold text-gray-500"
+            class="deleted-overlay hidden absolute inset-0 bg-white/90 dark:bg-black/90 flex items-center justify-center text-[10px] font-bold text-gray-500 dark:text-gray-400"
           >
             UNAVAILABLE
           </div>
@@ -514,7 +542,7 @@
               ></h3>
             </a>
             <span
-              class="music-badge hidden shrink-0 text-[10px] border border-gray-200 px-1 rounded text-gray-500 mt-0.5"
+              class="music-badge hidden shrink-0 text-[10px] border border-gray-200 dark:border-gray-700 px-1 rounded text-gray-500 dark:text-gray-400 mt-0.5"
               >MUSIC</span
             >
           </div>
@@ -528,7 +556,7 @@
 
     <template id="skeleton-template">
       <div class="flex flex-col gap-3">
-        <div class="skeleton w-full aspect-video rounded-sm"></div>
+        <div class="skeleton w-full aspect-video [.compact-mode_&]:aspect-square rounded-sm"></div>
         <div class="flex flex-col gap-2">
           <div class="skeleton h-4 w-5/6"></div>
           <div class="skeleton h-3 w-1/2"></div>
@@ -577,18 +605,6 @@
         },
       );
 
-      // Settings menu toggle
-      const settingsBtn = document.getElementById("settings-button");
-      const settingsMenu = document.getElementById("settings-menu");
-      if (settingsBtn && settingsMenu) {
-        settingsBtn.onclick = (e) => {
-          e.stopPropagation();
-          settingsMenu.classList.toggle("hidden");
-        };
-        document.addEventListener("click", () =>
-          settingsMenu.classList.add("hidden"),
-        );
-      }
     </script>
     <script src="version.js"></script>
     <script src="app.js"></script>

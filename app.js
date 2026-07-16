@@ -12,6 +12,8 @@ const state = {
   gisInited: false,
   tokenClient: null,
   isAuthenticated: false,
+  theme: localStorage.getItem("dislikes-theme") || "system",
+  compactMode: localStorage.getItem("dislikes-compact") === "true",
   videos: [],
   filteredVideos: [],
   loading: false,
@@ -72,6 +74,11 @@ const dom = {
   welcomeTitle: document.getElementById("welcome-title"),
   welcomeDesc: document.getElementById("welcome-desc"),
 
+  settingsButton: document.getElementById("settings-button"),
+  settingsMenu: document.getElementById("settings-menu"),
+  themeSelect: document.getElementById("theme-select"),
+  compactToggle: document.getElementById("compact-toggle"),
+
   favicon: document.getElementById("favicon"),
   appleIcon: document.getElementById("apple-icon"),
   siteLogo: document.getElementById("site-logo"),
@@ -88,6 +95,13 @@ function init() {
 
   initGapi();
   initGis();
+  
+  applyTheme(state.theme);
+  dom.themeSelect.value = state.theme;
+  
+  dom.compactToggle.checked = state.compactMode;
+  applyCompactMode(state.compactMode);
+
   setupEventListeners();
   render();
 
@@ -318,6 +332,40 @@ function setupEventListeners() {
     }
     window.scrollTo({ top: 0, behavior: "smooth" });
     render();
+  });
+
+  // Settings Menu Logic
+  dom.settingsButton.addEventListener("click", (e) => {
+    e.stopPropagation();
+    dom.settingsMenu.classList.toggle("hidden");
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!dom.settingsMenu.contains(e.target) && !dom.settingsButton.contains(e.target)) {
+      dom.settingsMenu.classList.add("hidden");
+    }
+  });
+
+  // Theme Logic
+  dom.themeSelect.addEventListener("change", (e) => {
+    const newTheme = e.target.value;
+    state.theme = newTheme;
+    localStorage.setItem("dislikes-theme", newTheme);
+    applyTheme(newTheme);
+  });
+
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    if (state.theme === "system") {
+      applyTheme("system");
+    }
+  });
+
+  // Compact Mode Logic
+  dom.compactToggle.addEventListener("change", (e) => {
+    const isCompact = e.target.checked;
+    state.compactMode = isCompact;
+    localStorage.setItem("dislikes-compact", isCompact);
+    applyCompactMode(isCompact);
   });
 }
 
@@ -739,7 +787,34 @@ function showError(msg) {
   setError(msg);
 }
 
-// --- Rendering ---
+function applyTheme(theme) {
+  let isDark = false;
+  if (theme === "dark") {
+    isDark = true;
+  } else if (theme === "system") {
+    isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  }
+  
+  if (isDark) {
+    document.documentElement.classList.add("dark");
+  } else {
+    document.documentElement.classList.remove("dark");
+  }
+}
+
+function applyCompactMode(isCompact) {
+  if (isCompact) {
+    document.body.classList.add("compact-mode");
+    dom.videoGrid.classList.remove("grid-cols-1", "sm:grid-cols-2", "lg:grid-cols-3", "gap-x-6", "gap-y-10");
+    dom.videoGrid.classList.add("grid-cols-2", "sm:grid-cols-3", "md:grid-cols-4", "xl:grid-cols-6", "gap-x-4", "gap-y-6");
+  } else {
+    document.body.classList.remove("compact-mode");
+    dom.videoGrid.classList.remove("grid-cols-2", "sm:grid-cols-3", "md:grid-cols-4", "xl:grid-cols-6", "gap-x-4", "gap-y-6");
+    dom.videoGrid.classList.add("grid-cols-1", "sm:grid-cols-2", "lg:grid-cols-3", "gap-x-6", "gap-y-10");
+  }
+}
+
+// --- Fetching Data ---
 
 function render() {
   const isReady = state.gapiInited && state.gisInited;
