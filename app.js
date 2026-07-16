@@ -1105,8 +1105,8 @@ function renderAnalytics() {
         : `<span class="truncate pr-2">${ch.name}</span>`;
 
       return `
-            <div class="flex items-center gap-3 text-sm">
-                <span class="w-8 flex justify-center font-bold text-black bg-white border border-gray-200 rounded text-[10px] py-0.5 shrink-0">${ch.count}</span>
+            <div class="flex items-center gap-3 text-sm text-gray-900 dark:text-gray-100">
+                <span class="w-8 flex justify-center font-bold text-black bg-white dark:bg-[#1a1a1a] dark:text-gray-200 border border-gray-200 dark:border-gray-700 rounded text-[10px] py-0.5 shrink-0">${ch.count}</span>
                 ${display}
             </div>
         `;
@@ -1118,7 +1118,7 @@ function renderAnalytics() {
     dom.topChannelsList.insertAdjacentHTML(
       "beforeend",
       `
-            <button id="channels-more-button" class="mt-2 text-[10px] font-bold uppercase tracking-wider text-gray-500 hover:text-black transition-colors">
+            <button id="channels-more-button" class="mt-2 text-[10px] font-bold uppercase tracking-wider text-gray-500 hover:text-black dark:text-gray-400 dark:hover:text-white transition-colors">
                 ${btnText}
             </button>
         `,
@@ -1146,12 +1146,12 @@ function renderAnalytics() {
     .map(
       (cat) => `
         <div class="space-y-1">
-            <div class="flex justify-between text-[10px] uppercase font-bold text-gray-600">
+            <div class="flex justify-between text-[10px] uppercase font-bold text-gray-600 dark:text-gray-400">
                 <span>${categoryNames[cat.id] || "Other"}</span>
-                <span class="text-black">${Math.round(cat.percent)}%</span>
+                <span class="text-black dark:text-gray-200">${Math.round(cat.percent)}%</span>
             </div>
-            <div class="w-full bg-gray-200 h-1 rounded-full overflow-hidden">
-                <div class="bg-black h-full" style="width: ${cat.percent}%"></div>
+            <div class="w-full bg-gray-200 dark:bg-gray-800 h-1 rounded-full overflow-hidden">
+                <div class="bg-black dark:bg-gray-200 h-full" style="width: ${cat.percent}%"></div>
             </div>
         </div>
     `,
