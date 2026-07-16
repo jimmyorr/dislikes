@@ -485,7 +485,8 @@ function slimVideo(v) {
     comments: v.statistics?.commentCount ? parseInt(v.statistics.commentCount, 10) : 0,
     duration: v.contentDetails?.duration || null,
     published_at: v.snippet?.publishedAt || null,
-    is_deleted: isDeleted
+    is_deleted: isDeleted,
+    is_music: v.snippet?.categoryId === "10"
   };
 }
 
@@ -700,18 +701,7 @@ function filterVideos() {
   let results = [...state.videos];
 
   if (state.musicOnly) {
-    results = results.filter((v) => {
-      const lowerArtist = v.artist.toLowerCase();
-      const lowerTitle = v.title.toLowerCase();
-      return (
-        lowerArtist.endsWith("- topic") ||
-        lowerArtist.includes("vevo") ||
-        lowerTitle.includes("official video") ||
-        lowerTitle.includes("official music video") ||
-        lowerTitle.includes("official audio") ||
-        lowerTitle.includes("lyric video")
-      );
-    });
+    results = results.filter((v) => v.is_music);
   }
 
   // Search
