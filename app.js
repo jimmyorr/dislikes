@@ -26,7 +26,7 @@ const state = {
   totalResults: null,
   showInsights: false,
   isFetchAll: false,
-  mode: "dislike", // 'dislike' or 'like'
+  mode: localStorage.getItem("dislikes-mode") || "dislike", // 'dislike' or 'like'
   iconCache: {},
   showAllChannels: false,
   renderLimit: 50,
@@ -319,6 +319,7 @@ function setupEventListeners() {
 
   dom.modeToggle.addEventListener("click", () => {
     state.mode = state.mode === "dislike" ? "like" : "dislike";
+    localStorage.setItem("dislikes-mode", state.mode);
 
     // Clear state for new mode
     state.videos = [];
