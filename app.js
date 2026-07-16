@@ -72,6 +72,7 @@ const dom = {
 
   favicon: document.getElementById("favicon"),
   appleIcon: document.getElementById("apple-icon"),
+  siteLogo: document.getElementById("site-logo"),
   footerResetButton: document.getElementById("footer-reset-button"),
   resetAppLink: document.getElementById("reset-app-link"),
   initializationTrouble: document.getElementById("initialization-trouble"),
@@ -1124,6 +1125,7 @@ function updateFavicon(mode) {
   if (state.iconCache[mode]) {
     dom.favicon.href = state.iconCache[mode];
     dom.appleIcon.href = state.iconCache[mode];
+    if (dom.siteLogo) dom.siteLogo.src = state.iconCache[mode];
     return;
   }
 
@@ -1146,6 +1148,7 @@ function updateFavicon(mode) {
     state.iconCache[mode] = dataUrl;
     dom.favicon.href = dataUrl;
     dom.appleIcon.href = dataUrl;
+    if (dom.siteLogo) dom.siteLogo.src = dataUrl;
   };
 }
 
