@@ -1039,7 +1039,7 @@ function renderAnalytics() {
     dom.topChannelsList.insertAdjacentHTML(
       "beforeend",
       `
-            <button id="channels-more-button" class="mt-2 text-[10px] font-bold uppercase tracking-wider text-gray-400 hover:text-black transition-colors">
+            <button id="channels-more-button" class="mt-2 text-[10px] font-bold uppercase tracking-wider text-gray-500 hover:text-black transition-colors">
                 ${btnText}
             </button>
         `,
@@ -1067,7 +1067,7 @@ function renderAnalytics() {
     .map(
       (cat) => `
         <div class="space-y-1">
-            <div class="flex justify-between text-[10px] uppercase font-bold text-gray-500">
+            <div class="flex justify-between text-[10px] uppercase font-bold text-gray-600">
                 <span>${categoryNames[cat.id] || "Other"}</span>
                 <span class="text-black">${Math.round(cat.percent)}%</span>
             </div>
