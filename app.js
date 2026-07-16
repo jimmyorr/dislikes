@@ -382,41 +382,8 @@ function debounce(func, wait) {
 }
 
 function checkIfDeleted(video) {
-  // Check for flags we might have set via onerror
   if (video._is404) return true;
-
-  // Check status part (requires 'status' in part parameter)
-  if (video.status) {
-    if (
-      video.status.uploadStatus === "deleted" ||
-      video.status.uploadStatus === "rejected"
-    )
-      return true;
-    if (video.status.privacyStatus === "private") return true;
-  }
-
-  // Check for specific common localized strings or missing snippets
-  if (!video.snippet) return true;
-
-  const title = video.snippet.title || "";
-  const lowerTitle = title.toLowerCase();
-
-  // Common localized strings for deleted/private videos
-  if (lowerTitle.includes("deleted video")) return true;
-  if (lowerTitle.includes("private video")) return true;
-  if (lowerTitle.includes("unavailable video")) return true;
-
-  // Check for missing thumbnails
-  if (
-    !video.snippet.thumbnails ||
-    Object.keys(video.snippet.thumbnails).length === 0
-  )
-    return true;
-
-  // Check for missing statistics
-  if (!video.statistics || !video.statistics.viewCount) return true;
-
-  return false;
+  return video.is_deleted;
 }
 
 function handleAuthClick() {
@@ -491,6 +458,22 @@ function saveToCache() {
 }
 
 // --- Logic ---
+
+function slimVideo(v) {
+  const isDeleted = v.status ? (v.status.uploadStatus === "deleted" || v.status.uploadStatus === "rejected") : (!v.snippet);
+  
+  return {
+    title: v.snippet?.title || "Deleted Video",
+    artist: v.snippet?.channelTitle || "Unknown",
+    video_id: v.id,
+    channel_id: v.snippet?.channelId || null,
+    views: v.statistics?.viewCount ? parseInt(v.statistics.viewCount, 10) : 0,
+    comments: v.statistics?.commentCount ? parseInt(v.statistics.commentCount, 10) : 0,
+    duration: v.contentDetails?.duration || null,
+    published_at: v.snippet?.publishedAt || null,
+    is_deleted: isDeleted
+  };
+}
 
 async function fetchVideos(pageToken = null) {
   const isLoadMore = !!pageToken;
@@ -578,9 +561,9 @@ async function fetchVideos(pageToken = null) {
     }
 
     if (isLoadMore) {
-      state.videos = [...state.videos, ...items];
+      state.videos = [...state.videos, ...items.map(slimVideo)];
     } else {
-      state.videos = items;
+      state.videos = items.map(slimVideo);
     }
 
     state.nextPageToken = nextToken;
@@ -640,7 +623,7 @@ function handleLoadAll() {
 async function handleCopyIds() {
   if (state.filteredVideos.length === 0) return;
 
-  const ids = state.filteredVideos.map((v) => v.id).join("\n");
+  const ids = state.filteredVideos.map((v) => v.video_id).join("\n");
 
   try {
     await navigator.clipboard.writeText(ids);
@@ -666,20 +649,12 @@ async function handleExportJson() {
   if (state.filteredVideos.length === 0) return;
 
   const exportData = state.filteredVideos.map((v) => {
-    const viewCountRaw = v.statistics?.viewCount;
-    const viewsFormatted = viewCountRaw
-      ? new Intl.NumberFormat("en-US", {
-          notation: "compact",
-          compactDisplay: "short",
-        }).format(viewCountRaw) + " views"
-      : "N/A";
-
     return {
-      title: v.snippet.title,
-      artist: v.snippet.channelTitle,
-      video_id: v.id,
-      channel_id: v.snippet.channelId,
-      views: viewsFormatted,
+      title: v.title,
+      artist: v.artist,
+      video_id: v.video_id,
+      channel_id: v.channel_id,
+      views: v.views,
     };
   });
 
@@ -715,8 +690,8 @@ function filterVideos() {
     const lower = state.debouncedSearchTerm.toLowerCase();
     results = results.filter(
       (v) =>
-        v.snippet.title.toLowerCase().includes(lower) ||
-        v.snippet.channelTitle.toLowerCase().includes(lower),
+        v.title.toLowerCase().includes(lower) ||
+        v.artist.toLowerCase().includes(lower),
     );
   }
 
@@ -724,44 +699,27 @@ function filterVideos() {
   results.sort((a, b) => {
     switch (state.sortBy) {
       case "date-new":
-        // YouTube returns myRating: dislike sorted by rating date desc by default
-        // But if we want to be explicit, we rely on the order in state.videos
-        // which is chronological from the API.
         return 0;
       case "duration-long":
         return (
-          parseDuration(b.contentDetails.duration) -
-          parseDuration(a.contentDetails.duration)
+          parseDuration(b.duration || "PT0S") -
+          parseDuration(a.duration || "PT0S")
         );
       case "upload-old":
         return (
-          new Date(a.snippet.publishedAt) - new Date(b.snippet.publishedAt)
+          new Date(a.published_at || 0) - new Date(b.published_at || 0)
         );
       case "comments-most":
-        return (
-          parseInt(b.statistics.commentCount || 0) -
-          parseInt(a.statistics.commentCount || 0)
-        );
+        return b.comments - a.comments;
       case "views-high":
-        return (
-          parseInt(b.statistics.viewCount || 0) -
-          parseInt(a.statistics.viewCount || 0)
-        );
+        return b.views - a.views;
       case "channel-az":
-        return a.snippet.channelTitle.localeCompare(b.snippet.channelTitle);
+        return a.artist.localeCompare(b.artist);
       case "title-az":
-        return a.snippet.title.localeCompare(b.snippet.title);
+        return a.title.localeCompare(b.title);
       case "deleted-first":
-        const isADeleted = checkIfDeleted(a);
-        const isBDeleted = checkIfDeleted(b);
-        if (isADeleted && !isBDeleted) return -1;
-        if (!isADeleted && isBDeleted) return 1;
-        return 0;
-      case "content-type":
-        const isAMusic = a.snippet?.categoryId === "10";
-        const isBMusic = b.snippet?.categoryId === "10";
-        if (!isAMusic && isBMusic) return -1;
-        if (isAMusic && !isBMusic) return 1;
+        if (a.is_deleted && !b.is_deleted) return -1;
+        if (!a.is_deleted && b.is_deleted) return 1;
         return 0;
       default:
         return 0;
@@ -979,17 +937,14 @@ function renderVideoList(append = false) {
   itemsToRender.forEach((video) => {
     const clone = dom.videoTemplate.content.cloneNode(true);
 
-    const title = video.snippet.title;
+    const title = video.title;
     const isDeleted = checkIfDeleted(video);
-    const isMusic = video.snippet.categoryId === "10";
-    const thumbnail =
-      video.snippet.thumbnails?.medium?.url ||
-      video.snippet.thumbnails?.default?.url;
-    const viewCount = video.statistics?.viewCount
+    const thumbnail = `https://i.ytimg.com/vi/${video.video_id}/mqdefault.jpg`;
+    const viewCount = video.views
       ? new Intl.NumberFormat("en-US", {
           notation: "compact",
           compactDisplay: "short",
-        }).format(video.statistics.viewCount)
+        }).format(video.views)
       : "N/A";
 
     // Image & Link
@@ -1020,7 +975,7 @@ function renderVideoList(append = false) {
 
     const links = clone.querySelectorAll(".video-link");
     links.forEach(
-      (l) => (l.href = `https://www.youtube.com/watch?v=${video.id}`),
+      (l) => (l.href = `https://www.youtube.com/watch?v=${video.video_id}`),
     );
 
     // Title
@@ -1029,9 +984,9 @@ function renderVideoList(append = false) {
 
     // Channel Info
     const channelEl = clone.querySelector(".channel-title");
-    let chName = video.snippet.channelTitle || "Unknown channel";
+    let chName = video.artist || "Unknown channel";
     if (chName.endsWith(" - Topic")) chName = chName.slice(0, -8);
-    const chId = video.snippet.channelId;
+    const chId = video.channel_id;
 
     if (chId && !isDeleted) {
       channelEl.innerHTML = `<a href="https://www.youtube.com/channel/${chId}" target="_blank" class="hover:text-black hover:underline">${highlightMatch(chName, state.debouncedSearchTerm)}</a>`;
@@ -1121,63 +1076,26 @@ function renderAnalytics() {
     );
   }
 
-  const categoryNames = {
-    1: "Film",
-    2: "Autos",
-    10: "Music",
-    15: "Pets",
-    17: "Sports",
-    20: "Gaming",
-    22: "Blogs",
-    23: "Comedy",
-    24: "Entertainment",
-    25: "News",
-    26: "Howto",
-    27: "Education",
-    28: "Tech",
-    deleted: "Unavailable",
-  };
-
-  dom.categoriesList.innerHTML = data.topCategories
-    .map(
-      (cat) => `
-        <div class="space-y-1">
-            <div class="flex justify-between text-[10px] uppercase font-bold text-gray-600 dark:text-gray-400">
-                <span>${categoryNames[cat.id] || "Other"}</span>
-                <span class="text-black dark:text-gray-200">${Math.round(cat.percent)}%</span>
-            </div>
-            <div class="w-full bg-gray-200 dark:bg-gray-800 h-1 rounded-full overflow-hidden">
-                <div class="bg-black dark:bg-gray-200 h-full" style="width: ${cat.percent}%"></div>
-            </div>
-        </div>
-    `,
-    )
-    .join("");
 }
 
 function calculateAnalytics() {
   const channels = {};
-  const categories = {};
 
   state.videos.forEach((v) => {
     const isDeleted = checkIfDeleted(v);
 
     // Channels
     let chName =
-      isDeleted && !v.snippet?.channelTitle
+      isDeleted && !v.artist
         ? "Unavailable"
-        : v.snippet?.channelTitle || "Unknown";
+        : v.artist || "Unknown";
     if (chName.endsWith(" - Topic")) chName = chName.slice(0, -8);
-    const chId = v.snippet?.channelId;
+    const chId = v.channel_id;
 
     if (!channels[chName]) {
       channels[chName] = { count: 0, id: isDeleted ? null : chId };
     }
     channels[chName].count++;
-
-    // Categories
-    const catId = isDeleted ? "deleted" : v.snippet?.categoryId || "unknown";
-    categories[catId] = (categories[catId] || 0) + 1;
   });
 
   const topChannels = Object.entries(channels)
@@ -1185,16 +1103,7 @@ function calculateAnalytics() {
     .sort((a, b) => b.count - a.count)
     .slice(0, 100);
 
-  const topCategories = Object.entries(categories)
-    .map(([id, count]) => ({
-      id,
-      count,
-      percent: (count / state.videos.length) * 100,
-    }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 4);
-
-  return { topChannels, topCategories };
+  return { topChannels };
 }
 
 function getDynamicMetadata(video) {
@@ -1207,19 +1116,19 @@ function getDynamicMetadata(video) {
 
   switch (state.sortBy) {
     case "views-high":
-      return `${compact(video.statistics?.viewCount)} views`;
+      return `${compact(video.views)} views`;
     case "duration-long":
-      return formatDuration(video.contentDetails?.duration);
+      return formatDuration(video.duration);
     case "upload-old":
-      return new Date(video.snippet?.publishedAt).toLocaleDateString(
+      return new Date(video.published_at).toLocaleDateString(
         undefined,
         { year: "numeric", month: "short", day: "numeric" },
       );
     case "comments-most":
-      return `${compact(video.statistics?.commentCount)} comments`;
+      return `${compact(video.comments)} comments`;
     default:
       // For Recent, Channel, Title, Deleted, etc.
-      return `${compact(video.statistics?.viewCount)} views`;
+      return `${compact(video.views)} views`;
   }
 }
 
