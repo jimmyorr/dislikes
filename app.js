@@ -15,6 +15,7 @@ const state = {
   theme: localStorage.getItem("dislikes-theme") || "system",
   compactMode: localStorage.getItem("dislikes-compact") === "true",
   musicOnly: localStorage.getItem("dislikes-music-only") === "true",
+  unavailableOnly: localStorage.getItem("dislikes-unavailable-only") === "true",
   videos: [],
   filteredVideos: [],
   loading: false,
@@ -81,6 +82,7 @@ const dom = {
   themeSelect: document.getElementById("theme-select"),
   compactToggle: document.getElementById("compact-toggle"),
   musicToggle: document.getElementById("music-toggle"),
+  unavailableToggle: document.getElementById("unavailable-toggle"),
 
   favicon: document.getElementById("favicon"),
   appleIcon: document.getElementById("apple-icon"),
@@ -381,6 +383,16 @@ function setupEventListeners() {
     filterVideos();
     render();
   });
+
+  // Unavailable Only Logic
+  dom.unavailableToggle.checked = state.unavailableOnly;
+  dom.unavailableToggle.addEventListener("change", (e) => {
+    const isUnavailableOnly = e.target.checked;
+    state.unavailableOnly = isUnavailableOnly;
+    localStorage.setItem("dislikes-unavailable-only", isUnavailableOnly);
+    filterVideos();
+    render();
+  });
 }
 
 function debounce(func, wait) {
@@ -477,7 +489,7 @@ function slimVideo(v) {
   const isDeleted = v.status ? (v.status.uploadStatus === "deleted" || v.status.uploadStatus === "rejected") : (!v.snippet);
   
   return {
-    title: v.snippet?.title || "Deleted Video",
+    title: v.snippet?.title || "Unavailable",
     artist: v.snippet?.channelTitle || "Unknown",
     video_id: v.id,
     channel_id: v.snippet?.channelId || null,
@@ -543,12 +555,20 @@ async function fetchVideos(pageToken = null) {
         });
 
         const fetchedItems = vResponse.result.items || [];
-        // Maintain the order returned by the playlist
+        // Maintain the order returned by the playlist, and preserve deleted/private videos
         const itemsMap = fetchedItems.reduce((acc, item) => {
           acc[item.id] = item;
           return acc;
         }, {});
-        items = videoIds.map((id) => itemsMap[id]).filter(Boolean);
+        items = videoIds.map((id) => {
+          if (itemsMap[id]) return itemsMap[id];
+          // If videos.list doesn't return the video, it's deleted/private
+          return {
+            id: id,
+            status: { uploadStatus: "deleted" },
+            snippet: null
+          };
+        });
       }
     } else {
       // Use videos.list for Dislikes
@@ -700,6 +720,10 @@ async function handleExportJson() {
 function filterVideos() {
   let results = [...state.videos];
 
+  if (state.unavailableOnly) {
+    results = results.filter((v) => checkIfDeleted(v));
+  }
+
   if (state.musicOnly) {
     results = results.filter((v) => v.is_music);
   }
@@ -724,9 +748,9 @@ function filterVideos() {
           parseDuration(b.duration || "PT0S") -
           parseDuration(a.duration || "PT0S")
         );
-      case "upload-old":
+      case "upload-new":
         return (
-          new Date(a.published_at || 0) - new Date(b.published_at || 0)
+          new Date(b.published_at || 0) - new Date(a.published_at || 0)
         );
       case "comments-most":
         return b.comments - a.comments;
@@ -736,10 +760,6 @@ function filterVideos() {
         return a.artist.localeCompare(b.artist);
       case "title-az":
         return a.title.localeCompare(b.title);
-      case "deleted-first":
-        if (a.is_deleted && !b.is_deleted) return -1;
-        if (!a.is_deleted && b.is_deleted) return 1;
-        return 0;
       default:
         return 0;
     }
@@ -862,7 +882,7 @@ function render() {
 
   if (state.loading && !isLoadMore) {
     countText = "Loading...";
-  } else if (!state.debouncedSearchTerm && !state.musicOnly) {
+  } else if (!state.debouncedSearchTerm && !state.musicOnly && !state.unavailableOnly) {
     if (state.nextPageToken) {
       if (totalCount && totalCount > currentCount) {
         countText = `${fmt(currentCount)} of about ${fmt(totalCount)} loaded`;
@@ -873,7 +893,11 @@ function render() {
       countText = `All ${fmt(currentCount)} loaded`;
     }
   } else {
-    countText = `Found ${fmt(currentCount)}${state.musicOnly && !state.debouncedSearchTerm ? ' music' : ''} videos`;
+    let modifiers = [];
+    if (state.unavailableOnly) modifiers.push('unavailable');
+    if (state.musicOnly) modifiers.push('music');
+    let modsStr = modifiers.length > 0 && !state.debouncedSearchTerm ? ' ' + modifiers.join(' ') : '';
+    countText = `Found ${fmt(currentCount)}${modsStr} videos`;
   }
 
   dom.resultsCount.textContent = countText;
