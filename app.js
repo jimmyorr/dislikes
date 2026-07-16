@@ -61,7 +61,8 @@ const dom = {
   insightsToggle: document.getElementById("insights-toggle"),
   analyticsContainer: document.getElementById("analytics-container"),
   topChannelsList: document.getElementById("top-channels-list"),
-  categoriesList: document.getElementById("categories-list"),
+  releaseYearsList: document.getElementById("release-years-list"),
+  mostDiscussedList: document.getElementById("most-discussed-list"),
 
   scrollSentinel: document.getElementById("infinite-scroll-sentinel"),
 
@@ -1077,10 +1078,44 @@ function renderAnalytics() {
     );
   }
 
+  // Render Release Years
+  dom.releaseYearsList.innerHTML = data.releaseYears.length > 0 ? data.releaseYears
+    .map((ry) => {
+      return `
+        <div class="flex items-center gap-3 text-sm text-gray-900 dark:text-gray-100">
+          <span class="w-10 font-mono text-gray-500 shrink-0">${ry.year}</span>
+          <div class="flex-1 bg-gray-200 dark:bg-gray-800 rounded-full h-1.5 overflow-hidden">
+            <div class="bg-gray-400 dark:bg-gray-500 h-full rounded-full" style="width: ${ry.percent}%"></div>
+          </div>
+          <span class="text-[10px] text-gray-500 font-mono whitespace-nowrap text-right shrink-0 min-w-[70px]">${ry.count} (${ry.percent.toFixed(1)}%)</span>
+        </div>
+      `;
+    })
+    .join("") : '<div class="text-gray-500 text-[12px]">No data</div>';
+
+  // Render Most Discussed
+  dom.mostDiscussedList.innerHTML = data.mostDiscussed.length > 0 ? data.mostDiscussed
+    .map((v) => {
+      const compact = new Intl.NumberFormat("en-US", { notation: "compact", compactDisplay: "short" }).format(v.comments || 0);
+      return `
+        <div class="flex flex-col gap-0.5">
+          <a href="https://www.youtube.com/watch?v=${v.video_id}" target="_blank" class="hover:underline text-[13px] font-medium text-gray-900 dark:text-gray-100 line-clamp-1">${v.title}</a>
+          <div class="flex items-center gap-2 text-[11px] text-gray-500">
+            <span class="truncate">${v.artist}</span>
+            <span class="shrink-0">•</span>
+            <span class="shrink-0 font-bold">${compact} comments</span>
+          </div>
+        </div>
+      `;
+    })
+    .join("") : '<div class="text-gray-500 text-[12px]">No data</div>';
+
 }
 
 function calculateAnalytics() {
   const channels = {};
+  const years = {};
+  const validVideos = [];
 
   state.videos.forEach((v) => {
     const isDeleted = checkIfDeleted(v);
@@ -1097,6 +1132,18 @@ function calculateAnalytics() {
       channels[chName] = { count: 0, id: isDeleted ? null : chId };
     }
     channels[chName].count++;
+
+    // Release Years
+    if (!isDeleted && v.published_at) {
+      const year = new Date(v.published_at).getFullYear();
+      if (!isNaN(year)) {
+        years[year] = (years[year] || 0) + 1;
+      }
+    }
+
+    if (!isDeleted) {
+      validVideos.push(v);
+    }
   });
 
   const topChannels = Object.entries(channels)
@@ -1104,7 +1151,20 @@ function calculateAnalytics() {
     .sort((a, b) => b.count - a.count)
     .slice(0, 100);
 
-  return { topChannels };
+  const totalVideos = state.videos.length;
+  const releaseYears = Object.entries(years)
+    .map(([year, count]) => ({
+      year,
+      count,
+      percent: (count / totalVideos) * 100,
+    }))
+    .sort((a, b) => b.year - a.year);
+
+  const mostDiscussed = validVideos
+    .sort((a, b) => b.comments - a.comments)
+    .slice(0, 5);
+
+  return { topChannels, releaseYears, mostDiscussed };
 }
 
 function getDynamicMetadata(video) {

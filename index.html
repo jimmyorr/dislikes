@@ -426,9 +426,9 @@
         <!-- Analytics Dashboard -->
         <div
           id="analytics-container"
-          class="hidden mb-12 p-6 bg-gray-50 dark:bg-[#121212] border border-gray-100 dark:border-gray-800 rounded flex flex-col md:flex-row gap-8"
+          class="hidden mb-12 p-6 bg-gray-50 dark:bg-[#121212] border border-gray-100 dark:border-gray-800 rounded grid grid-cols-1 md:grid-cols-3 gap-8"
         >
-          <div class="flex-1 space-y-4">
+          <div class="space-y-4">
             <h3
               class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest"
             >
@@ -436,6 +436,28 @@
             </h3>
             <div id="top-channels-list" class="space-y-4">
               <!-- Top channels will be injected here -->
+            </div>
+          </div>
+          
+          <div class="space-y-4">
+            <h3
+              class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest"
+            >
+              Release Year
+            </h3>
+            <div id="release-years-list" class="space-y-4 text-sm">
+              <!-- Release years will be injected here -->
+            </div>
+          </div>
+
+          <div class="space-y-4">
+            <h3
+              class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest"
+            >
+              Most Discussed
+            </h3>
+            <div id="most-discussed-list" class="space-y-4 text-sm">
+              <!-- Most discussed videos will be injected here -->
             </div>
           </div>
         </div>
