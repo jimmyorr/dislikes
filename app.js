@@ -897,7 +897,8 @@ function renderVideoList(append = false) {
 
     // Channel Info
     const channelEl = clone.querySelector(".channel-title");
-    const chName = video.snippet.channelTitle || "Unknown channel";
+    let chName = video.snippet.channelTitle || "Unknown channel";
+    if (chName.endsWith(" - Topic")) chName = chName.slice(0, -8);
     const chId = video.snippet.channelId;
 
     if (chId && !isDeleted) {
@@ -1030,10 +1031,11 @@ function calculateAnalytics() {
     const isDeleted = checkIfDeleted(v);
 
     // Channels
-    const chName =
+    let chName =
       isDeleted && !v.snippet?.channelTitle
         ? "Unavailable"
         : v.snippet?.channelTitle || "Unknown";
+    if (chName.endsWith(" - Topic")) chName = chName.slice(0, -8);
     const chId = v.snippet?.channelId;
 
     if (!channels[chName]) {
