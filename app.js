@@ -273,6 +273,7 @@ function setupEventListeners() {
           // Render more from local memory
           state.renderLimit += 50;
           renderVideoList(true);
+          updateSentinel();
         } else if (
           state.nextPageToken &&
           !state.loading &&
@@ -868,23 +869,26 @@ function render() {
       renderVideoList();
     }
 
-    // Infinite Scroll Sentinel
-    if (
-      state.renderLimit < state.filteredVideos.length ||
-      (state.nextPageToken && !state.debouncedSearchTerm)
-    ) {
-      dom.scrollSentinel.classList.remove("hidden");
-      if (state.loading && isLoadMore) {
-        dom.scrollSentinel.innerHTML = `
-                    <div class="loading-spinner inline-block w-4 h-4 border-2 border-gray-100 border-t-gray-400 rounded-full mr-2 align-middle"></div>
-                    <span>Loading more...</span>
-                `;
-      } else {
-        dom.scrollSentinel.textContent = "Scroll for more";
-      }
+    updateSentinel();
+  }
+}
+
+function updateSentinel() {
+  if (
+    state.renderLimit < state.filteredVideos.length ||
+    (state.nextPageToken && !state.debouncedSearchTerm)
+  ) {
+    dom.scrollSentinel.classList.remove("hidden");
+    if (state.loading && state.isLoadMore) {
+      dom.scrollSentinel.innerHTML = `
+                  <div class="loading-spinner inline-block w-4 h-4 border-2 border-gray-100 border-t-gray-400 rounded-full mr-2 align-middle"></div>
+                  <span>Loading more...</span>
+              `;
     } else {
-      dom.scrollSentinel.classList.add("hidden");
+      dom.scrollSentinel.textContent = "Scroll for more";
     }
+  } else {
+    dom.scrollSentinel.classList.add("hidden");
   }
 }
 
