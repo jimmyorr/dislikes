@@ -28,6 +28,7 @@ const state = {
   iconCache: {},
   showAllChannels: false,
   renderLimit: 50,
+  forceRefetch: false,
 };
 
 // --- DOM Elements ---
@@ -53,6 +54,7 @@ const dom = {
   videoGrid: document.getElementById("video-grid"),
   copyIdsButton: document.getElementById("copy-ids-button"),
   exportJsonButton: document.getElementById("export-json-button"),
+  clearCacheButton: document.getElementById("clear-cache-button"),
   loadAllButton: document.getElementById("load-all-button"),
   insightsToggle: document.getElementById("insights-toggle"),
   analyticsContainer: document.getElementById("analytics-container"),
@@ -256,6 +258,7 @@ function setupEventListeners() {
 
   dom.copyIdsButton.addEventListener("click", handleCopyIds);
   dom.exportJsonButton.addEventListener("click", handleExportJson);
+  dom.clearCacheButton.addEventListener("click", handleClearCache);
   dom.loadAllButton.addEventListener("click", handleLoadAll);
   dom.insightsToggle.addEventListener("click", () => {
     state.showInsights = !state.showInsights;
@@ -401,12 +404,64 @@ function handleSignout() {
   render();
 }
 
+function handleClearCache() {
+  localStorage.removeItem(`yt_dislikes_cache_${state.mode}`);
+  state.videos = [];
+  state.filteredVideos = [];
+  state.nextPageToken = null;
+  state.totalResults = null;
+  state.isFetchAll = false;
+  state.forceRefetch = true;
+  fetchVideos();
+}
+
+function loadFromCache() {
+  try {
+    const data = localStorage.getItem(`yt_dislikes_cache_${state.mode}`);
+    if (data) {
+      return JSON.parse(data);
+    }
+  } catch (e) {
+    console.error("Failed to load cache:", e);
+  }
+  return null;
+}
+
+function saveToCache() {
+  try {
+    const data = {
+      videos: state.videos,
+      nextPageToken: state.nextPageToken,
+      totalResults: state.totalResults,
+      timestamp: Date.now()
+    };
+    localStorage.setItem(`yt_dislikes_cache_${state.mode}`, JSON.stringify(data));
+  } catch (e) {
+    console.error("Failed to save cache:", e);
+  }
+}
+
 // --- Logic ---
 
 async function fetchVideos(pageToken = null) {
   const isLoadMore = !!pageToken;
   setLoading(true, isLoadMore);
   setError(null);
+
+  if (!isLoadMore && !state.forceRefetch) {
+    const cached = loadFromCache();
+    if (cached) {
+      state.videos = cached.videos;
+      state.nextPageToken = cached.nextPageToken;
+      state.totalResults = cached.totalResults;
+      filterVideos();
+      setLoading(false, false);
+      return;
+    }
+  }
+  
+  state.forceRefetch = false;
+
   try {
     if (!window.gapi?.client?.youtube) {
       throw new Error("YouTube API client not loaded.");
@@ -481,6 +536,7 @@ async function fetchVideos(pageToken = null) {
 
     state.nextPageToken = nextToken;
     state.totalResults = total;
+    saveToCache();
     filterVideos();
 
     // If we acquired 0 items but totalResults > 0, something is wrong
