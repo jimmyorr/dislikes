@@ -513,7 +513,7 @@
           class="video-link block relative w-full aspect-video [.compact-mode_&]:aspect-square"
         >
           <img
-            class="video-thumbnail w-full h-full object-cover bg-gray-100 dark:bg-gray-800 rounded-sm"
+            class="video-thumbnail w-full h-full object-cover bg-gray-100 dark:bg-gray-800 rounded-lg"
             src=""
             alt=""
           />
@@ -523,17 +523,15 @@
             UNAVAILABLE
           </div>
         </a>
-        <div class="flex flex-col gap-1 min-w-0">
-          <div class="flex items-start justify-between gap-3 mb-1">
-            <a href="" target="_blank" class="video-link hover:underline">
-              <h3
-                class="video-title text-sm font-semibold text-gray-900 dark:text-gray-100 line-clamp-2 leading-snug"
-              ></h3>
-            </a>
-          </div>
-          <div class="flex items-center gap-3 text-xs text-gray-500">
-            <span class="channel-title truncate"></span>
-            <span class="dynamic-metadata shrink-0"></span>
+        <div class="flex flex-col min-w-0 mt-2 gap-1">
+          <a href="" target="_blank" class="video-link hover:underline">
+            <h3
+              class="video-title text-[16px] font-medium text-gray-900 dark:text-gray-100 line-clamp-2 leading-tight"
+            ></h3>
+          </a>
+          <div class="flex flex-col gap-0.5">
+            <span class="channel-title text-[14px] text-gray-500 dark:text-gray-400 truncate block"></span>
+            <span class="dynamic-metadata text-[12px] text-gray-500 dark:text-gray-400 block"></span>
           </div>
         </div>
       </div>
