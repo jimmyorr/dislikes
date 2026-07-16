@@ -1023,13 +1023,9 @@ function renderVideoList(append = false) {
       (l) => (l.href = `https://www.youtube.com/watch?v=${video.id}`),
     );
 
-    // Title & Music Icon
+    // Title
     const titleEl = clone.querySelector(".video-title");
     titleEl.innerHTML = highlightMatch(title, state.debouncedSearchTerm);
-
-    if (isMusic) {
-      clone.querySelector(".music-badge").classList.remove("hidden");
-    }
 
     // Channel Info
     const channelEl = clone.querySelector(".channel-title");
