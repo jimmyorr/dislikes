@@ -14,6 +14,7 @@ const state = {
   isAuthenticated: false,
   theme: localStorage.getItem("dislikes-theme") || "system",
   compactMode: localStorage.getItem("dislikes-compact") === "true",
+  musicOnly: localStorage.getItem("dislikes-music-only") === "true",
   videos: [],
   filteredVideos: [],
   loading: false,
@@ -79,6 +80,7 @@ const dom = {
   settingsMenu: document.getElementById("settings-menu"),
   themeSelect: document.getElementById("theme-select"),
   compactToggle: document.getElementById("compact-toggle"),
+  musicToggle: document.getElementById("music-toggle"),
 
   favicon: document.getElementById("favicon"),
   appleIcon: document.getElementById("apple-icon"),
@@ -368,6 +370,16 @@ function setupEventListeners() {
     state.compactMode = isCompact;
     localStorage.setItem("dislikes-compact", isCompact);
     applyCompactMode(isCompact);
+  });
+
+  // Music Only Logic
+  dom.musicToggle.checked = state.musicOnly;
+  dom.musicToggle.addEventListener("change", (e) => {
+    const isMusicOnly = e.target.checked;
+    state.musicOnly = isMusicOnly;
+    localStorage.setItem("dislikes-music-only", isMusicOnly);
+    filterVideos();
+    render();
   });
 }
 
@@ -687,6 +699,21 @@ async function handleExportJson() {
 function filterVideos() {
   let results = [...state.videos];
 
+  if (state.musicOnly) {
+    results = results.filter((v) => {
+      const lowerArtist = v.artist.toLowerCase();
+      const lowerTitle = v.title.toLowerCase();
+      return (
+        lowerArtist.endsWith("- topic") ||
+        lowerArtist.includes("vevo") ||
+        lowerTitle.includes("official video") ||
+        lowerTitle.includes("official music video") ||
+        lowerTitle.includes("official audio") ||
+        lowerTitle.includes("lyric video")
+      );
+    });
+  }
+
   // Search
   if (state.debouncedSearchTerm) {
     const lower = state.debouncedSearchTerm.toLowerCase();
@@ -845,7 +872,7 @@ function render() {
 
   if (state.loading && !isLoadMore) {
     countText = "Loading...";
-  } else if (!state.debouncedSearchTerm) {
+  } else if (!state.debouncedSearchTerm && !state.musicOnly) {
     if (state.nextPageToken) {
       if (totalCount && totalCount > currentCount) {
         countText = `${fmt(currentCount)} of about ${fmt(totalCount)} loaded`;
@@ -856,7 +883,7 @@ function render() {
       countText = `All ${fmt(currentCount)} loaded`;
     }
   } else {
-    countText = `Found ${fmt(currentCount)} videos`;
+    countText = `Found ${fmt(currentCount)}${state.musicOnly && !state.debouncedSearchTerm ? ' music' : ''} videos`;
   }
 
   dom.resultsCount.textContent = countText;
@@ -1117,7 +1144,7 @@ function calculateAnalytics() {
   const years = {};
   const validVideos = [];
 
-  state.videos.forEach((v) => {
+  state.filteredVideos.forEach((v) => {
     const isDeleted = checkIfDeleted(v);
 
     // Channels
@@ -1151,7 +1178,7 @@ function calculateAnalytics() {
     .sort((a, b) => b.count - a.count)
     .slice(0, 100);
 
-  const totalVideos = state.videos.length;
+  const totalVideos = state.filteredVideos.length;
   const releaseYears = Object.entries(years)
     .map(([year, count]) => ({
       year,
