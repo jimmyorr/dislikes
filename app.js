@@ -31,6 +31,7 @@ const state = {
   mode: localStorage.getItem("dislikes-mode") || "dislike", // 'dislike' or 'like'
   iconCache: {},
   showAllChannels: false,
+  showAllAlbums: false,
   renderLimit: 50,
   forceRefetch: false,
 };
@@ -64,7 +65,7 @@ const dom = {
   analyticsContainer: document.getElementById("analytics-container"),
   topChannelsList: document.getElementById("top-channels-list"),
   releaseYearsList: document.getElementById("release-years-list"),
-  mostDiscussedList: document.getElementById("most-discussed-list"),
+  topAlbumsList: document.getElementById("top-albums-list"),
 
   scrollSentinel: document.getElementById("infinite-scroll-sentinel"),
 
@@ -258,11 +259,19 @@ function setupEventListeners() {
   }, 300);
 
   // More Channels Button Click (using delegation or direct since it's injected)
-  dom.analyticsContainer.addEventListener("click", (e) => {
+  dom.topChannelsList.addEventListener("click", (e) => {
     const btn = e.target.closest("#channels-more-button");
     if (btn) {
       state.showAllChannels = !state.showAllChannels;
-      render();
+      renderAnalytics();
+    }
+  });
+
+  dom.topAlbumsList.addEventListener("click", (e) => {
+    const btn = e.target.closest("#albums-more-button");
+    if (btn) {
+      state.showAllAlbums = !state.showAllAlbums;
+      renderAnalytics();
     }
   });
 
@@ -1196,29 +1205,49 @@ function renderAnalytics() {
     })
     .join("") : '<div class="text-gray-500 text-[12px]">No data</div>';
 
-  // Render Most Discussed
-  dom.mostDiscussedList.innerHTML = data.mostDiscussed.length > 0 ? data.mostDiscussed
-    .map((v) => {
-      const compact = new Intl.NumberFormat("en-US", { notation: "compact", compactDisplay: "short" }).format(v.comments || 0);
+  // Render Top Albums
+  const displayAlbums = state.showAllAlbums
+    ? data.topAlbums
+    : data.topAlbums.slice(0, 5);
+  const hasMoreAlbums = data.topAlbums.length > 5;
+
+  dom.topAlbumsList.innerHTML = displayAlbums.length > 0 ? displayAlbums
+    .map((album) => {
       return `
-        <div class="flex flex-col gap-0.5">
-          <a href="https://www.youtube.com/watch?v=${v.video_id}" target="_blank" class="hover:underline text-[13px] font-medium text-gray-900 dark:text-gray-100 line-clamp-1">${v.title}</a>
-          <div class="flex items-center gap-2 text-[11px] text-gray-500">
-            <span class="truncate">${v.artist}</span>
-            <span class="shrink-0">•</span>
-            <span class="shrink-0 font-bold">${compact} comments</span>
+        <div class="flex gap-3 items-center">
+          <a href="https://www.youtube.com/watch?v=${album.video_id}" target="_blank" class="shrink-0 relative group">
+             <img src="${album.thumbnail}" alt="${album.artist}" class="w-12 h-12 object-cover rounded border border-gray-200 dark:border-gray-800 shadow-sm group-hover:opacity-80 transition-opacity">
+          </a>
+          <div class="flex flex-col gap-0.5">
+            <a href="https://www.youtube.com/watch?v=${album.video_id}" target="_blank" class="hover:underline text-[13px] font-medium text-gray-900 dark:text-gray-100 line-clamp-1">${album.artist}</a>
+            <div class="flex items-center gap-2 text-[11px] text-gray-500">
+              <span class="truncate">${album.year}</span>
+              <span class="shrink-0">•</span>
+              <span class="shrink-0 font-bold">${album.count} tracks</span>
+            </div>
           </div>
         </div>
       `;
     })
     .join("") : '<div class="text-gray-500 text-[12px]">No data</div>';
 
+  if (hasMoreAlbums) {
+    const btnText = state.showAllAlbums ? "Show less" : "More";
+    dom.topAlbumsList.insertAdjacentHTML(
+      "beforeend",
+      `
+            <button id="albums-more-button" class="mt-2 text-[10px] font-bold uppercase tracking-wider text-gray-500 hover:text-black dark:text-gray-400 dark:hover:text-white transition-colors">
+                ${btnText}
+            </button>
+        `,
+    );
+  }
 }
 
 function calculateAnalytics() {
   const channels = {};
   const years = {};
-  const validVideos = [];
+  const albums = {};
 
   state.filteredVideos.forEach((v) => {
     const isDeleted = checkIfDeleted(v);
@@ -1244,8 +1273,20 @@ function calculateAnalytics() {
       }
     }
 
-    if (!isDeleted) {
-      validVideos.push(v);
+    // Top Albums (cluster by channel + exact day)
+    if (!isDeleted && v.published_at && v.artist && chName !== "Music Library Uploads") {
+      const date = v.published_at.split('T')[0];
+      const albumKey = `${chName}|${date}`;
+      if (!albums[albumKey]) {
+        albums[albumKey] = {
+           artist: chName,
+           year: new Date(v.published_at).getFullYear(),
+           thumbnail: `https://i.ytimg.com/vi/${v.video_id}/mqdefault.jpg`,
+           video_id: v.video_id,
+           count: 0
+        };
+      }
+      albums[albumKey].count++;
     }
   });
 
@@ -1263,11 +1304,13 @@ function calculateAnalytics() {
     }))
     .sort((a, b) => b.year - a.year);
 
-  const mostDiscussed = validVideos
-    .sort((a, b) => b.comments - a.comments)
-    .slice(0, 5);
+  const topAlbums = Object.values(albums)
+    // Only consider it an album if there's at least 3 tracks
+    .filter(a => a.count >= 3)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 100);
 
-  return { topChannels, releaseYears, mostDiscussed };
+  return { topChannels, releaseYears, topAlbums };
 }
 
 function getDynamicMetadata(video) {
