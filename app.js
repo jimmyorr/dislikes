@@ -1692,8 +1692,22 @@ function playVideo(videoId, title, artist, thumbUrl, channelUrl) {
   }
   
   // Full-screen player updates
-  dom.fsPlayerThumbnail.src = thumbUrl;
-  dom.fsPlayerBg.style.backgroundImage = `url(${thumbUrl})`;
+  const maxResUrl = `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`;
+  const hqResUrl = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+  
+  dom.fsPlayerThumbnail.src = maxResUrl;
+  dom.fsPlayerBg.style.backgroundImage = `url(${maxResUrl})`;
+  
+  // Fallbacks if maxres doesn't exist
+  dom.fsPlayerThumbnail.onerror = () => {
+    if (dom.fsPlayerThumbnail.src === maxResUrl) {
+      dom.fsPlayerThumbnail.src = hqResUrl;
+      dom.fsPlayerBg.style.backgroundImage = `url(${hqResUrl})`;
+    } else if (dom.fsPlayerThumbnail.src === hqResUrl) {
+      dom.fsPlayerThumbnail.src = thumbUrl;
+      dom.fsPlayerBg.style.backgroundImage = `url(${thumbUrl})`;
+    }
+  };
   dom.fsPlayerTitle.innerText = title;
   
   dom.playerIconLoading.classList.remove("hidden");
