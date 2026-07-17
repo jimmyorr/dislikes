@@ -35,6 +35,8 @@ const state = {
   renderLimit: 50,
   forceRefetch: false,
   sidebarBaseVideos: [],
+  ytPlayer: null,
+  isPlayerReady: false,
 };
 
 // --- DOM Elements ---
@@ -68,6 +70,16 @@ const dom = {
   sidebarListContainer: document.getElementById("sidebar-list-container"),
 
   scrollSentinel: document.getElementById("infinite-scroll-sentinel"),
+
+  bottomPlayer: document.getElementById("bottom-player"),
+  playerThumbnail: document.getElementById("player-thumbnail"),
+  playerTitle: document.getElementById("player-title"),
+  playerArtist: document.getElementById("player-artist"),
+  playerPlayPause: document.getElementById("player-play-pause"),
+  playerIconPlay: document.getElementById("player-icon-play"),
+  playerIconPause: document.getElementById("player-icon-pause"),
+  playerIconLoading: document.getElementById("player-icon-loading"),
+  playerClose: document.getElementById("player-close"),
 
   quickScrollContainer: document.getElementById("quick-scroll-container"),
   backToTop: document.getElementById("back-to-top"),
@@ -103,6 +115,7 @@ function init() {
 
   initGapi();
   initGis();
+  initYTPlayer();
   
   applyTheme(state.theme);
   dom.themeSelect.value = state.theme;
@@ -251,6 +264,28 @@ function setupEventListeners() {
   dom.authButton.addEventListener("click", handleAuthClick);
   dom.heroAuthButton.addEventListener("click", handleAuthClick);
   dom.signoutButton.addEventListener("click", handleSignout);
+
+  dom.playerPlayPause.addEventListener("click", () => {
+    if (!state.isPlayerReady || !state.ytPlayer) return;
+    const playerState = state.ytPlayer.getPlayerState();
+    if (playerState === 1) { // Playing
+      state.ytPlayer.pauseVideo();
+    } else {
+      state.ytPlayer.playVideo();
+    }
+  });
+
+  dom.playerClose.addEventListener("click", () => {
+    if (state.ytPlayer) {
+      state.ytPlayer.stopVideo();
+    }
+    dom.bottomPlayer.classList.add("translate-y-full");
+    document.body.style.paddingBottom = "0px";
+    
+    if (dom.quickScrollContainer) {
+      dom.quickScrollContainer.classList.remove("-translate-y-[80px]");
+    }
+  });
 
   const debouncedSearch = debounce((value) => {
     state.debouncedSearchTerm = value;
@@ -1146,8 +1181,20 @@ function renderVideoList(append = false) {
         "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="; // Transparent pixel
     };
 
-    const links = clone.querySelectorAll(".video-link");
     const baseUrl = video.is_music ? "https://music.youtube.com" : "https://www.youtube.com";
+    
+    // Internal Playback Button
+    const playBtn = clone.querySelector(".video-play-btn");
+    if (!isDeleted) {
+      playBtn.addEventListener("click", () => {
+        playVideo(video.video_id, title, video.artist || "Unknown channel", thumbnail);
+      });
+    } else {
+      playBtn.classList.add("cursor-not-allowed");
+    }
+
+    // External Links (Title + Icon)
+    const links = clone.querySelectorAll(".video-link");
     links.forEach(
       (l) => (l.href = `${baseUrl}/watch?v=${video.video_id}`),
     );
@@ -1427,6 +1474,84 @@ function updateFavicon(mode) {
     dom.appleIcon.href = dataUrl;
     if (dom.siteLogo) dom.siteLogo.src = dataUrl;
   };
+}
+
+// --- YouTube Player Logic ---
+function initYTPlayer() {
+  const tag = document.createElement("script");
+  tag.src = "https://www.youtube.com/iframe_api";
+  const firstScriptTag = document.getElementsByTagName("script")[0];
+  firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+  window.onYouTubeIframeAPIReady = function() {
+    state.ytPlayer = new YT.Player("ytplayer", {
+      height: "1",
+      width: "1",
+      videoId: "",
+      playerVars: {
+        playsinline: 1,
+        autoplay: 1,
+        controls: 0,
+      },
+      events: {
+        onReady: () => {
+          state.isPlayerReady = true;
+          dom.playerPlayPause.disabled = false;
+        },
+        onStateChange: onPlayerStateChange,
+        onError: (event) => {
+          console.error("YouTube API Error:", event.data);
+          dom.playerIconLoading.classList.add("hidden");
+          dom.playerIconPlay.classList.remove("hidden");
+          dom.playerIconPause.classList.add("hidden");
+          
+          if (event.data === 101 || event.data === 150) {
+            dom.playerArtist.innerHTML = `<span class="text-red-500">Playback restricted on external sites</span>`;
+          } else {
+            dom.playerArtist.innerHTML = `<span class="text-red-500">Video unavailable</span>`;
+          }
+        }
+      }
+    });
+  };
+}
+
+function onPlayerStateChange(event) {
+  // YT.PlayerState.PLAYING = 1, PAUSED = 2, BUFFERING = 3
+  if (event.data === 1) { // Playing
+    dom.playerIconLoading.classList.add("hidden");
+    dom.playerIconPlay.classList.add("hidden");
+    dom.playerIconPause.classList.remove("hidden");
+  } else if (event.data === 2) { // Paused
+    dom.playerIconLoading.classList.add("hidden");
+    dom.playerIconPlay.classList.remove("hidden");
+    dom.playerIconPause.classList.add("hidden");
+  } else if (event.data === 3) { // Buffering
+    dom.playerIconLoading.classList.remove("hidden");
+    dom.playerIconPlay.classList.add("hidden");
+    dom.playerIconPause.classList.add("hidden");
+  }
+}
+
+function playVideo(videoId, title, artist, thumbUrl) {
+  dom.bottomPlayer.classList.remove("translate-y-full");
+  document.body.style.paddingBottom = "72px"; // Height of bottom player
+  
+  if (dom.quickScrollContainer) {
+    dom.quickScrollContainer.classList.add("-translate-y-[80px]");
+  }
+  
+  dom.playerThumbnail.src = thumbUrl;
+  dom.playerTitle.innerText = title;
+  dom.playerArtist.innerText = artist;
+  
+  dom.playerIconLoading.classList.remove("hidden");
+  dom.playerIconPlay.classList.add("hidden");
+  dom.playerIconPause.classList.add("hidden");
+
+  if (state.isPlayerReady && state.ytPlayer) {
+    state.ytPlayer.loadVideoById(videoId);
+  }
 }
 
 // Start

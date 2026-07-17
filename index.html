@@ -488,6 +488,33 @@
         </div>
       </div>
     </main>
+      <!-- YouTube Player -->
+      <div id="ytplayer" class="hidden"></div>
+      
+      <!-- Bottom Player UI -->
+      <div id="bottom-player" class="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-[#121212] border-t border-gray-200 dark:border-gray-800 transition-transform duration-300 translate-y-full shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] flex items-center justify-between px-4 sm:px-6 py-3">
+        <!-- Track Info -->
+        <div class="flex items-center gap-4 flex-1 min-w-0">
+          <img id="player-thumbnail" src="" class="w-12 h-12 object-cover rounded shadow-sm shrink-0 bg-gray-200 dark:bg-gray-800" />
+          <div class="min-w-0 pr-4">
+            <h4 id="player-title" class="text-sm font-medium text-gray-900 dark:text-white truncate"></h4>
+            <p id="player-artist" class="text-xs text-gray-500 dark:text-gray-400 truncate"></p>
+          </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="flex items-center gap-4 shrink-0">
+          <button id="player-play-pause" class="w-10 h-10 rounded-full bg-black dark:bg-white text-white dark:text-black flex items-center justify-center hover:scale-105 transition-transform" disabled>
+            <svg id="player-icon-play" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden ml-1"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+            <svg id="player-icon-pause" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+            <svg id="player-icon-loading" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="animate-spin"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg>
+          </button>
+          
+          <button id="player-close" class="p-2 text-gray-400 hover:text-black dark:hover:text-white transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
+        </div>
+      </div>
 
     <footer class="py-8 border-t border-gray-50 dark:border-gray-900 mt-12">
       <div
@@ -515,7 +542,7 @@
     <!-- Quick Scroll -->
     <div
       id="quick-scroll-container"
-      class="fixed bottom-8 right-8 flex flex-col gap-2 opacity-0 transition-opacity pointer-events-none z-50"
+      class="fixed bottom-8 right-8 flex flex-col gap-2 opacity-0 transition-all duration-300 pointer-events-none z-40"
     >
       <button
         id="back-to-top"
@@ -556,28 +583,31 @@
     <!-- Templates -->
     <template id="video-card-template">
       <div class="video-card group flex flex-col gap-3">
-        <a
-          href=""
-          target="_blank"
-          class="video-link block relative w-full aspect-video [.compact-mode_&]:aspect-square"
+        <button
+          class="video-play-btn block relative w-full aspect-video [.compact-mode_&]:aspect-square group/btn overflow-hidden rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
         >
           <img
-            class="video-thumbnail w-full h-full object-cover bg-gray-100 dark:bg-gray-800 rounded-lg"
+            class="video-thumbnail w-full h-full object-cover bg-gray-100 dark:bg-gray-800 transition-transform duration-300 group-hover/btn:scale-105"
             src=""
             alt=""
           />
+          <div class="absolute inset-0 bg-black/0 group-hover/btn:bg-black/20 transition-colors flex items-center justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white opacity-0 group-hover/btn:opacity-100 transition-opacity scale-75 group-hover/btn:scale-100 duration-300 drop-shadow-lg"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+          </div>
           <div
             class="deleted-overlay hidden absolute inset-0 bg-white/90 dark:bg-black/90 flex items-center justify-center text-[10px] font-bold text-gray-500 dark:text-gray-400"
           >
             UNAVAILABLE
           </div>
-        </a>
-        <div class="flex flex-col min-w-0 mt-2 gap-1">
-          <a href="" target="_blank" class="video-link hover:underline">
-            <h3
-              class="video-title text-[16px] font-medium text-gray-900 dark:text-gray-100 line-clamp-2 leading-tight"
-            ></h3>
-          </a>
+        </button>
+        <div class="flex flex-col min-w-0 mt-2 gap-1 relative">
+          <div class="flex items-start gap-2 pr-6">
+            <a href="" target="_blank" class="video-link hover:underline min-w-0">
+              <h3
+                class="video-title text-[16px] font-medium text-gray-900 dark:text-gray-100 line-clamp-2 leading-tight"
+              ></h3>
+            </a>
+          </div>
           <div class="flex flex-col gap-0.5">
             <span class="channel-title text-[14px] text-gray-500 dark:text-gray-400 truncate block"></span>
             <span class="dynamic-metadata text-[12px] text-gray-500 dark:text-gray-400 block"></span>
