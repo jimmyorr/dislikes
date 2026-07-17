@@ -30,11 +30,11 @@ const state = {
   isFetchAll: false,
   mode: localStorage.getItem("dislikes-mode") || "dislike", // 'dislike' or 'like'
   iconCache: {},
-  showAllChannels: false,
-  showAllAlbums: false,
-  showAllYears: false,
+  sidebarCategory: "channels",
+  activeFilter: null,
   renderLimit: 50,
   forceRefetch: false,
+  sidebarBaseVideos: [],
 };
 
 // --- DOM Elements ---
@@ -62,11 +62,8 @@ const dom = {
   exportJsonButton: document.getElementById("export-json-button"),
   clearCacheButton: document.getElementById("clear-cache-button"),
   loadAllButton: document.getElementById("load-all-button"),
-  insightsToggle: document.getElementById("insights-toggle"),
-  analyticsContainer: document.getElementById("analytics-container"),
-  topChannelsList: document.getElementById("top-channels-list"),
-  releaseYearsList: document.getElementById("release-years-list"),
-  topAlbumsList: document.getElementById("top-albums-list"),
+  sidebarFilterSelect: document.getElementById("sidebar-filter-select"),
+  sidebarListContainer: document.getElementById("sidebar-list-container"),
 
   scrollSentinel: document.getElementById("infinite-scroll-sentinel"),
 
@@ -259,28 +256,27 @@ function setupEventListeners() {
     render();
   }, 300);
 
-  // More Channels Button Click (using delegation or direct since it's injected)
-  dom.topChannelsList.addEventListener("click", (e) => {
-    const btn = e.target.closest("#channels-more-button");
-    if (btn) {
-      state.showAllChannels = !state.showAllChannels;
-      renderAnalytics();
-    }
+  dom.sidebarFilterSelect.addEventListener("change", (e) => {
+    state.sidebarCategory = e.target.value;
+    renderSidebar();
   });
 
-  dom.topAlbumsList.addEventListener("click", (e) => {
-    const btn = e.target.closest("#albums-more-button");
-    if (btn) {
-      state.showAllAlbums = !state.showAllAlbums;
-      renderAnalytics();
-    }
-  });
-
-  dom.releaseYearsList.addEventListener("click", (e) => {
-    const btn = e.target.closest("#years-more-button");
-    if (btn) {
-      state.showAllYears = !state.showAllYears;
-      renderAnalytics();
+  dom.sidebarListContainer.addEventListener("click", (e) => {
+    // Check if clicked on a filter item
+    const filterItem = e.target.closest(".sidebar-filter-item");
+    if (filterItem) {
+      const type = filterItem.dataset.type;
+      const value = filterItem.dataset.value;
+      
+      // Toggle off if already active
+      if (state.activeFilter && state.activeFilter.type === type && state.activeFilter.value === value) {
+        state.activeFilter = null;
+      } else {
+        state.activeFilter = { type, value };
+      }
+      
+      filterVideos();
+      render();
     }
   });
 
@@ -299,10 +295,7 @@ function setupEventListeners() {
   dom.exportJsonButton.addEventListener("click", handleExportJson);
   dom.clearCacheButton.addEventListener("click", handleClearCache);
   dom.loadAllButton.addEventListener("click", handleLoadAll);
-  dom.insightsToggle.addEventListener("click", () => {
-    state.showInsights = !state.showInsights;
-    render();
-  });
+
 
   // Infinite Scroll Observer
   const observer = new IntersectionObserver(
@@ -795,6 +788,37 @@ function filterVideos() {
     );
   }
 
+  // Save the base list for sidebar analytics (so other options don't disappear)
+  state.sidebarBaseVideos = results;
+
+  // Sidebar Filters
+  if (state.activeFilter) {
+    const { type, value } = state.activeFilter;
+    if (type === "channel") {
+      results = results.filter((v) => {
+        const isDeleted = checkIfDeleted(v);
+        let chName = isDeleted && !v.artist ? "Unavailable" : v.artist || "Unknown";
+        if (chName.endsWith(" - Topic")) chName = chName.slice(0, -8);
+        return chName === value;
+      });
+    } else if (type === "album") {
+      // value is "artist|YYYY-MM-DD"
+      const [artist, dateStr] = value.split("|");
+      results = results.filter((v) => {
+        if (!v.published_at || !v.artist) return false;
+        let chName = v.artist;
+        if (chName.endsWith(" - Topic")) chName = chName.slice(0, -8);
+        if (chName !== artist) return false;
+        return v.published_at.split('T')[0] === dateStr;
+      });
+    } else if (type === "year") {
+      results = results.filter((v) => {
+        if (!v.published_at) return false;
+        return new Date(v.published_at).getFullYear().toString() === value;
+      });
+    }
+  }
+
   // Sort
   results.sort((a, b) => {
     switch (state.sortBy) {
@@ -989,15 +1013,7 @@ function render() {
     dom.loadAllButton.classList.add("hidden");
   }
 
-  // Insights State
-  if (state.showInsights) {
-    dom.analyticsContainer.classList.remove("hidden");
-    dom.insightsToggle.classList.add("bg-black", "text-white");
-    renderAnalytics();
-  } else {
-    dom.analyticsContainer.classList.add("hidden");
-    dom.insightsToggle.classList.remove("bg-black", "text-white");
-  }
+  renderSidebar();
 
   // Loading & Empty States
   if (state.isAuthenticated) {
@@ -1163,89 +1179,36 @@ function renderSkeletons() {
   }
 }
 
-function renderAnalytics() {
+function renderSidebar() {
   if (state.videos.length === 0) return;
 
   const data = calculateAnalytics();
-  const displayChannels = state.showAllChannels
-    ? data.topChannels
-    : data.topChannels.slice(0, 10);
-  const hasMore = data.topChannels.length > 10;
-
-  // Render Top Channels
-  dom.topChannelsList.innerHTML = displayChannels
-    .map((ch) => {
-      const display = ch.id
-        ? `<a href="https://www.youtube.com/channel/${ch.id}" target="_blank" class="hover:underline truncate pr-2">${ch.name}</a>`
-        : `<span class="truncate pr-2">${ch.name}</span>`;
-
+  let html = "";
+  
+  if (state.sidebarCategory === "channels") {
+    html = data.topChannels.map((ch) => {
+      const isActive = state.activeFilter && state.activeFilter.type === "channel" && state.activeFilter.value === ch.name;
+      const bgClass = isActive ? "bg-gray-100 dark:bg-gray-800" : "hover:bg-gray-50 dark:hover:bg-gray-900";
+      
       return `
-            <div class="flex items-center gap-3 text-sm text-gray-900 dark:text-gray-100">
-                <span class="w-8 flex justify-center font-bold text-gray-700 bg-gray-100 dark:bg-gray-800 dark:text-gray-300 rounded text-[10px] py-1 shrink-0">${ch.count}</span>
-                ${display}
-            </div>
-        `;
-    })
-    .join("");
-
-  if (hasMore) {
-    const btnText = state.showAllChannels ? "Show less" : "More";
-    dom.topChannelsList.insertAdjacentHTML(
-      "beforeend",
-      `
-            <button id="channels-more-button" class="mt-2 text-[10px] font-bold uppercase tracking-wider text-gray-500 hover:text-black dark:text-gray-400 dark:hover:text-white transition-colors">
-                ${btnText}
-            </button>
-        `,
-    );
-  }
-
-  // Render Release Years
-  const displayYears = state.showAllYears
-    ? data.releaseYears
-    : data.releaseYears.slice(0, 10);
-  const hasMoreYears = data.releaseYears.length > 10;
-
-  dom.releaseYearsList.innerHTML = displayYears.length > 0 ? displayYears
-    .map((ry) => {
-      return `
-        <div class="flex items-center gap-3 text-sm text-gray-900 dark:text-gray-100">
-          <span class="w-10 font-mono text-gray-500 shrink-0">${ry.year}</span>
-          <div class="flex-1 bg-gray-200 dark:bg-gray-800 rounded-full h-1.5 overflow-hidden">
-            <div class="bg-gray-400 dark:bg-gray-500 h-full rounded-full" style="width: ${ry.percent}%"></div>
-          </div>
-          <span class="text-[10px] text-gray-500 font-mono whitespace-nowrap text-right shrink-0 min-w-[70px]">${ry.count} (${ry.percent.toFixed(1)}%)</span>
+        <div class="sidebar-filter-item flex items-center gap-3 text-sm text-gray-900 dark:text-gray-100 p-1.5 rounded cursor-pointer transition-colors ${bgClass}" data-type="channel" data-value="${ch.name}">
+            <span class="w-8 flex justify-center font-bold text-gray-700 bg-gray-100 dark:bg-gray-800 dark:text-gray-300 rounded text-[10px] py-1 shrink-0">${ch.count}</span>
+            <span class="truncate pr-2">${ch.name}</span>
         </div>
       `;
-    })
-    .join("") : '<div class="text-gray-500 text-[12px]">No data</div>';
-
-  if (hasMoreYears) {
-    const btnText = state.showAllYears ? "Show less" : "More";
-    dom.releaseYearsList.insertAdjacentHTML(
-      "beforeend",
-      `
-            <button id="years-more-button" class="mt-2 text-[10px] font-bold uppercase tracking-wider text-gray-500 hover:text-black dark:text-gray-400 dark:hover:text-white transition-colors">
-                ${btnText}
-            </button>
-        `,
-    );
-  }
-
-  // Render Top Albums
-  const displayAlbums = state.showAllAlbums
-    ? data.topAlbums
-    : data.topAlbums.slice(0, 5);
-  const hasMoreAlbums = data.topAlbums.length > 5;
-
-  dom.topAlbumsList.innerHTML = displayAlbums.length > 0 ? displayAlbums
-    .map((album) => {
+    }).join("");
+  } else if (state.sidebarCategory === "albums") {
+    html = data.topAlbums.map((album) => {
+      const val = `${album.artist}|${album.date}`;
+      const isActive = state.activeFilter && state.activeFilter.type === "album" && state.activeFilter.value === val;
+      const bgClass = isActive ? "bg-gray-100 dark:bg-gray-800" : "hover:bg-gray-50 dark:hover:bg-gray-900";
+      
       return `
-        <div class="flex gap-3 items-center">
+        <div class="sidebar-filter-item flex gap-3 items-center p-1.5 rounded cursor-pointer transition-colors ${bgClass}" data-type="album" data-value="${val}">
           <div class="shrink-0 relative group">
              <img src="${album.thumbnail}" alt="${album.artist}" class="w-12 h-12 object-cover rounded border border-gray-200 dark:border-gray-800 shadow-sm transition-opacity">
           </div>
-          <div class="flex flex-col gap-0.5">
+          <div class="flex flex-col gap-0.5 overflow-hidden">
             <span class="text-[13px] font-medium text-gray-900 dark:text-gray-100 line-clamp-1">${album.artist}</span>
             <div class="flex items-center gap-2 text-[11px] text-gray-500">
               <span class="truncate">${album.year}</span>
@@ -1255,20 +1218,25 @@ function renderAnalytics() {
           </div>
         </div>
       `;
-    })
-    .join("") : '<div class="text-gray-500 text-[12px]">No data</div>';
-
-  if (hasMoreAlbums) {
-    const btnText = state.showAllAlbums ? "Show less" : "More";
-    dom.topAlbumsList.insertAdjacentHTML(
-      "beforeend",
-      `
-            <button id="albums-more-button" class="mt-2 text-[10px] font-bold uppercase tracking-wider text-gray-500 hover:text-black dark:text-gray-400 dark:hover:text-white transition-colors">
-                ${btnText}
-            </button>
-        `,
-    );
+    }).join("");
+  } else if (state.sidebarCategory === "years") {
+    html = data.releaseYears.map((ry) => {
+      const isActive = state.activeFilter && state.activeFilter.type === "year" && state.activeFilter.value === ry.year.toString();
+      const bgClass = isActive ? "bg-gray-100 dark:bg-gray-800" : "hover:bg-gray-50 dark:hover:bg-gray-900";
+      
+      return `
+        <div class="sidebar-filter-item flex items-center gap-3 text-sm text-gray-900 dark:text-gray-100 p-1.5 rounded cursor-pointer transition-colors ${bgClass}" data-type="year" data-value="${ry.year}">
+          <span class="w-10 font-mono text-gray-500 shrink-0">${ry.year}</span>
+          <div class="flex-1 bg-gray-200 dark:bg-gray-800 rounded-full h-1.5 overflow-hidden">
+            <div class="bg-gray-400 dark:bg-gray-500 h-full rounded-full" style="width: ${ry.percent}%"></div>
+          </div>
+          <span class="text-[10px] text-gray-500 font-mono whitespace-nowrap text-right shrink-0 min-w-[70px]">${ry.count}</span>
+        </div>
+      `;
+    }).join("");
   }
+
+  dom.sidebarListContainer.innerHTML = html || '<div class="text-gray-500 text-[12px] p-2">No data</div>';
 }
 
 function calculateAnalytics() {
@@ -1276,7 +1244,7 @@ function calculateAnalytics() {
   const years = {};
   const albums = {};
 
-  state.filteredVideos.forEach((v) => {
+  (state.sidebarBaseVideos || state.filteredVideos).forEach((v) => {
     const isDeleted = checkIfDeleted(v);
 
     // Channels
@@ -1307,6 +1275,7 @@ function calculateAnalytics() {
       if (!albums[albumKey]) {
         albums[albumKey] = {
            artist: chName,
+           date: date,
            year: new Date(v.published_at).getFullYear(),
            thumbnail: `https://i.ytimg.com/vi/${v.video_id}/mqdefault.jpg`,
            video_id: v.video_id,
@@ -1322,7 +1291,7 @@ function calculateAnalytics() {
     .sort((a, b) => b.count - a.count)
     .slice(0, 100);
 
-  const totalVideos = state.filteredVideos.length;
+  const totalVideos = (state.sidebarBaseVideos || state.filteredVideos).length;
   const releaseYears = Object.entries(years)
     .map(([year, count]) => ({
       year,

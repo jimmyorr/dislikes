@@ -412,67 +412,30 @@
               </button>
             </div>
 
-            <button
-              id="insights-toggle"
-              class="flex items-center gap-2 px-3 py-1.5 border border-gray-200 dark:border-gray-800 dark:text-gray-200 rounded text-sm font-medium hover:border-black dark:hover:border-white transition-colors"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <line x1="18" y1="20" x2="18" y2="10" />
-                <line x1="12" y1="20" x2="12" y2="4" />
-                <line x1="6" y1="20" x2="6" y2="14" />
-              </svg>
-              <span>Insights</span>
-            </button>
+
           </div>
         </div>
 
-        <!-- Analytics Dashboard -->
-        <div
-          id="analytics-container"
-          class="hidden mb-12 p-6 bg-gray-50 dark:bg-[#121212] border border-gray-100 dark:border-gray-800 rounded grid grid-cols-1 md:grid-cols-3 gap-8"
-        >
-          <div class="space-y-4">
-            <h3
-              class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest"
-            >
-              Top Channels
-            </h3>
-            <div id="top-channels-list" class="space-y-4">
-              <!-- Top channels will be injected here -->
+        <div class="flex flex-col lg:flex-row gap-8 lg:gap-12">
+          <!-- Sidebar -->
+          <div class="lg:w-64 shrink-0 flex flex-col gap-6">
+            <div class="relative">
+              <select id="sidebar-filter-select" class="w-full appearance-none bg-transparent border border-gray-200 dark:border-gray-800 rounded px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 focus:outline-none focus:border-black dark:focus:border-white cursor-pointer">
+                <option value="channels">Filter by: Artists</option>
+                <option value="albums">Filter by: Albums</option>
+                <option value="years">Filter by: Years</option>
+              </select>
+              <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+              </div>
+            </div>
+            <div id="sidebar-list-container" class="space-y-4 max-h-[80vh] overflow-y-auto pr-2 pb-12">
+              <!-- Sidebar list will be injected here -->
             </div>
           </div>
-          <div class="space-y-4">
-            <h3
-              class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest"
-            >
-              Top Albums
-            </h3>
-            <div id="top-albums-list" class="space-y-4 text-sm">
-              <!-- Top albums will be injected here -->
-            </div>
-          </div>
-
-          <div class="space-y-4">
-            <h3
-              class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest"
-            >
-              Release Year
-            </h3>
-            <div id="release-years-list" class="space-y-4 text-sm">
-              <!-- Release years will be injected here -->
-            </div>
-          </div>
-        </div>
+          
+          <!-- Main Content -->
+          <div class="flex-1 min-w-0">
 
         <div
           id="empty-state"
@@ -487,8 +450,10 @@
         >
           <!-- Video cards will be injected here -->
         </div>
+        </div> <!-- End Main Content -->
+      </div> <!-- End flex layout -->
 
-        <div
+      <div
           id="infinite-scroll-sentinel"
           class="hidden py-12 text-center text-gray-500 text-sm"
         >
