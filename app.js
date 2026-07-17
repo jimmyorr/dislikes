@@ -1169,8 +1169,8 @@ function renderAnalytics() {
   const data = calculateAnalytics();
   const displayChannels = state.showAllChannels
     ? data.topChannels
-    : data.topChannels.slice(0, 5);
-  const hasMore = data.topChannels.length > 5;
+    : data.topChannels.slice(0, 10);
+  const hasMore = data.topChannels.length > 10;
 
   // Render Top Channels
   dom.topChannelsList.innerHTML = displayChannels
