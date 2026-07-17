@@ -1216,11 +1216,11 @@ function renderAnalytics() {
     .map((album) => {
       return `
         <div class="flex gap-3 items-center">
-          <a href="https://music.youtube.com/watch?v=${album.video_id}" target="_blank" class="shrink-0 relative group">
-             <img src="${album.thumbnail}" alt="${album.artist}" class="w-12 h-12 object-cover rounded border border-gray-200 dark:border-gray-800 shadow-sm group-hover:opacity-80 transition-opacity">
-          </a>
+          <div class="shrink-0 relative group">
+             <img src="${album.thumbnail}" alt="${album.artist}" class="w-12 h-12 object-cover rounded border border-gray-200 dark:border-gray-800 shadow-sm transition-opacity">
+          </div>
           <div class="flex flex-col gap-0.5">
-            <a href="https://music.youtube.com/watch?v=${album.video_id}" target="_blank" class="hover:underline text-[13px] font-medium text-gray-900 dark:text-gray-100 line-clamp-1">${album.artist}</a>
+            <span class="text-[13px] font-medium text-gray-900 dark:text-gray-100 line-clamp-1">${album.artist}</span>
             <div class="flex items-center gap-2 text-[11px] text-gray-500">
               <span class="truncate">${album.year}</span>
               <span class="shrink-0">•</span>
