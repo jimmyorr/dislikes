@@ -72,6 +72,7 @@ const dom = {
   scrollSentinel: document.getElementById("infinite-scroll-sentinel"),
 
   bottomPlayer: document.getElementById("bottom-player"),
+  bottomPlayerTrackInfo: document.getElementById("bottom-player-track-info"),
   playerThumbnail: document.getElementById("player-thumbnail"),
   playerTitle: document.getElementById("player-title"),
   playerArtist: document.getElementById("player-artist"),
@@ -80,6 +81,17 @@ const dom = {
   playerIconPause: document.getElementById("player-icon-pause"),
   playerIconLoading: document.getElementById("player-icon-loading"),
   playerClose: document.getElementById("player-close"),
+
+  fsPlayer: document.getElementById("full-screen-player"),
+  fsPlayerBg: document.getElementById("fs-player-bg"),
+  fsPlayerClose: document.getElementById("fs-player-close"),
+  fsPlayerThumbnail: document.getElementById("fs-player-thumbnail"),
+  fsPlayerTitle: document.getElementById("fs-player-title"),
+  fsPlayerArtist: document.getElementById("fs-player-artist"),
+  fsPlayerPlayPause: document.getElementById("fs-player-play-pause"),
+  fsPlayerIconPlay: document.getElementById("fs-player-icon-play"),
+  fsPlayerIconPause: document.getElementById("fs-player-icon-pause"),
+  fsPlayerIconLoading: document.getElementById("fs-player-icon-loading"),
 
   quickScrollContainer: document.getElementById("quick-scroll-container"),
   backToTop: document.getElementById("back-to-top"),
@@ -273,6 +285,37 @@ function setupEventListeners() {
     } else {
       state.ytPlayer.playVideo();
     }
+  });
+
+  dom.fsPlayerPlayPause.addEventListener("click", () => {
+    if (!state.isPlayerReady || !state.ytPlayer) return;
+    const playerState = state.ytPlayer.getPlayerState();
+    if (playerState === 1) { // Playing
+      state.ytPlayer.pauseVideo();
+    } else {
+      state.ytPlayer.playVideo();
+    }
+  });
+
+  dom.fsPlayerThumbnail.addEventListener("click", () => {
+    if (!state.isPlayerReady || !state.ytPlayer) return;
+    const playerState = state.ytPlayer.getPlayerState();
+    if (playerState === 1) { // Playing
+      state.ytPlayer.pauseVideo();
+    } else {
+      state.ytPlayer.playVideo();
+    }
+  });
+
+  dom.bottomPlayerTrackInfo.addEventListener("click", () => {
+    dom.fsPlayer.classList.remove("translate-y-full");
+    // Make sure we stop body scrolling while full screen is open
+    document.body.style.overflow = "hidden";
+  });
+
+  dom.fsPlayerClose.addEventListener("click", () => {
+    dom.fsPlayer.classList.add("translate-y-full");
+    document.body.style.overflow = "";
   });
 
   dom.playerClose.addEventListener("click", () => {
@@ -1571,6 +1614,7 @@ function initYTPlayer() {
         onReady: () => {
           state.isPlayerReady = true;
           dom.playerPlayPause.disabled = false;
+          dom.fsPlayerPlayPause.disabled = false;
         },
         onStateChange: onPlayerStateChange,
         onError: (event) => {
@@ -1579,10 +1623,16 @@ function initYTPlayer() {
           dom.playerIconPlay.classList.remove("hidden");
           dom.playerIconPause.classList.add("hidden");
           
+          dom.fsPlayerIconLoading.classList.add("hidden");
+          dom.fsPlayerIconPlay.classList.remove("hidden");
+          dom.fsPlayerIconPause.classList.add("hidden");
+          
           if (event.data === 101 || event.data === 150) {
             dom.playerArtist.innerHTML = `<span class="text-red-500">Playback restricted on external sites</span>`;
+            dom.fsPlayerArtist.innerHTML = `<span class="text-red-500">Playback restricted on external sites</span>`;
           } else {
             dom.playerArtist.innerHTML = `<span class="text-red-500">Video unavailable</span>`;
+            dom.fsPlayerArtist.innerHTML = `<span class="text-red-500">Video unavailable</span>`;
           }
         }
       }
@@ -1596,14 +1646,26 @@ function onPlayerStateChange(event) {
     dom.playerIconLoading.classList.add("hidden");
     dom.playerIconPlay.classList.add("hidden");
     dom.playerIconPause.classList.remove("hidden");
+    
+    dom.fsPlayerIconLoading.classList.add("hidden");
+    dom.fsPlayerIconPlay.classList.add("hidden");
+    dom.fsPlayerIconPause.classList.remove("hidden");
   } else if (event.data === 2) { // Paused
     dom.playerIconLoading.classList.add("hidden");
     dom.playerIconPlay.classList.remove("hidden");
     dom.playerIconPause.classList.add("hidden");
+    
+    dom.fsPlayerIconLoading.classList.add("hidden");
+    dom.fsPlayerIconPlay.classList.remove("hidden");
+    dom.fsPlayerIconPause.classList.add("hidden");
   } else if (event.data === 3) { // Buffering
     dom.playerIconLoading.classList.remove("hidden");
     dom.playerIconPlay.classList.add("hidden");
     dom.playerIconPause.classList.add("hidden");
+    
+    dom.fsPlayerIconLoading.classList.remove("hidden");
+    dom.fsPlayerIconPlay.classList.add("hidden");
+    dom.fsPlayerIconPause.classList.add("hidden");
   }
 }
 
@@ -1623,13 +1685,24 @@ function playVideo(videoId, title, artist, thumbUrl, channelUrl) {
   
   if (channelUrl) {
     dom.playerArtist.innerHTML = `<a href="${channelUrl}" target="_blank" class="hover:underline">${cleanArtist}</a>`;
+    dom.fsPlayerArtist.innerHTML = `<a href="${channelUrl}" target="_blank" class="hover:underline">${cleanArtist}</a>`;
   } else {
     dom.playerArtist.innerText = cleanArtist;
+    dom.fsPlayerArtist.innerText = cleanArtist;
   }
+  
+  // Full-screen player updates
+  dom.fsPlayerThumbnail.src = thumbUrl;
+  dom.fsPlayerBg.style.backgroundImage = `url(${thumbUrl})`;
+  dom.fsPlayerTitle.innerText = title;
   
   dom.playerIconLoading.classList.remove("hidden");
   dom.playerIconPlay.classList.add("hidden");
   dom.playerIconPause.classList.add("hidden");
+
+  dom.fsPlayerIconLoading.classList.remove("hidden");
+  dom.fsPlayerIconPlay.classList.add("hidden");
+  dom.fsPlayerIconPause.classList.add("hidden");
 
   if (state.isPlayerReady && state.ytPlayer) {
     state.ytPlayer.loadVideoById(videoId);
