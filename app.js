@@ -318,6 +318,13 @@ function setupEventListeners() {
     document.body.style.overflow = "";
   });
 
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !dom.fsPlayer.classList.contains("translate-y-full")) {
+      dom.fsPlayer.classList.add("translate-y-full");
+      document.body.style.overflow = "";
+    }
+  });
+
   dom.playerClose.addEventListener("click", () => {
     if (state.ytPlayer) {
       state.ytPlayer.stopVideo();
