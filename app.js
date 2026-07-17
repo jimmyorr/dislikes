@@ -1327,7 +1327,7 @@ function getDynamicMetadata(video) {
       return `${compact(video.views)} views`;
     case "duration-long":
       return formatDuration(video.duration);
-    case "upload-old":
+    case "upload-new":
       return new Date(video.published_at).toLocaleDateString(
         undefined,
         { year: "numeric", month: "short", day: "numeric" },
