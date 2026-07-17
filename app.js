@@ -68,7 +68,9 @@ const dom = {
 
   scrollSentinel: document.getElementById("infinite-scroll-sentinel"),
 
+  quickScrollContainer: document.getElementById("quick-scroll-container"),
   backToTop: document.getElementById("back-to-top"),
+  scrollToBottom: document.getElementById("scroll-to-bottom"),
 
   videoTemplate: document.getElementById("video-card-template"),
   skeletonTemplate: document.getElementById("skeleton-template"),
@@ -307,18 +309,34 @@ function setupEventListeners() {
 
   observer.observe(dom.scrollSentinel);
 
-  // Back to Top Logic
+  // Quick Scroll Logic
   dom.backToTop.addEventListener("click", () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   });
 
+  dom.scrollToBottom.addEventListener("click", async () => {
+    // Instantly expand the render limit to show everything we have
+    state.renderLimit = state.filteredVideos.length;
+    renderVideoList();
+    updateSentinel();
+
+    if (state.nextPageToken && !state.isFetchAll) {
+      // handleLoadAll will fetch all remaining pages and update renderLimit when done
+      await handleLoadAll();
+    }
+
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+    });
+  });
+
   window.addEventListener("scroll", () => {
     if (window.scrollY > 500) {
-      dom.backToTop.classList.remove("opacity-0", "pointer-events-none");
-      dom.backToTop.classList.add("opacity-100");
+      dom.quickScrollContainer.classList.remove("opacity-0", "pointer-events-none");
+      dom.quickScrollContainer.classList.add("opacity-100");
     } else {
-      dom.backToTop.classList.add("opacity-0", "pointer-events-none");
-      dom.backToTop.classList.remove("opacity-100");
+      dom.quickScrollContainer.classList.add("opacity-0", "pointer-events-none");
+      dom.quickScrollContainer.classList.remove("opacity-100");
     }
   });
 
@@ -502,10 +520,17 @@ function slimVideo(v) {
   };
 }
 
+let activeFetchPromise = null;
+
 async function fetchVideos(pageToken = null) {
-  const isLoadMore = !!pageToken;
-  setLoading(true, isLoadMore);
-  setError(null);
+  if (activeFetchPromise) {
+    return activeFetchPromise;
+  }
+
+  activeFetchPromise = (async () => {
+    const isLoadMore = !!pageToken;
+    setLoading(true, isLoadMore);
+    setError(null);
 
   if (!isLoadMore && !state.forceRefetch) {
     const cached = loadFromCache();
@@ -582,63 +607,62 @@ async function fetchVideos(pageToken = null) {
         pageToken: pageToken || "",
       });
 
-      // Enforce 30-second timeout
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Request timed out")), 30000),
-      );
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Request timed out")), 30000),
+        );
 
-      const response = await Promise.race([apiCall, timeoutPromise]);
+        const response = await Promise.race([apiCall, timeoutPromise]);
 
-      console.log("YouTube API Response:", response);
-      items = response.result.items || [];
-      nextToken = response.result.nextPageToken || null;
-      total = response.result.pageInfo?.totalResults || 0;
-    }
+        items = response.result.items || [];
+        nextToken = response.result.nextPageToken || null;
+        total = response.result.pageInfo?.totalResults || 0;
+      }
 
-    if (isLoadMore) {
-      state.videos = [...state.videos, ...items.map(slimVideo)];
-    } else {
-      state.videos = items.map(slimVideo);
-    }
-
-    state.nextPageToken = nextToken;
-    state.totalResults = total;
-    saveToCache();
-    filterVideos();
-
-    // If we acquired 0 items but totalResults > 0, something is wrong
-    if (items.length === 0 && total > 0 && !isLoadMore) {
-      console.warn(
-        "API returned 0 items but totalResults > 0. Account might be restricted or token issues.",
-      );
-    }
-
-    // If we are in "Load All" mode, fetch the next page immediately
-    if (state.isFetchAll) {
-      if (state.nextPageToken) {
-        fetchVideos(state.nextPageToken);
+      if (isLoadMore) {
+        state.videos = [...state.videos, ...items.map(slimVideo)];
       } else {
-        state.isFetchAll = false;
-        triggerCelebration();
+        state.videos = items.map(slimVideo);
+      }
+
+      state.nextPageToken = nextToken;
+      state.totalResults = total;
+      saveToCache();
+      filterVideos();
+
+      // The zero-yield fix for infinite scroll
+      if (!state.isFetchAll && state.nextPageToken && !state.debouncedSearchTerm) {
+        requestAnimationFrame(() => {
+          const rect = dom.scrollSentinel.getBoundingClientRect();
+          if (rect.top < window.innerHeight && rect.bottom > 0) {
+            handleLoadMore();
+          }
+        });
+      }
+    } catch (err) {
+      console.error("Fetch error detail:", err);
+      const status = err?.status || err?.result?.error?.code;
+      if (status === 401) {
+        localStorage.removeItem("yt_dislikes_token");
+        state.isAuthenticated = false;
+        setError("Session expired. Please sign in again.");
+      } else {
+        setError(
+          err?.result?.error?.message ||
+            err?.message ||
+            `Failed to fetch ${state.mode === "dislike" ? "disliked" : "liked"} videos.`,
+        );
+      }
+    } finally {
+      if (!state.isFetchAll) {
+        setLoading(false, isLoadMore);
       }
     }
-  } catch (err) {
-    console.error("Fetch error detail:", err);
-    const status = err?.status || err?.result?.error?.code;
-    if (status === 401) {
-      // Token expired or invalid
-      localStorage.removeItem("yt_dislikes_token");
-      state.isAuthenticated = false;
-      setError("Session expired. Please sign in again.");
-    } else {
-      setError(
-        err?.result?.error?.message ||
-          err?.message ||
-          `Failed to fetch ${state.mode === "dislike" ? "disliked" : "liked"} videos.`,
-      );
-    }
+  })();
+
+  try {
+    await activeFetchPromise;
   } finally {
-    setLoading(false, isLoadMore);
+    activeFetchPromise = null;
   }
 }
 
@@ -648,10 +672,25 @@ function handleLoadMore() {
   }
 }
 
-function handleLoadAll() {
-  if (state.nextPageToken && !state.loading) {
+async function handleLoadAll() {
+  if (state.nextPageToken) {
     state.isFetchAll = true;
-    fetchVideos(state.nextPageToken);
+    updateSentinel(); // Force "Loading all videos..." UI immediately
+    try {
+      while (state.isFetchAll && state.nextPageToken) {
+        await fetchVideos(state.nextPageToken);
+        window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+      }
+    } finally {
+      state.isFetchAll = false;
+      // Ensure renderLimit covers all newly fetched videos so sentinel hides properly
+      state.renderLimit = state.filteredVideos.length;
+      renderVideoList();
+      setLoading(false, false);
+      if (!state.nextPageToken) {
+        triggerCelebration();
+      }
+    }
   }
 }
 
@@ -950,6 +989,15 @@ function render() {
 }
 
 function updateSentinel() {
+  if (state.isFetchAll) {
+    dom.scrollSentinel.classList.remove("hidden");
+    dom.scrollSentinel.innerHTML = `
+        <div class="loading-spinner inline-block w-4 h-4 border-2 border-gray-100 border-t-gray-400 rounded-full mr-2 align-middle"></div>
+        <span>Loading all videos...</span>
+    `;
+    return;
+  }
+
   if (
     state.renderLimit < state.filteredVideos.length ||
     (state.nextPageToken && !state.debouncedSearchTerm)
