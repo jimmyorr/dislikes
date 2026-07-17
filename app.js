@@ -561,10 +561,25 @@ function slimVideo(v) {
   const isDeleted = v.status ? (v.status.uploadStatus === "deleted" || v.status.uploadStatus === "rejected") : (!v.snippet);
   
   let inferredDate = null;
+  let inferredLabel = null;
+  let inferredCopyright = null;
+
   if (v.snippet && v.snippet.description) {
-    const match = v.snippet.description.match(/Released on:\s*(\d{4}-\d{2}-\d{2})/i);
-    if (match) {
-      inferredDate = match[1] + "T00:00:00Z";
+    const desc = v.snippet.description;
+    
+    const dateMatch = desc.match(/Released on:\s*(\d{4}-\d{2}-\d{2})/i);
+    if (dateMatch) {
+      inferredDate = dateMatch[1] + "T00:00:00Z";
+    }
+
+    const labelMatch = desc.match(/Provided to YouTube by\s+(.*)/i);
+    if (labelMatch) {
+      inferredLabel = labelMatch[1].trim();
+    }
+
+    const copyrightMatch = desc.match(/℗\s+(.*)/i);
+    if (copyrightMatch) {
+      inferredCopyright = copyrightMatch[1].trim();
     }
   }
 
@@ -577,6 +592,8 @@ function slimVideo(v) {
     comments: v.statistics?.commentCount ? parseInt(v.statistics.commentCount, 10) : 0,
     duration: v.contentDetails?.duration || null,
     published_at: inferredDate || v.snippet?.publishedAt || null,
+    label: inferredLabel,
+    copyright: inferredCopyright,
     is_deleted: isDeleted,
     is_music: v.snippet?.categoryId === "10"
   };
@@ -889,6 +906,10 @@ function filterVideos() {
         if (!v.published_at) return false;
         return new Date(v.published_at).getFullYear().toString() === value;
       });
+    } else if (type === "label") {
+      results = results.filter((v) => v.label === value);
+    } else if (type === "copyright") {
+      results = results.filter((v) => v.copyright === value);
     }
   }
 
@@ -1319,6 +1340,30 @@ function renderSidebar() {
         </div>
       `;
     }).join("");
+  } else if (state.sidebarCategory === "labels") {
+    html = data.topLabels.map((lbl) => {
+      const isActive = state.activeFilter && state.activeFilter.type === "label" && state.activeFilter.value === lbl.name;
+      const bgClass = isActive ? "bg-gray-100 dark:bg-gray-800" : "hover:bg-gray-50 dark:hover:bg-gray-900";
+      
+      return `
+        <div class="sidebar-filter-item flex items-center gap-3 text-sm text-gray-900 dark:text-gray-100 p-1.5 rounded cursor-pointer transition-colors ${bgClass}" data-type="label" data-value="${lbl.name}">
+            <span class="w-8 flex justify-center font-bold text-gray-700 bg-gray-100 dark:bg-gray-800 dark:text-gray-300 rounded text-[10px] py-1 shrink-0">${lbl.count}</span>
+            <span class="truncate pr-2">${lbl.name}</span>
+        </div>
+      `;
+    }).join("");
+  } else if (state.sidebarCategory === "copyrights") {
+    html = data.topCopyrights.map((cpy) => {
+      const isActive = state.activeFilter && state.activeFilter.type === "copyright" && state.activeFilter.value === cpy.name;
+      const bgClass = isActive ? "bg-gray-100 dark:bg-gray-800" : "hover:bg-gray-50 dark:hover:bg-gray-900";
+      
+      return `
+        <div class="sidebar-filter-item flex items-center gap-3 text-sm text-gray-900 dark:text-gray-100 p-1.5 rounded cursor-pointer transition-colors ${bgClass}" data-type="copyright" data-value="${cpy.name}">
+            <span class="w-8 flex justify-center font-bold text-gray-700 bg-gray-100 dark:bg-gray-800 dark:text-gray-300 rounded text-[10px] py-1 shrink-0">${cpy.count}</span>
+            <span class="truncate pr-2">${cpy.name}</span>
+        </div>
+      `;
+    }).join("");
   }
 
   dom.sidebarListContainer.innerHTML = html || '<div class="text-gray-500 text-[12px] p-2">No data</div>';
@@ -1328,6 +1373,8 @@ function calculateAnalytics() {
   const channels = {};
   const years = {};
   const albums = {};
+  const labels = {};
+  const copyrights = {};
 
   (state.sidebarBaseVideos || state.filteredVideos).forEach((v) => {
     const isDeleted = checkIfDeleted(v);
@@ -1369,6 +1416,18 @@ function calculateAnalytics() {
       }
       albums[albumKey].count++;
     }
+
+    // Labels
+    if (!isDeleted && v.label) {
+      if (!labels[v.label]) labels[v.label] = 0;
+      labels[v.label]++;
+    }
+
+    // Copyrights
+    if (!isDeleted && v.copyright) {
+      if (!copyrights[v.copyright]) copyrights[v.copyright] = 0;
+      copyrights[v.copyright]++;
+    }
   });
 
   const topChannels = Object.entries(channels)
@@ -1391,7 +1450,17 @@ function calculateAnalytics() {
     .sort((a, b) => b.count - a.count)
     .slice(0, 100);
 
-  return { topChannels, releaseYears, topAlbums };
+  const topLabels = Object.entries(labels)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 100);
+
+  const topCopyrights = Object.entries(copyrights)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 100);
+
+  return { topChannels, releaseYears, topAlbums, topLabels, topCopyrights };
 }
 
 function getDynamicMetadata(video) {
