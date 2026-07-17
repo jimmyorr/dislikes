@@ -37,6 +37,8 @@ const state = {
   sidebarBaseVideos: [],
   ytPlayer: null,
   isPlayerReady: false,
+  currentVideoIndex: -1,
+  progressInterval: null,
 };
 
 // --- DOM Elements ---
@@ -81,6 +83,13 @@ const dom = {
   playerIconPause: document.getElementById("player-icon-pause"),
   playerIconLoading: document.getElementById("player-icon-loading"),
   playerClose: document.getElementById("player-close"),
+  playerPrev: document.getElementById("player-prev"),
+  playerNext: document.getElementById("player-next"),
+  playerTimeCurrent: document.getElementById("player-time-current"),
+  playerTimeTotal: document.getElementById("player-time-total"),
+  bottomPlayerProgressBar: document.getElementById("bottom-player-progress-bar"),
+  bottomPlayerProgressContainer: document.getElementById("bottom-player-progress-container"),
+  bottomPlayerBg: document.getElementById("bottom-player-bg"),
 
   fsPlayer: document.getElementById("full-screen-player"),
   fsPlayerBg: document.getElementById("fs-player-bg"),
@@ -92,6 +101,11 @@ const dom = {
   fsPlayerIconPlay: document.getElementById("fs-player-icon-play"),
   fsPlayerIconPause: document.getElementById("fs-player-icon-pause"),
   fsPlayerIconLoading: document.getElementById("fs-player-icon-loading"),
+  fsPlayerProgress: document.getElementById("fs-player-progress"),
+  fsPlayerTimeCurrent: document.getElementById("fs-player-time-current"),
+  fsPlayerTimeTotal: document.getElementById("fs-player-time-total"),
+  fsPlayerPrev: document.getElementById("fs-player-prev"),
+  fsPlayerNext: document.getElementById("fs-player-next"),
 
   quickScrollContainer: document.getElementById("quick-scroll-container"),
   backToTop: document.getElementById("back-to-top"),
@@ -307,7 +321,11 @@ function setupEventListeners() {
     }
   });
 
-  dom.bottomPlayerTrackInfo.addEventListener("click", () => {
+  dom.bottomPlayer.addEventListener("click", (e) => {
+    // Don't trigger if they clicked a button, the progress bar, or a link
+    if (e.target.closest("button") || e.target.closest("input") || e.target.closest("a") || e.target.closest("#bottom-player-progress-container")) {
+      return;
+    }
     dom.fsPlayer.classList.remove("translate-y-full");
     // Make sure we stop body scrolling while full screen is open
     document.body.style.overflow = "hidden";
@@ -319,9 +337,66 @@ function setupEventListeners() {
   });
 
   document.addEventListener("keydown", (e) => {
+    // Ignore key presses when typing in inputs
+    if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+
     if (e.key === "Escape" && !dom.fsPlayer.classList.contains("translate-y-full")) {
       dom.fsPlayer.classList.add("translate-y-full");
       document.body.style.overflow = "";
+    } else if (e.code === "Space" || e.key === " ") {
+      e.preventDefault(); // Prevent page scrolling
+      if (!state.isPlayerReady || !state.ytPlayer) return;
+      const playerState = state.ytPlayer.getPlayerState();
+      if (playerState === 1) { // Playing
+        state.ytPlayer.pauseVideo();
+      } else {
+        state.ytPlayer.playVideo();
+      }
+    }
+  });
+
+  dom.fsPlayerProgress.addEventListener("input", (e) => {
+    if (state.ytPlayer && state.ytPlayer.getDuration) {
+      const duration = state.ytPlayer.getDuration();
+      const seekTo = (e.target.value / 100) * duration;
+      state.ytPlayer.seekTo(seekTo, true);
+      dom.fsPlayerTimeCurrent.innerText = formatTime(seekTo);
+    }
+  });
+
+  const handlePrevClick = () => {
+    if (state.ytPlayer && state.ytPlayer.getCurrentTime) {
+      if (state.ytPlayer.getCurrentTime() > 3) {
+        state.ytPlayer.seekTo(0, true);
+        return;
+      }
+    }
+    if (state.currentVideoIndex > 0) {
+      playTrackByIndex(state.currentVideoIndex - 1);
+    } else {
+      if (state.ytPlayer) state.ytPlayer.seekTo(0, true);
+    }
+  };
+
+  dom.fsPlayerPrev.addEventListener("click", handlePrevClick);
+  dom.playerPrev.addEventListener("click", handlePrevClick);
+
+  const handleNextClick = () => {
+    playTrackByIndex(state.currentVideoIndex + 1);
+  };
+
+  dom.fsPlayerNext.addEventListener("click", handleNextClick);
+  dom.playerNext.addEventListener("click", handleNextClick);
+
+  dom.bottomPlayerProgressContainer.addEventListener("click", (e) => {
+    if (state.ytPlayer && state.ytPlayer.getDuration) {
+      const rect = dom.bottomPlayerProgressContainer.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const percent = Math.max(0, Math.min(1, x / rect.width));
+      const duration = state.ytPlayer.getDuration();
+      const seekTo = percent * duration;
+      state.ytPlayer.seekTo(seekTo, true);
+      dom.playerTimeCurrent.innerText = formatTime(seekTo);
     }
   });
 
@@ -1262,8 +1337,9 @@ function renderVideoList(append = false) {
     const playBtn = clone.querySelector(".video-play-btn");
     if (!isDeleted) {
       playBtn.addEventListener("click", () => {
+        const index = state.filteredVideos.findIndex(v => v.video_id === video.video_id);
         const channelUrl = video.channel_id ? `${baseUrl}/channel/${video.channel_id}` : null;
-        playVideo(video.video_id, title, video.artist || "Unknown channel", thumbnail, channelUrl);
+        playVideo(video.video_id, title, video.artist || "Unknown channel", thumbnail, channelUrl, index);
       });
     } else {
       playBtn.classList.add("cursor-not-allowed");
@@ -1648,7 +1724,6 @@ function initYTPlayer() {
 }
 
 function onPlayerStateChange(event) {
-  // YT.PlayerState.PLAYING = 1, PAUSED = 2, BUFFERING = 3
   if (event.data === 1) { // Playing
     dom.playerIconLoading.classList.add("hidden");
     dom.playerIconPlay.classList.add("hidden");
@@ -1657,7 +1732,10 @@ function onPlayerStateChange(event) {
     dom.fsPlayerIconLoading.classList.add("hidden");
     dom.fsPlayerIconPlay.classList.add("hidden");
     dom.fsPlayerIconPause.classList.remove("hidden");
-  } else if (event.data === 2) { // Paused
+    
+    dom.fsPlayerPlayPause.disabled = false;
+    startProgressInterval();
+  } else if (event.data === 2 || event.data === 0) { // Paused or Ended
     dom.playerIconLoading.classList.add("hidden");
     dom.playerIconPlay.classList.remove("hidden");
     dom.playerIconPause.classList.add("hidden");
@@ -1665,6 +1743,14 @@ function onPlayerStateChange(event) {
     dom.fsPlayerIconLoading.classList.add("hidden");
     dom.fsPlayerIconPlay.classList.remove("hidden");
     dom.fsPlayerIconPause.classList.add("hidden");
+    
+    dom.fsPlayerPlayPause.disabled = false;
+    stopProgressInterval();
+
+    if (event.data === 0 && state.currentVideoIndex >= 0 && state.currentVideoIndex < state.filteredVideos.length - 1) {
+      // Autoplay next track when finished
+      playTrackByIndex(state.currentVideoIndex + 1);
+    }
   } else if (event.data === 3) { // Buffering
     dom.playerIconLoading.classList.remove("hidden");
     dom.playerIconPlay.classList.add("hidden");
@@ -1676,7 +1762,10 @@ function onPlayerStateChange(event) {
   }
 }
 
-function playVideo(videoId, title, artist, thumbUrl, channelUrl) {
+function playVideo(videoId, title, artist, thumbUrl, channelUrl, index = -1) {
+  state.currentVideoIndex = index;
+  updatePrevNextButtons();
+
   dom.bottomPlayer.classList.remove("translate-y-full");
   document.body.style.paddingBottom = "72px"; // Height of bottom player
   
@@ -1704,15 +1793,18 @@ function playVideo(videoId, title, artist, thumbUrl, channelUrl) {
   
   dom.fsPlayerThumbnail.src = maxResUrl;
   dom.fsPlayerBg.style.backgroundImage = `url(${maxResUrl})`;
+  dom.bottomPlayerBg.style.backgroundImage = `url(${maxResUrl})`;
   
   // Fallbacks if maxres doesn't exist
   dom.fsPlayerThumbnail.onerror = () => {
     if (dom.fsPlayerThumbnail.src === maxResUrl) {
       dom.fsPlayerThumbnail.src = hqResUrl;
       dom.fsPlayerBg.style.backgroundImage = `url(${hqResUrl})`;
+      dom.bottomPlayerBg.style.backgroundImage = `url(${hqResUrl})`;
     } else if (dom.fsPlayerThumbnail.src === hqResUrl) {
       dom.fsPlayerThumbnail.src = thumbUrl;
       dom.fsPlayerBg.style.backgroundImage = `url(${thumbUrl})`;
+      dom.bottomPlayerBg.style.backgroundImage = `url(${thumbUrl})`;
     }
   };
   dom.fsPlayerTitle.innerText = title;
@@ -1727,6 +1819,70 @@ function playVideo(videoId, title, artist, thumbUrl, channelUrl) {
 
   if (state.isPlayerReady && state.ytPlayer) {
     state.ytPlayer.loadVideoById(videoId);
+  }
+}
+
+function updatePrevNextButtons() {
+  if (state.currentVideoIndex === -1) {
+    dom.fsPlayerPrev.disabled = true;
+    dom.fsPlayerNext.disabled = true;
+    dom.playerPrev.disabled = true;
+    dom.playerNext.disabled = true;
+  } else {
+    dom.fsPlayerPrev.disabled = false; // Always allow seeking to start
+    dom.fsPlayerNext.disabled = state.currentVideoIndex >= state.filteredVideos.length - 1;
+    dom.playerPrev.disabled = false;
+    dom.playerNext.disabled = state.currentVideoIndex >= state.filteredVideos.length - 1;
+  }
+}
+
+function playTrackByIndex(index) {
+  if (index >= 0 && index < state.filteredVideos.length) {
+    const video = state.filteredVideos[index];
+    const baseUrl = video.is_music ? "https://music.youtube.com" : "https://www.youtube.com";
+    const channelUrl = video.channel_id ? `${baseUrl}/channel/${video.channel_id}` : null;
+    let title = video.title;
+    if (state.mode === "dislike") {
+      title = video.title.replace(/^\[.*?\]\s*/, '');
+    }
+    const thumbnail = video.thumbnails?.high?.url || video.thumbnails?.default?.url || "";
+    playVideo(video.video_id, title, video.artist || "Unknown channel", thumbnail, channelUrl, index);
+  }
+}
+
+function formatTime(seconds) {
+  if (isNaN(seconds)) return "0:00";
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s < 10 ? '0' : ''}${s}`;
+}
+
+function startProgressInterval() {
+  stopProgressInterval();
+  state.progressInterval = setInterval(() => {
+    if (state.ytPlayer && state.ytPlayer.getCurrentTime) {
+      const current = state.ytPlayer.getCurrentTime();
+      const duration = state.ytPlayer.getDuration();
+      if (duration > 0) {
+        const percent = (current / duration) * 100;
+        dom.fsPlayerProgress.value = percent;
+        dom.bottomPlayerProgressBar.style.width = `${percent}%`;
+        
+        const currentFormatted = formatTime(current);
+        const totalFormatted = formatTime(duration);
+        dom.fsPlayerTimeCurrent.innerText = currentFormatted;
+        dom.fsPlayerTimeTotal.innerText = totalFormatted;
+        dom.playerTimeCurrent.innerText = currentFormatted;
+        dom.playerTimeTotal.innerText = totalFormatted;
+      }
+    }
+  }, 500);
+}
+
+function stopProgressInterval() {
+  if (state.progressInterval) {
+    clearInterval(state.progressInterval);
+    state.progressInterval = null;
   }
 }
 
