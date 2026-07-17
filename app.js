@@ -1088,8 +1088,9 @@ function renderVideoList(append = false) {
     };
 
     const links = clone.querySelectorAll(".video-link");
+    const baseUrl = video.is_music ? "https://music.youtube.com" : "https://www.youtube.com";
     links.forEach(
-      (l) => (l.href = `https://www.youtube.com/watch?v=${video.video_id}`),
+      (l) => (l.href = `${baseUrl}/watch?v=${video.video_id}`),
     );
 
     // Title
@@ -1103,7 +1104,7 @@ function renderVideoList(append = false) {
     const chId = video.channel_id;
 
     if (chId && !isDeleted) {
-      channelEl.innerHTML = `<a href="https://www.youtube.com/channel/${chId}" target="_blank" class="hover:text-black hover:underline">${highlightMatch(chName, state.debouncedSearchTerm)}</a>`;
+      channelEl.innerHTML = `<a href="${baseUrl}/channel/${chId}" target="_blank" class="hover:text-black hover:underline">${highlightMatch(chName, state.debouncedSearchTerm)}</a>`;
     } else {
       channelEl.innerHTML = highlightMatch(chName, state.debouncedSearchTerm);
     }
@@ -1215,11 +1216,11 @@ function renderAnalytics() {
     .map((album) => {
       return `
         <div class="flex gap-3 items-center">
-          <a href="https://www.youtube.com/watch?v=${album.video_id}" target="_blank" class="shrink-0 relative group">
+          <a href="https://music.youtube.com/watch?v=${album.video_id}" target="_blank" class="shrink-0 relative group">
              <img src="${album.thumbnail}" alt="${album.artist}" class="w-12 h-12 object-cover rounded border border-gray-200 dark:border-gray-800 shadow-sm group-hover:opacity-80 transition-opacity">
           </a>
           <div class="flex flex-col gap-0.5">
-            <a href="https://www.youtube.com/watch?v=${album.video_id}" target="_blank" class="hover:underline text-[13px] font-medium text-gray-900 dark:text-gray-100 line-clamp-1">${album.artist}</a>
+            <a href="https://music.youtube.com/watch?v=${album.video_id}" target="_blank" class="hover:underline text-[13px] font-medium text-gray-900 dark:text-gray-100 line-clamp-1">${album.artist}</a>
             <div class="flex items-center gap-2 text-[11px] text-gray-500">
               <span class="truncate">${album.year}</span>
               <span class="shrink-0">•</span>
