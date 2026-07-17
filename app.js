@@ -1212,7 +1212,8 @@ function renderVideoList(append = false) {
     const playBtn = clone.querySelector(".video-play-btn");
     if (!isDeleted) {
       playBtn.addEventListener("click", () => {
-        playVideo(video.video_id, title, video.artist || "Unknown channel", thumbnail);
+        const channelUrl = video.channel_id ? `${baseUrl}/channel/${video.channel_id}` : null;
+        playVideo(video.video_id, title, video.artist || "Unknown channel", thumbnail, channelUrl);
       });
     } else {
       playBtn.classList.add("cursor-not-allowed");
@@ -1606,7 +1607,7 @@ function onPlayerStateChange(event) {
   }
 }
 
-function playVideo(videoId, title, artist, thumbUrl) {
+function playVideo(videoId, title, artist, thumbUrl, channelUrl) {
   dom.bottomPlayer.classList.remove("translate-y-full");
   document.body.style.paddingBottom = "72px"; // Height of bottom player
   
@@ -1616,7 +1617,15 @@ function playVideo(videoId, title, artist, thumbUrl) {
   
   dom.playerThumbnail.src = thumbUrl;
   dom.playerTitle.innerText = title;
-  dom.playerArtist.innerText = artist;
+  
+  let cleanArtist = artist || "Unknown channel";
+  if (cleanArtist.endsWith(" - Topic")) cleanArtist = cleanArtist.slice(0, -8);
+  
+  if (channelUrl) {
+    dom.playerArtist.innerHTML = `<a href="${channelUrl}" target="_blank" class="hover:underline">${cleanArtist}</a>`;
+  } else {
+    dom.playerArtist.innerText = cleanArtist;
+  }
   
   dom.playerIconLoading.classList.remove("hidden");
   dom.playerIconPlay.classList.add("hidden");
