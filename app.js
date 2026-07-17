@@ -798,7 +798,18 @@ function filterVideos() {
       case "channel-az": {
         const artistCompare = a.artist.localeCompare(b.artist);
         if (artistCompare !== 0) return artistCompare;
-        return new Date(a.published_at || 0) - new Date(b.published_at || 0);
+        
+        // Truncate to just the day (YYYY-MM-DD)
+        const dateA = a.published_at ? a.published_at.split('T')[0] : '';
+        const dateB = b.published_at ? b.published_at.split('T')[0] : '';
+        
+        if (dateA !== dateB) {
+          // Sort chronologically by date
+          return new Date(dateA || 0) - new Date(dateB || 0);
+        }
+        
+        // If uploaded on the same day, sort by title (useful if tracks have track numbers)
+        return a.title.localeCompare(b.title);
       }
       case "title-az":
         return a.title.localeCompare(b.title);
