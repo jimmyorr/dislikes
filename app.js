@@ -1172,7 +1172,7 @@ function renderAnalytics() {
 
       return `
             <div class="flex items-center gap-3 text-sm text-gray-900 dark:text-gray-100">
-                <span class="w-8 flex justify-center font-bold text-black bg-white dark:bg-[#1a1a1a] dark:text-gray-200 border border-gray-200 dark:border-gray-700 rounded text-[10px] py-0.5 shrink-0">${ch.count}</span>
+                <span class="w-8 flex justify-center font-bold text-gray-700 bg-gray-100 dark:bg-gray-800 dark:text-gray-300 rounded text-[10px] py-1 shrink-0">${ch.count}</span>
                 ${display}
             </div>
         `;
