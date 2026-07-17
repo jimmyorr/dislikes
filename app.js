@@ -795,8 +795,11 @@ function filterVideos() {
         return b.comments - a.comments;
       case "views-high":
         return b.views - a.views;
-      case "channel-az":
-        return a.artist.localeCompare(b.artist);
+      case "channel-az": {
+        const artistCompare = a.artist.localeCompare(b.artist);
+        if (artistCompare !== 0) return artistCompare;
+        return new Date(a.published_at || 0) - new Date(b.published_at || 0);
+      }
       case "title-az":
         return a.title.localeCompare(b.title);
       default:
