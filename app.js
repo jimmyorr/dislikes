@@ -32,6 +32,7 @@ const state = {
   iconCache: {},
   showAllChannels: false,
   showAllAlbums: false,
+  showAllYears: false,
   renderLimit: 50,
   forceRefetch: false,
 };
@@ -271,6 +272,14 @@ function setupEventListeners() {
     const btn = e.target.closest("#albums-more-button");
     if (btn) {
       state.showAllAlbums = !state.showAllAlbums;
+      renderAnalytics();
+    }
+  });
+
+  dom.releaseYearsList.addEventListener("click", (e) => {
+    const btn = e.target.closest("#years-more-button");
+    if (btn) {
+      state.showAllYears = !state.showAllYears;
       renderAnalytics();
     }
   });
@@ -1192,7 +1201,12 @@ function renderAnalytics() {
   }
 
   // Render Release Years
-  dom.releaseYearsList.innerHTML = data.releaseYears.length > 0 ? data.releaseYears
+  const displayYears = state.showAllYears
+    ? data.releaseYears
+    : data.releaseYears.slice(0, 10);
+  const hasMoreYears = data.releaseYears.length > 10;
+
+  dom.releaseYearsList.innerHTML = displayYears.length > 0 ? displayYears
     .map((ry) => {
       return `
         <div class="flex items-center gap-3 text-sm text-gray-900 dark:text-gray-100">
@@ -1205,6 +1219,18 @@ function renderAnalytics() {
       `;
     })
     .join("") : '<div class="text-gray-500 text-[12px]">No data</div>';
+
+  if (hasMoreYears) {
+    const btnText = state.showAllYears ? "Show less" : "More";
+    dom.releaseYearsList.insertAdjacentHTML(
+      "beforeend",
+      `
+            <button id="years-more-button" class="mt-2 text-[10px] font-bold uppercase tracking-wider text-gray-500 hover:text-black dark:text-gray-400 dark:hover:text-white transition-colors">
+                ${btnText}
+            </button>
+        `,
+    );
+  }
 
   // Render Top Albums
   const displayAlbums = state.showAllAlbums
