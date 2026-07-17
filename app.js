@@ -521,6 +521,14 @@ function saveToCache() {
 function slimVideo(v) {
   const isDeleted = v.status ? (v.status.uploadStatus === "deleted" || v.status.uploadStatus === "rejected") : (!v.snippet);
   
+  let inferredDate = null;
+  if (v.snippet && v.snippet.description) {
+    const match = v.snippet.description.match(/Released on:\s*(\d{4}-\d{2}-\d{2})/i);
+    if (match) {
+      inferredDate = match[1] + "T00:00:00Z";
+    }
+  }
+
   return {
     title: v.snippet?.title || "Unavailable",
     artist: v.snippet?.channelTitle || "Unknown",
@@ -529,7 +537,7 @@ function slimVideo(v) {
     views: v.statistics?.viewCount ? parseInt(v.statistics.viewCount, 10) : 0,
     comments: v.statistics?.commentCount ? parseInt(v.statistics.commentCount, 10) : 0,
     duration: v.contentDetails?.duration || null,
-    published_at: v.snippet?.publishedAt || null,
+    published_at: inferredDate || v.snippet?.publishedAt || null,
     is_deleted: isDeleted,
     is_music: v.snippet?.categoryId === "10"
   };
@@ -694,7 +702,6 @@ async function handleLoadAll() {
     try {
       while (state.isFetchAll && state.nextPageToken) {
         await fetchVideos(state.nextPageToken);
-        window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
       }
     } finally {
       state.isFetchAll = false;
