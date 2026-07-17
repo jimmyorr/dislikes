@@ -13,8 +13,8 @@ const state = {
   tokenClient: null,
   isAuthenticated: false,
   theme: localStorage.getItem("dislikes-theme") || "system",
-  compactMode: localStorage.getItem("dislikes-compact") === "true",
-  musicOnly: localStorage.getItem("dislikes-music-only") === "true",
+  compactMode: localStorage.getItem("dislikes-compact") !== null ? localStorage.getItem("dislikes-compact") === "true" : true,
+  musicOnly: localStorage.getItem("dislikes-music-only") !== null ? localStorage.getItem("dislikes-music-only") === "true" : true,
   unavailableOnly: localStorage.getItem("dislikes-unavailable-only") === "true",
   videos: [],
   filteredVideos: [],
@@ -28,7 +28,7 @@ const state = {
   totalResults: null,
   showInsights: false,
   isFetchAll: false,
-  mode: localStorage.getItem("dislikes-mode") || "dislike", // 'dislike' or 'like'
+  mode: localStorage.getItem("dislikes-mode") || "like", // 'dislike' or 'like'
   iconCache: {},
   sidebarCategory: "channels",
   activeFilter: null,
