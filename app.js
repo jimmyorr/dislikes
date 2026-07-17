@@ -400,6 +400,10 @@ function setupEventListeners() {
     state.nextPageToken = null;
     state.totalResults = null;
     state.isFetchAll = false;
+    state.searchTerm = "";
+    state.debouncedSearchTerm = "";
+    dom.searchInput.value = "";
+    state.activeFilter = null;
 
     if (state.isAuthenticated) {
       fetchVideos();
