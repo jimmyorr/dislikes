@@ -60,6 +60,8 @@ const dom = {
   videoGrid: document.getElementById("video-grid"),
   copyIdsButton: document.getElementById("copy-ids-button"),
   exportJsonButton: document.getElementById("export-json-button"),
+  uploadJsonButton: document.getElementById("upload-json-button"),
+  uploadJsonInput: document.getElementById("upload-json-input"),
   clearCacheButton: document.getElementById("clear-cache-button"),
   loadAllButton: document.getElementById("load-all-button"),
   sidebarFilterSelect: document.getElementById("sidebar-filter-select"),
@@ -293,6 +295,8 @@ function setupEventListeners() {
 
   dom.copyIdsButton.addEventListener("click", handleCopyIds);
   dom.exportJsonButton.addEventListener("click", handleExportJson);
+  dom.uploadJsonButton.addEventListener("click", () => dom.uploadJsonInput.click());
+  dom.uploadJsonInput.addEventListener("change", handleUploadJson);
   dom.clearCacheButton.addEventListener("click", handleClearCache);
   dom.loadAllButton.addEventListener("click", handleLoadAll);
 
@@ -733,15 +737,7 @@ async function handleCopyIds() {
 async function handleExportJson() {
   if (state.filteredVideos.length === 0) return;
 
-  const exportData = state.filteredVideos.map((v) => {
-    return {
-      title: v.title,
-      artist: v.artist,
-      video_id: v.video_id,
-      channel_id: v.channel_id,
-      views: v.views,
-    };
-  });
+  const exportData = state.filteredVideos;
 
   const dataStr =
     "data:text/json;charset=utf-8," +
@@ -765,6 +761,37 @@ async function handleExportJson() {
     dom.exportJsonButton.innerHTML = originalBg;
     dom.exportJsonButton.classList.remove("border-green-500");
   }, 2000);
+}
+
+function handleUploadJson(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (Array.isArray(data)) {
+        state.videos = data;
+        localStorage.setItem(`dislikes-data-${state.mode}`, JSON.stringify(data));
+        localStorage.setItem(`dislikes-data-${state.mode}-timestamp`, Date.now());
+        
+        state.activeFilter = null;
+        filterVideos();
+        render();
+        alert(`Successfully loaded ${data.length} videos!`);
+      } else {
+        alert("Invalid JSON format. Expected an array of videos.");
+      }
+    } catch (err) {
+      alert("Error parsing JSON file.");
+      console.error(err);
+    }
+  };
+  reader.readAsText(file);
+  
+  // Reset the input so the same file can be uploaded again if needed
+  event.target.value = "";
 }
 
 function filterVideos() {
