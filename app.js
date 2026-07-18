@@ -142,6 +142,25 @@ function init() {
   console.log(`Dislikes v${APP_VERSION} initializing...`);
   document.getElementById("app-version").textContent = `v${APP_VERSION}`;
 
+  // Handle responsive sidebar visibility
+  const handleResize = () => {
+    if (window.innerWidth >= 1024) {
+      dom.sidebarContent.classList.remove("hidden");
+      dom.sidebarContent.classList.add("flex");
+    } else if (!dom.sidebarContent.classList.contains("hidden") && !dom.mobileFilterToggle.classList.contains("open")) {
+      dom.sidebarContent.classList.add("hidden");
+      dom.sidebarContent.classList.remove("flex");
+    }
+  };
+  
+  // Set initial state
+  if (window.innerWidth < 1024) {
+    dom.sidebarContent.classList.add("hidden");
+    dom.sidebarContent.classList.remove("flex");
+  }
+  
+  window.addEventListener("resize", handleResize);
+
   initGapi();
   initGis();
   initYTPlayer();
