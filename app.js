@@ -1884,7 +1884,7 @@ function playTrackByIndex(index) {
     if (state.mode === "dislike") {
       title = video.title.replace(/^\[.*?\]\s*/, '');
     }
-    const thumbnail = video.thumbnails?.high?.url || video.thumbnails?.default?.url || "";
+    const thumbnail = `https://i.ytimg.com/vi/${video.video_id}/mqdefault.jpg`;
     playVideo(video.video_id, title, video.artist || "Unknown channel", thumbnail, channelUrl, index);
   }
 }
