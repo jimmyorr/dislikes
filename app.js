@@ -71,6 +71,8 @@ const dom = {
   loadAllButton: document.getElementById("load-all-button"),
   sidebarFilterSelect: document.getElementById("sidebar-filter-select"),
   sidebarListContainer: document.getElementById("sidebar-list-container"),
+  mobileFilterToggle: document.getElementById("mobile-filter-toggle"),
+  sidebarContent: document.getElementById("sidebar-content"),
 
   scrollSentinel: document.getElementById("infinite-scroll-sentinel"),
 
@@ -427,14 +429,13 @@ function setupEventListeners() {
     renderSidebar();
   });
 
+  // Sidebar item clicks
   dom.sidebarListContainer.addEventListener("click", (e) => {
-    // Check if clicked on a filter item
     const filterItem = e.target.closest(".sidebar-filter-item");
     if (filterItem) {
       const type = filterItem.dataset.type;
       const value = filterItem.dataset.value;
-      
-      // Toggle off if already active
+
       if (state.activeFilter && state.activeFilter.type === type && state.activeFilter.value === value) {
         state.activeFilter = null;
       } else {
@@ -443,8 +444,34 @@ function setupEventListeners() {
       
       filterVideos();
       render();
+      
+      // On mobile, automatically close the filters after selecting one
+      if (window.innerWidth < 1024 && !dom.sidebarContent.classList.contains("hidden")) {
+        dom.sidebarContent.classList.add("hidden");
+        dom.sidebarContent.classList.remove("flex");
+        dom.mobileFilterToggle.querySelector("span").textContent = "Show Filters";
+        dom.mobileFilterToggle.querySelector("svg").classList.remove("rotate-180");
+      }
     }
   });
+  
+  // Mobile filter toggle
+  if (dom.mobileFilterToggle) {
+    dom.mobileFilterToggle.addEventListener("click", () => {
+      const isHidden = dom.sidebarContent.classList.contains("hidden");
+      if (isHidden) {
+        dom.sidebarContent.classList.remove("hidden");
+        dom.sidebarContent.classList.add("flex");
+        dom.mobileFilterToggle.querySelector("span").textContent = "Hide Filters";
+        dom.mobileFilterToggle.querySelector("svg").classList.add("rotate-180");
+      } else {
+        dom.sidebarContent.classList.add("hidden");
+        dom.sidebarContent.classList.remove("flex");
+        dom.mobileFilterToggle.querySelector("span").textContent = "Show Filters";
+        dom.mobileFilterToggle.querySelector("svg").classList.remove("rotate-180");
+      }
+    });
+  }
 
   dom.searchInput.addEventListener("input", (e) => {
     state.searchTerm = e.target.value;
