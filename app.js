@@ -950,7 +950,7 @@ async function handleLoadAll() {
 async function handleCopyIds() {
   if (state.filteredVideos.length === 0) return;
 
-  const ids = state.filteredVideos.map((v) => v.video_id).join("\n");
+  const ids = state.filteredVideos.map((v) => v.video_id).join(",");
 
   try {
     await navigator.clipboard.writeText(ids);
