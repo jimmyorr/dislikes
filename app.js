@@ -1003,6 +1003,8 @@ async function loadDemoData() {
       state.activeFilter = null;
       state.isAuthenticated = true; // Act as if authenticated
       
+      dom.clearCacheButton.classList.add("hidden");
+      
       filterVideos();
       render();
     } else {
@@ -1031,6 +1033,9 @@ function handleUploadJson(event) {
         localStorage.setItem(`dislikes-data-${state.mode}-timestamp`, Date.now());
         
         state.activeFilter = null;
+        
+        dom.clearCacheButton.classList.add("hidden");
+        
         filterVideos();
         render();
         alert(`Successfully loaded ${data.length} videos!`);
