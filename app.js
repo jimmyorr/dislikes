@@ -47,6 +47,7 @@ const dom = {
   authButton: document.getElementById("auth-button"),
   authText: document.getElementById("auth-text"),
   heroAuthButton: document.getElementById("hero-auth-button"),
+  heroDemoButton: document.getElementById("hero-demo-button"),
   signoutButton: document.getElementById("signout-button"),
 
   viewWelcome: document.getElementById("view-welcome"),
@@ -289,6 +290,9 @@ function checkReady() {
 function setupEventListeners() {
   dom.authButton.addEventListener("click", handleAuthClick);
   dom.heroAuthButton.addEventListener("click", handleAuthClick);
+  if (dom.heroDemoButton) {
+    dom.heroDemoButton.addEventListener("click", loadDemoData);
+  }
   dom.signoutButton.addEventListener("click", handleSignout);
 
   dom.playerPlayPause.addEventListener("click", () => {
@@ -951,6 +955,41 @@ async function handleExportJson() {
   }, 2000);
 }
 
+async function loadDemoData() {
+  const originalText = dom.heroDemoButton.textContent;
+  dom.heroDemoButton.textContent = "Loading...";
+  dom.heroDemoButton.disabled = true;
+
+  try {
+    const response = await fetch('likes.json');
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    const data = await response.json();
+    
+    if (Array.isArray(data)) {
+      state.mode = 'like';
+      state.videos = data;
+      localStorage.setItem(`dislikes-data-${state.mode}`, JSON.stringify(data));
+      localStorage.setItem(`dislikes-data-${state.mode}-timestamp`, Date.now());
+      
+      state.activeFilter = null;
+      state.isAuthenticated = true; // Act as if authenticated
+      
+      filterVideos();
+      render();
+    } else {
+      alert("Invalid JSON format in demo data.");
+    }
+  } catch (err) {
+    alert("Error loading demo data. Make sure likes.json exists.");
+    console.error(err);
+  } finally {
+    dom.heroDemoButton.textContent = originalText;
+    dom.heroDemoButton.disabled = false;
+  }
+}
+
 function handleUploadJson(event) {
   const file = event.target.files[0];
   if (!file) return;
@@ -1156,7 +1195,7 @@ function render() {
     dom.modeToggle.textContent = isDislike ? "Dislikes" : "Likes";
   }
   dom.welcomeTitle.textContent = `Your YouTube ${isDislike ? "disliked" : "liked"} videos.`;
-  dom.welcomeDesc.textContent = `View, filter, and sort your ${isDislike ? "dislikes" : "likes"}. Simple, private, and minimal.`;
+  dom.welcomeDesc.innerHTML = `View, filter, and sort your ${isDislike ? "dislikes" : "likes"}.<br>Simple, private, and minimal.`;
 
   document.title = isDislike ? "Dislikes" : "Likes";
   updateFavicon(state.mode);

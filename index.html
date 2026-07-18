@@ -291,15 +291,23 @@
           Your YouTube disliked videos.
         </h2>
         <p id="welcome-desc" class="text-gray-600 dark:text-gray-400 mb-10 max-w-md mx-auto">
-          View, filter, and sort your dislikes. Simple, private, and minimal.
+          View, filter, and sort your dislikes.<br>Simple, private, and minimal.
         </p>
-        <button
-          id="hero-auth-button"
-          disabled
-          class="px-8 py-3 bg-black dark:bg-white text-white dark:text-black rounded font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
-        >
-          Initializing...
-        </button>
+        <div class="flex flex-col sm:flex-row gap-4 justify-center items-center">
+          <button
+            id="hero-auth-button"
+            disabled
+            class="px-8 py-3 bg-black dark:bg-white text-white dark:text-black rounded font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+          >
+            Initializing...
+          </button>
+          <button
+            id="hero-demo-button"
+            class="px-8 py-3 bg-gray-100 dark:bg-[#1a1a1a] text-black dark:text-white rounded font-medium hover:bg-gray-200 dark:hover:bg-[#2a2a2a] transition-colors border border-gray-200 dark:border-gray-800"
+          >
+            See my likes
+          </button>
+        </div>
         <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-4 tracking-wider uppercase">
           Local only. Data never leaves your browser.
         </p>
