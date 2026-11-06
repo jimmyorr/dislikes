@@ -1,0 +1,8 @@
+# OS / Editor
+.DS_Store
+.vscode/
+.idea/
+
+# Dependencies / Logs
+node_modules/
+*.log
