@@ -10,7 +10,7 @@
     />
     <link rel="canonical" href="https://dislikes.cowneck.com/" />
     <link rel="manifest" href="manifest.json" />
-    <meta name="theme-color" content="#ffffff" />
+    <meta id="theme-color-meta" name="theme-color" content="#ffffff" />
     <link id="favicon" rel="icon" type="image/png" href="icon.png" />
 
     <!-- Link previews (Open Graph & Twitter/X) -->
@@ -86,7 +86,18 @@
     <script>
       tailwind.config = {
         darkMode: 'class',
-      }
+      };
+      (function () {
+        try {
+          var t = localStorage.getItem('dislikes-theme') || 'system';
+          var isDark = t === 'dark' || (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.classList.toggle('dark', isDark);
+          var meta = document.getElementById('theme-color-meta');
+          if (meta) meta.setAttribute('content', isDark ? '#0a0a0a' : '#ffffff');
+        } catch {
+          /* ignore */
+        }
+      })();
     </script>
 
     <!-- Google Scripts -->
@@ -157,6 +168,11 @@
         border-radius: 2px;
       }
 
+      .dark mark {
+        background: rgba(251, 191, 36, 0.25);
+        color: #fde68a;
+      }
+
       @keyframes rotate {
         from {
           transform: rotate(0deg);
@@ -194,6 +210,16 @@
         border-radius: 2px;
       }
 
+      .dark .skeleton {
+        background: linear-gradient(
+          90deg,
+          #1f2937 25%,
+          #374151 50%,
+          #1f2937 75%
+        );
+        background-size: 200% 100%;
+      }
+
     </style>
   </head>
 
@@ -205,6 +231,7 @@
         <div class="flex items-center gap-3">
           <button
             id="mode-toggle"
+            title="Switch between likes and dislikes"
             class="flex items-center gap-2 text-lg font-medium tracking-tight hover:opacity-70 transition-opacity"
           >
             <img id="site-logo" src="icon.png" class="w-6 h-6 object-contain" alt="Logo" />
@@ -215,9 +242,9 @@
         <div class="flex items-center gap-2 relative">
           <div
             id="auth-indicator"
-            class="hidden flex items-center gap-4 text-sm mr-2"
+            class="hidden items-center gap-4 text-sm mr-2"
           >
-            <span class="text-gray-500 hidden sm:inline">Authenticated</span>
+            <span id="auth-status-text" class="text-gray-500 hidden sm:inline">Authenticated</span>
             <button
               id="signout-button"
               class="text-gray-900 dark:text-gray-100 underline hover:no-underline font-medium"
@@ -230,6 +257,7 @@
             id="settings-button"
             class="p-2 text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors rounded-full hover:bg-gray-50 dark:hover:bg-gray-800"
             title="Settings"
+            aria-label="Settings"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -244,7 +272,7 @@
             >
               <circle cx="12" cy="12" r="3" />
               <path
-                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
+                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
               />
             </svg>
           </button>
@@ -298,6 +326,7 @@
             <a
               href="https://github.com/jimmyorr/dislikes"
               target="_blank"
+              rel="noopener noreferrer"
               class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800"
               >GitHub source</a
             >
@@ -325,11 +354,11 @@
       <!-- Error -->
       <div
         id="error-container"
-        class="hidden mb-8 p-4 border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm flex flex-col sm:flex-row justify-between items-center gap-4"
+        class="hidden mb-8 p-4 border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm flex-col sm:flex-row justify-between items-center gap-4"
       >
         <p id="error-message"></p>
         <button
-          onclick="window.location.reload()"
+          id="error-retry-button"
           class="shrink-0 px-3 py-1 bg-red-600 text-white rounded font-medium hover:bg-red-700 transition-colors"
         >
           Retry
@@ -368,7 +397,7 @@
         >
           <p>
             Taking too long?
-            <button id="reset-app-link" class="underline hover:text-black">
+            <button id="reset-app-link" class="underline hover:text-black dark:hover:text-white">
               Reset app
             </button>
           </p>
@@ -381,13 +410,22 @@
           class="flex flex-col lg:flex-row gap-4 lg:gap-12 items-start lg:items-end mb-6 lg:mb-12"
         >
           <div class="space-y-1 lg:w-64 shrink-0">
-            <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <div class="flex flex-wrap items-center gap-x-2 gap-y-1.5">
               <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-gray-800 text-sm font-medium text-gray-700 dark:text-gray-300">
                 <span id="results-count">0 videos</span>
               </div>
               <button
+                id="active-filter-badge"
+                type="button"
+                title="Clear active filter"
+                class="hidden items-center gap-1.5 max-w-full px-3 py-1.5 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs font-medium hover:opacity-80 transition-opacity"
+              >
+                <span id="active-filter-label" class="truncate max-w-[180px]"></span>
+                <span aria-hidden="true" class="font-bold leading-none">&times;</span>
+              </button>
+              <button
                 id="load-all-button"
-                class="hidden whitespace-nowrap text-xs font-bold uppercase tracking-wider px-3 py-1.5 border border-gray-200 dark:border-gray-800 rounded hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition-colors flex items-center gap-2"
+                class="hidden whitespace-nowrap text-xs font-bold uppercase tracking-wider px-3 py-1.5 border border-gray-200 dark:border-gray-800 rounded hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition-colors items-center gap-2"
               >
                 Load all
               </button>
@@ -395,17 +433,30 @@
           </div>
 
           <div class="flex flex-col md:flex-row items-stretch md:items-center gap-2 flex-1 w-full lg:w-auto">
-            <input
-              type="text"
-              id="search-input"
-              placeholder="Search..."
-              class="flex-1 w-full min-w-[200px] text-sm border border-gray-200 dark:border-gray-800 rounded px-3 py-1.5 bg-white dark:bg-[#121212] focus:outline-none focus:border-black dark:focus:border-gray-500 transition-colors"
-            />
+            <div class="relative flex-1 w-full min-w-[200px]">
+              <input
+                type="text"
+                id="search-input"
+                placeholder="Search..."
+                aria-label="Search videos"
+                class="w-full text-sm border border-gray-200 dark:border-gray-800 rounded pl-3 pr-8 py-1.5 bg-white dark:bg-[#121212] focus:outline-none focus:border-black dark:focus:border-gray-500 transition-colors"
+              />
+              <button
+                type="button"
+                id="search-clear-button"
+                title="Clear search"
+                aria-label="Clear search"
+                class="hidden absolute inset-y-0 right-0 px-2.5 items-center justify-center text-gray-400 hover:text-black dark:hover:text-white transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              </button>
+            </div>
 
             <div class="flex items-center gap-2 shrink-0 overflow-x-auto pb-1 md:pb-0">
               <select
                 id="sort-select"
-                class="flex-grow px-3 py-1.5 border border-gray-200 dark:border-gray-800 rounded text-sm focus:outline-none focus:border-black bg-white dark:bg-[#121212] dark:text-gray-200 min-w-[130px]"
+                aria-label="Sort videos"
+                class="flex-grow px-3 py-1.5 border border-gray-200 dark:border-gray-800 rounded text-sm focus:outline-none focus:border-black dark:focus:border-gray-500 bg-white dark:bg-[#121212] dark:text-gray-200 min-w-[130px]"
               >
                 <option value="date-new">Recent</option>
                 <option value="views-high">Views</option>
@@ -505,13 +556,13 @@
         <div class="flex flex-col lg:flex-row gap-4 lg:gap-12">
           <!-- Sidebar -->
           <div class="lg:w-64 shrink-0 flex flex-col gap-4">
-            <button id="mobile-filter-toggle" class="lg:hidden flex items-center justify-between w-full px-4 py-2 bg-gray-100 dark:bg-gray-800 rounded font-medium text-sm transition-colors hover:bg-gray-200 dark:hover:bg-gray-700">
-              <span>Show Filters</span>
+            <button id="mobile-filter-toggle" type="button" aria-expanded="false" aria-controls="sidebar-content" class="lg:hidden flex items-center justify-between w-full px-4 py-2 bg-gray-100 dark:bg-gray-800 rounded font-medium text-sm transition-colors hover:bg-gray-200 dark:hover:bg-gray-700">
+              <span>Show filters</span>
               <svg class="w-4 h-4 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>
-            <div id="sidebar-content" class="flex flex-col gap-6">
+            <div id="sidebar-content" class="hidden lg:flex flex-col gap-6">
               <div class="relative">
-                <select id="sidebar-filter-select" class="w-full appearance-none bg-transparent border border-gray-200 dark:border-gray-800 rounded px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 focus:outline-none focus:border-black dark:focus:border-white cursor-pointer">
+                <select id="sidebar-filter-select" aria-label="Filter category" class="w-full appearance-none bg-transparent border border-gray-200 dark:border-gray-800 rounded px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 focus:outline-none focus:border-black dark:focus:border-white cursor-pointer">
                   <option value="channels">Filter by: Artists</option>
                   <option value="albums">Filter by: Albums</option>
                   <option value="years">Filter by: Years</option>
@@ -522,7 +573,7 @@
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                 </div>
               </div>
-              <div id="sidebar-list-container" class="space-y-4 max-h-[80vh] overflow-y-auto pr-2 pb-12">
+              <div id="sidebar-list-container" class="space-y-4 max-h-[80vh] overflow-y-auto overscroll-contain pr-2 pb-12">
                 <!-- Sidebar list will be injected here -->
               </div>
             </div>
@@ -566,40 +617,42 @@
         <div class="absolute inset-0 bg-white/80 dark:bg-black/60 pointer-events-none z-0"></div>
 
         <!-- Progress Bar -->
-        <div class="absolute top-0 left-0 right-0 h-[2px] bg-gray-200 dark:bg-gray-800 cursor-pointer overflow-hidden z-20" id="bottom-player-progress-container">
-          <div id="bottom-player-progress-bar" class="h-full bg-red-600 w-0 pointer-events-none transition-all duration-100 ease-linear"></div>
+        <div class="group/seek absolute top-0 left-0 right-0 h-2 cursor-pointer z-20 flex items-start" id="bottom-player-progress-container">
+          <div class="w-full h-[3px] group-hover/seek:h-1.5 bg-gray-200 dark:bg-gray-800 overflow-hidden transition-all">
+            <div id="bottom-player-progress-bar" class="h-full bg-red-600 w-0 pointer-events-none transition-all duration-100 ease-linear"></div>
+          </div>
         </div>
 
         <div class="relative z-10 flex items-center justify-between px-4 sm:px-6 py-2 h-[72px]">
           <!-- Left: Track Info -->
-          <div id="bottom-player-track-info" class="flex items-center justify-start gap-3 shrink-0 w-1/3 cursor-pointer min-w-0 group relative z-10">
+          <div id="bottom-player-track-info" class="flex items-center justify-start gap-3 shrink-0 w-1/3 cursor-pointer min-w-0 relative z-10">
             <img id="player-thumbnail" alt="" class="w-10 h-10 sm:w-12 sm:h-12 object-cover rounded shadow-sm shrink-0 bg-gray-200 dark:bg-gray-800" />
             <div class="min-w-0 text-left flex flex-col justify-center max-w-[200px]">
-              <h4 id="player-title" class="text-sm font-bold text-gray-900 dark:text-white truncate group-hover:underline drop-shadow-sm"></h4>
-              <p id="player-artist" class="text-xs text-gray-600 dark:text-gray-200 truncate group-hover:underline drop-shadow-sm"></p>
+              <h4 id="player-title" class="text-sm font-bold text-gray-900 dark:text-white truncate drop-shadow-sm"></h4>
+              <p id="player-artist" class="text-xs text-gray-600 dark:text-gray-200 truncate drop-shadow-sm"></p>
             </div>
           </div>
 
           <!-- Center: Controls -->
           <div class="flex items-center gap-2 sm:gap-4 shrink-0 w-1/3 justify-center">
             <span class="text-xs text-gray-500 hidden lg:block mr-2 w-10 text-right font-medium drop-shadow-sm"><span id="player-time-current">0:00</span></span>
-            <button id="player-prev" class="p-2 text-gray-800 dark:text-gray-200 hover:text-black dark:hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+            <button id="player-prev" type="button" title="Previous track" aria-label="Previous track" class="p-2 text-gray-800 dark:text-gray-200 hover:text-black dark:hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="19 20 9 12 19 4 19 20"></polygon><line x1="5" y1="19" x2="5" y2="5"></line></svg>
             </button>
-            <button id="player-play-pause" class="w-10 h-10 rounded-full bg-black dark:bg-white text-white dark:text-black flex items-center justify-center hover:scale-105 transition-transform shrink-0" disabled>
+            <button id="player-play-pause" type="button" title="Play or pause" aria-label="Play or pause" class="w-10 h-10 rounded-full bg-black dark:bg-white text-white dark:text-black flex items-center justify-center hover:scale-105 transition-transform shrink-0" disabled>
               <svg id="player-icon-play" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden ml-1"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
               <svg id="player-icon-pause" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
               <svg id="player-icon-loading" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="animate-spin"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg>
             </button>
-            <button id="player-next" class="p-2 text-gray-800 dark:text-gray-200 hover:text-black dark:hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+            <button id="player-next" type="button" title="Next track" aria-label="Next track" class="p-2 text-gray-800 dark:text-gray-200 hover:text-black dark:hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg>
             </button>
-            <span class="text-xs text-gray-500 hidden lg:block ml-2 w-10 text-left font-medium drop-shadow-sm"><span id="player-time-total">-:-</span></span>
+            <span class="text-xs text-gray-500 hidden lg:block ml-2 w-10 text-left font-medium drop-shadow-sm"><span id="player-time-total">-:--</span></span>
           </div>
 
           <!-- Right: Actions -->
           <div class="flex items-center gap-4 shrink-0 w-1/3 justify-end">
-            <button id="player-close" class="p-2 text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors">
+            <button id="player-close" type="button" title="Close player" aria-label="Close player" class="p-2 text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
             </button>
           </div>
@@ -616,7 +669,7 @@
         <div class="relative z-10 flex flex-col h-full p-6 sm:p-12 max-w-[100vh] mx-auto w-full">
           <!-- Header -->
           <div class="flex justify-between items-center mb-8 sm:mb-12">
-            <button id="fs-player-close" class="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-black dark:hover:text-white transition-colors">
+            <button id="fs-player-close" type="button" title="Minimize player" aria-label="Minimize player" class="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-black dark:hover:text-white transition-colors">
               <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
             </button>
             <div class="w-12"></div><!-- Spacer -->
@@ -624,7 +677,7 @@
 
           <!-- Art -->
           <div class="flex-1 w-full min-h-0 mb-8 flex flex-col items-center justify-center">
-            <img id="fs-player-thumbnail" alt="" class="h-full max-w-full aspect-square object-cover rounded-2xl shadow-2xl bg-gray-200 dark:bg-gray-800 cursor-pointer hover:opacity-90 transition-opacity" title="Play/Pause" />
+            <img id="fs-player-thumbnail" alt="" class="h-full max-w-full aspect-square object-cover rounded-2xl shadow-2xl bg-gray-200 dark:bg-gray-800 cursor-pointer hover:opacity-90 transition-opacity" title="Play or pause" />
           </div>
 
           <!-- Info & Controls -->
@@ -636,7 +689,7 @@
 
             <!-- Progress Bar -->
             <div class="mb-8 px-2 flex flex-col gap-2">
-              <input type="range" id="fs-player-progress" min="0" max="100" value="0" class="w-full h-1.5 bg-gray-300 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-black dark:accent-white">
+              <input type="range" id="fs-player-progress" aria-label="Seek progress" min="0" max="100" value="0" class="w-full h-1.5 bg-gray-300 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-black dark:accent-white">
               <div class="flex justify-between text-xs text-gray-600 dark:text-gray-400 font-mono">
                 <span id="fs-player-time-current">0:00</span>
                 <span id="fs-player-time-total">-:--</span>
@@ -644,15 +697,15 @@
             </div>
 
             <div class="flex items-center justify-center gap-8">
-              <button id="fs-player-prev" class="p-3 text-gray-800 dark:text-gray-200 hover:text-black dark:hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+              <button id="fs-player-prev" type="button" title="Previous track" aria-label="Previous track" class="p-3 text-gray-800 dark:text-gray-200 hover:text-black dark:hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
                 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="19 20 9 12 19 4 19 20"></polygon><line x1="5" y1="19" x2="5" y2="5"></line></svg>
               </button>
-              <button id="fs-player-play-pause" class="w-20 h-20 rounded-full bg-black dark:bg-white text-white dark:text-black flex items-center justify-center hover:scale-105 transition-transform shadow-xl shrink-0 disabled:opacity-50 disabled:cursor-not-allowed">
+              <button id="fs-player-play-pause" type="button" title="Play or pause" aria-label="Play or pause" class="w-20 h-20 rounded-full bg-black dark:bg-white text-white dark:text-black flex items-center justify-center hover:scale-105 transition-transform shadow-xl shrink-0 disabled:opacity-50 disabled:cursor-not-allowed">
                 <svg id="fs-player-icon-play" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden ml-2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
                 <svg id="fs-player-icon-pause" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
                 <svg id="fs-player-icon-loading" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="animate-spin"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg>
               </button>
-              <button id="fs-player-next" class="p-3 text-gray-800 dark:text-gray-200 hover:text-black dark:hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+              <button id="fs-player-next" type="button" title="Next track" aria-label="Next track" class="p-3 text-gray-800 dark:text-gray-200 hover:text-black dark:hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
                 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg>
               </button>
             </div>
@@ -665,14 +718,15 @@
         class="max-w-6xl mx-auto px-6 flex justify-between items-center text-xs text-gray-500"
       >
         <div class="flex gap-4">
-          <a href="privacy.html" class="hover:text-black transition-colors">Privacy</a>
+          <a href="privacy.html" class="hover:text-black dark:hover:text-white transition-colors">Privacy</a>
           <a
             href="https://github.com/jimmyorr/dislikes"
             target="_blank"
-            class="hover:text-black transition-colors"
+            rel="noopener noreferrer"
+            class="hover:text-black dark:hover:text-white transition-colors"
             >GitHub</a
           >
-          <button id="footer-reset-button" class="hover:text-black transition-colors">
+          <button id="footer-reset-button" class="hover:text-black dark:hover:text-white transition-colors">
             Reset app
           </button>
         </div>
@@ -691,6 +745,7 @@
       <button
         id="back-to-top"
         title="Scroll to top"
+        aria-label="Scroll to top"
         class="w-10 h-10 bg-black dark:bg-white text-white dark:text-black rounded flex items-center justify-center pointer-events-auto shadow-lg hover:opacity-80 transition-opacity"
       >
         <svg
@@ -708,6 +763,7 @@
       <button
         id="scroll-to-bottom"
         title="Scroll to bottom"
+        aria-label="Scroll to bottom"
         class="w-10 h-10 bg-black dark:bg-white text-white dark:text-black rounded flex items-center justify-center pointer-events-auto shadow-lg hover:opacity-80 transition-opacity"
       >
         <svg
@@ -728,25 +784,27 @@
     <template id="video-card-template">
       <div class="video-card group flex flex-col gap-3">
         <button
+          type="button"
+          aria-label="Play track"
           class="video-play-btn block relative w-full aspect-video [.compact-mode_&]:aspect-square group/btn overflow-hidden rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
         >
           <img
             class="video-thumbnail w-full h-full object-cover bg-gray-100 dark:bg-gray-800 transition-transform duration-300 group-hover/btn:scale-105"
-            src=""
+            loading="lazy"
             alt=""
           />
           <div class="absolute inset-0 bg-black/0 group-hover/btn:bg-black/20 transition-colors flex items-center justify-center">
             <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white opacity-0 group-hover/btn:opacity-100 transition-opacity scale-75 group-hover/btn:scale-100 duration-300 drop-shadow-lg"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
           </div>
           <div
-            class="deleted-overlay hidden absolute inset-0 bg-white/90 dark:bg-black/90 flex items-center justify-center text-[10px] font-bold text-gray-500 dark:text-gray-400"
+            class="deleted-overlay hidden absolute inset-0 bg-white/90 dark:bg-black/90 items-center justify-center text-[10px] font-bold text-gray-500 dark:text-gray-400"
           >
             UNAVAILABLE
           </div>
         </button>
         <div class="flex flex-col min-w-0 mt-2 gap-1 relative">
-          <div class="flex items-start gap-2 pr-6">
-            <a href="" target="_blank" class="video-link hover:underline min-w-0">
+          <div class="flex items-start gap-2">
+            <a target="_blank" rel="noopener noreferrer" class="video-link hover:underline min-w-0">
               <h3
                 class="video-title text-[16px] font-medium text-gray-900 dark:text-gray-100 line-clamp-2 leading-tight"
               ></h3>
@@ -776,10 +834,12 @@
         if (e) e.preventDefault();
         if (!confirm("Reset all application data and sign out?")) return;
 
-        const btn = document.getElementById("footer-reset-button");
-        const originalText = btn.textContent;
-        btn.textContent = "Resetting...";
-        btn.disabled = true;
+        const btn = (e && e.currentTarget) || document.getElementById("footer-reset-button");
+        const originalText = btn ? btn.textContent : "";
+        if (btn) {
+          btn.textContent = "Resetting...";
+          btn.disabled = true;
+        }
 
         try {
           if ("serviceWorker" in navigator) {
@@ -798,8 +858,10 @@
             Date.now();
         } catch (err) {
           alert("Reset failed: " + err.message);
-          btn.textContent = originalText;
-          btn.disabled = false;
+          if (btn) {
+            btn.textContent = originalText;
+            btn.disabled = false;
+          }
         }
       }
 

@@ -37,17 +37,11 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  // Basic network-first strategy for the app shell,
-  // Exclude API calls and Google scripts from caching/interception
-  const exclusions = [
-    "googleapis.com",
-    "apis.google.com",
-    "accounts.google.com",
-    "gstatic.com",
-  ];
-  if (exclusions.some((domain) => event.request.url.includes(domain))) {
-    return;
-  }
+  // Only intercept same-origin GET requests for the app shell;
+  // leave cross-origin requests (Google APIs, YouTube player/thumbnails, analytics, CDNs) untouched.
+  if (event.request.method !== "GET") return;
+  const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin) return;
 
   event.respondWith(
     (async () => {
@@ -59,6 +53,10 @@ self.addEventListener("fetch", (event) => {
           signal: controller.signal,
         });
         clearTimeout(timeoutId);
+        if (response.ok && !url.pathname.endsWith("/likes.json")) {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy)).catch(() => {});
+        }
         return response;
       } catch (err) {
         clearTimeout(timeoutId);

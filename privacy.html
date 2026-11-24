@@ -10,7 +10,7 @@
     />
     <link rel="canonical" href="https://dislikes.cowneck.com/privacy.html" />
     <link rel="icon" type="image/png" href="icon.png" />
-    <meta name="theme-color" content="#ffffff" />
+    <meta id="theme-color-meta" name="theme-color" content="#ffffff" />
 
     <!-- Link previews (Open Graph & Twitter/X) -->
     <meta property="og:type" content="website" />
@@ -48,16 +48,25 @@
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+      };
+      (function () {
+        try {
+          var t = localStorage.getItem('dislikes-theme') || 'system';
+          var isDark = t === 'dark' || (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.classList.toggle('dark', isDark);
+          var meta = document.getElementById('theme-color-meta');
+          if (meta) meta.setAttribute('content', isDark ? '#0a0a0a' : '#ffffff');
+        } catch {
+          /* ignore */
+        }
+      })();
+    </script>
 
     <style>
       @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap");
-
-      :root {
-        --bg: #ffffff;
-        --fg: #000000;
-        --dim: #666666;
-        --border: #e5e7eb;
-      }
 
       body {
         font-family:
@@ -65,18 +74,12 @@
           -apple-system,
           BlinkMacSystemFont,
           sans-serif;
-        background-color: var(--bg);
-        color: var(--fg);
         line-height: 1.6;
         -webkit-font-smoothing: antialiased;
       }
 
-      .hidden {
-        display: none !important;
-      }
-
       a {
-        color: var(--fg);
+        color: inherit;
         text-decoration: underline;
         text-underline-offset: 2px;
       }
@@ -99,21 +102,25 @@
       .step-num {
         font-size: 0.75rem;
         font-weight: 600;
-        color: var(--dim);
+        color: #666666;
         display: block;
         margin-bottom: 0.25rem;
         text-transform: uppercase;
         letter-spacing: 0.05em;
       }
+
+      .dark .step-num {
+        color: #9ca3af;
+      }
     </style>
   </head>
 
-  <body class="min-h-screen flex flex-col">
-    <header class="border-b border-gray-100 py-4">
+  <body class="bg-white dark:bg-[#0a0a0a] text-black dark:text-gray-100 min-h-screen flex flex-col">
+    <header class="border-b border-gray-100 dark:border-gray-800 py-4">
       <div class="max-w-4xl mx-auto px-6 flex justify-between items-center">
         <a
           href="index.html"
-          class="text-sm font-medium hover:opacity-70 transition-opacity flex items-center gap-2"
+          class="text-sm font-medium hover:opacity-70 transition-opacity flex items-center gap-2 no-underline"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -126,24 +133,24 @@
           >
             <path d="m15 18-6-6 6-6" />
           </svg>
-          Back to App
+          Back to app
         </a>
-        <h1 class="text-lg font-medium tracking-tight">Privacy Policy</h1>
+        <h1 class="text-lg font-medium tracking-tight">Privacy policy</h1>
       </div>
     </header>
 
     <main class="max-w-2xl mx-auto px-6 py-20 flex-grow w-full">
       <div class="mb-16">
         <h1 class="text-4xl font-semibold mb-4 tracking-tight">
-          Privacy Policy
+          Privacy policy
         </h1>
-        <p class="text-sm text-gray-500">Last updated: January 28, 2026</p>
+        <p class="text-sm text-gray-500 dark:text-gray-400">Last updated: January 28, 2026</p>
       </div>
 
       <section>
         <span class="step-num">01</span>
         <h2>Introduction</h2>
-        <p class="text-gray-600">
+        <p class="text-gray-600 dark:text-gray-300">
           Dislikes ("we", "us", or "our") is committed to protecting your
           privacy. This Privacy policy explains how our application accesses,
           uses, and protects your Google user data.
@@ -152,22 +159,22 @@
 
       <section>
         <span class="step-num">02</span>
-        <h2>Data We Access</h2>
-        <p class="text-gray-600 mb-4">
+        <h2>Data we access</h2>
+        <p class="text-gray-600 dark:text-gray-300 mb-4">
           Our application requests access to the following Google user data
           through the YouTube Data API:
         </p>
-        <ul class="list-disc list-outside text-gray-600 space-y-2 ml-4">
+        <ul class="list-disc list-outside text-gray-600 dark:text-gray-300 space-y-2 ml-4">
           <li>
             Your YouTube rating history (specifically identifying videos you
-            have disliked).
+            have disliked or liked).
           </li>
           <li>
             Basic video metadata (titles, channel names, thumbnails, view
-            counts).
+            counts, and release descriptions).
           </li>
         </ul>
-        <p class="text-gray-600 mt-4">
+        <p class="text-gray-600 dark:text-gray-300 mt-4">
           We use the <code>youtube.readonly</code> scope to ensure read-only
           access to your data.
         </p>
@@ -175,39 +182,39 @@
 
       <section>
         <span class="step-num">03</span>
-        <h2>How We Use Your Data</h2>
-        <p class="text-gray-600">
+        <h2>How we use your data</h2>
+        <p class="text-gray-600 dark:text-gray-300">
           The data we access is used solely to provide the core functionality of
-          the application: displaying, searching, and sorting your list of
-          disliked videos. This processing happens entirely within your web
-          browser.
+          the application: displaying, searching, filtering, and sorting your
+          disliked and liked videos. This processing happens entirely within your
+          web browser.
         </p>
       </section>
 
       <section>
         <span class="step-num">04</span>
-        <h2>Data Protection & Security</h2>
-        <p class="text-gray-600 mb-4">
+        <h2>Data protection &amp; security</h2>
+        <p class="text-gray-600 dark:text-gray-300 mb-4">
           <strong
             >We do not store your personal YouTube data on any servers.</strong
           >
-          All information is fetched directly from Google's APIs and resides
-          only in your browser's temporary memory while the app is open.
+          All information is fetched directly from Google's APIs and stored only
+          locally inside your browser.
         </p>
-        <p class="text-gray-600 mb-4">
+        <p class="text-gray-600 dark:text-gray-300 mb-4">
           To protect your sensitive data, we implement the following:
         </p>
-        <ul class="list-disc list-outside text-gray-600 space-y-2 ml-4">
+        <ul class="list-disc list-outside text-gray-600 dark:text-gray-300 space-y-2 ml-4">
           <li>
             <strong>Encryption:</strong> All communication between your browser
             and Google is encrypted via TLS/HTTPS.
           </li>
           <li>
-            <strong>Local Processing:</strong> Data is processed entirely on
+            <strong>Local processing:</strong> Data is processed entirely on
             your local device.
           </li>
           <li>
-            <strong>Token Security:</strong> Authentication tokens are stored in
+            <strong>Token security:</strong> Authentication tokens are stored in
             your browser's local storage and used only to authorize requests to
             Google on your behalf.
           </li>
@@ -216,8 +223,8 @@
 
       <section>
         <span class="step-num">05</span>
-        <h2>Data Sharing</h2>
-        <p class="text-gray-600">
+        <h2>Data sharing</h2>
+        <p class="text-gray-600 dark:text-gray-300">
           We do not share, sell, or trade your Google user data with any third
           parties. Your data never leaves the connection between your browser
           and Google's official endpoints.
@@ -226,13 +233,13 @@
 
       <section>
         <span class="step-num">06</span>
-        <h2>User Control</h2>
-        <p class="text-gray-600 mb-4">You can revoke access at any time by:</p>
-        <ul class="list-disc list-outside text-gray-600 space-y-2 ml-4">
-          <li>Clicking "Sign out" within the application.</li>
+        <h2>User control</h2>
+        <p class="text-gray-600 dark:text-gray-300 mb-4">You can revoke access at any time by:</p>
+        <ul class="list-disc list-outside text-gray-600 dark:text-gray-300 space-y-2 ml-4">
+          <li>Clicking "Sign out" or "Reset app" within the application.</li>
           <li>
             Removing access in your
-            <a href="https://myaccount.google.com/permissions" target="_blank"
+            <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer"
               >Google Account Security settings</a
             >.
           </li>
@@ -241,27 +248,29 @@
 
       <section>
         <span class="step-num">07</span>
-        <h2>Retention & Deletion</h2>
-        <p class="text-gray-600 mb-4">
+        <h2>Retention &amp; deletion</h2>
+        <p class="text-gray-600 dark:text-gray-300 mb-4">
           We follow a strict minimization policy:
         </p>
-        <ul class="list-disc list-outside text-gray-600 space-y-2 ml-4">
+        <ul class="list-disc list-outside text-gray-600 dark:text-gray-300 space-y-2 ml-4">
           <li>
-            <strong>User Data:</strong> We hold no permanent record of your
-            data. Browser memory is cleared when the tab is closed.
+            <strong>User data:</strong> We hold no server-side record of your
+            data. Video metadata cached locally in your browser can be cleared
+            at any time via "Reset app".
           </li>
           <li>
             <strong>Tokens:</strong> Authentication tokens are retained locally
-            to keep you signed in. You can delete them by signing out.
+            to keep you signed in. You can delete them by signing out or
+            resetting the app.
           </li>
         </ul>
       </section>
 
-      <section class="pt-12 border-t border-gray-100">
+      <section class="pt-12 border-t border-gray-100 dark:border-gray-800">
         <h2>Contact</h2>
-        <p class="text-gray-600">
+        <p class="text-gray-600 dark:text-gray-300">
           Questions? View the source code on
-          <a href="https://github.com/jimmyorr/dislikes" target="_blank"
+          <a href="https://github.com/jimmyorr/dislikes" target="_blank" rel="noopener noreferrer"
             >GitHub</a
           >.
         </p>
@@ -269,7 +278,7 @@
     </main>
 
     <footer
-      class="py-12 border-t border-gray-50 flex justify-center text-xs text-gray-400"
+      class="py-12 border-t border-gray-50 dark:border-gray-900 flex justify-center text-xs text-gray-400"
     >
       <p>&copy; 2026 Dislikes.</p>
     </footer>

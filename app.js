@@ -12,6 +12,7 @@ const state = {
   gisInited: false,
   tokenClient: null,
   isAuthenticated: false,
+  dataSource: null, // 'youtube' | 'demo' | 'upload' | null
   theme: localStorage.getItem("dislikes-theme") || "system",
   compactMode: localStorage.getItem("dislikes-compact") !== null ? localStorage.getItem("dislikes-compact") === "true" : true,
   musicOnly: localStorage.getItem("dislikes-music-only") !== null ? localStorage.getItem("dislikes-music-only") === "true" : true,
@@ -26,7 +27,6 @@ const state = {
   sortBy: "date-new",
   nextPageToken: null,
   totalResults: null,
-  showInsights: false,
   isFetchAll: false,
   mode: localStorage.getItem("dislikes-mode") || "like", // 'dislike' or 'like'
   iconCache: {},
@@ -38,12 +38,15 @@ const state = {
   ytPlayer: null,
   isPlayerReady: false,
   currentVideoIndex: -1,
+  currentVideoId: null,
+  pendingVideoId: null,
   progressInterval: null,
 };
 
 // --- DOM Elements ---
 const dom = {
   authIndicator: document.getElementById("auth-indicator"),
+  authStatusText: document.getElementById("auth-status-text"),
   authButton: document.getElementById("auth-button"),
   authText: document.getElementById("auth-text"),
   heroAuthButton: document.getElementById("hero-auth-button"),
@@ -55,12 +58,15 @@ const dom = {
 
   errorContainer: document.getElementById("error-container"),
   errorMessage: document.getElementById("error-message"),
+  errorRetryButton: document.getElementById("error-retry-button"),
 
   resultsCount: document.getElementById("results-count"),
+  activeFilterBadge: document.getElementById("active-filter-badge"),
+  activeFilterLabel: document.getElementById("active-filter-label"),
   searchInput: document.getElementById("search-input"),
+  searchClearButton: document.getElementById("search-clear-button"),
   sortSelect: document.getElementById("sort-select"),
 
-  contentLoader: document.getElementById("content-loader"),
   emptyState: document.getElementById("empty-state"),
   videoGrid: document.getElementById("video-grid"),
   copyIdsButton: document.getElementById("copy-ids-button"),
@@ -124,6 +130,7 @@ const dom = {
   settingsButton: document.getElementById("settings-button"),
   settingsMenu: document.getElementById("settings-menu"),
   themeSelect: document.getElementById("theme-select"),
+  themeColorMeta: document.getElementById("theme-color-meta"),
   compactToggle: document.getElementById("compact-toggle"),
   musicToggle: document.getElementById("music-toggle"),
   unavailableToggle: document.getElementById("unavailable-toggle"),
@@ -138,28 +145,20 @@ const dom = {
 
 // --- Initialization ---
 
+function setMobileFiltersOpen(isOpen) {
+  if (!dom.sidebarContent || !dom.mobileFilterToggle) return;
+  dom.sidebarContent.classList.toggle("hidden", !isOpen);
+  dom.sidebarContent.classList.toggle("flex", isOpen);
+  dom.mobileFilterToggle.setAttribute("aria-expanded", String(isOpen));
+  const labelEl = dom.mobileFilterToggle.querySelector("span");
+  const iconEl = dom.mobileFilterToggle.querySelector("svg");
+  if (labelEl) labelEl.textContent = isOpen ? "Hide filters" : "Show filters";
+  if (iconEl) iconEl.classList.toggle("rotate-180", isOpen);
+}
+
 function init() {
   console.log(`Dislikes v${APP_VERSION} initializing...`);
   document.getElementById("app-version").textContent = `v${APP_VERSION}`;
-
-  // Handle responsive sidebar visibility
-  const handleResize = () => {
-    if (window.innerWidth >= 1024) {
-      dom.sidebarContent.classList.remove("hidden");
-      dom.sidebarContent.classList.add("flex");
-    } else if (!dom.sidebarContent.classList.contains("hidden") && !dom.mobileFilterToggle.classList.contains("open")) {
-      dom.sidebarContent.classList.add("hidden");
-      dom.sidebarContent.classList.remove("flex");
-    }
-  };
-  
-  // Set initial state
-  if (window.innerWidth < 1024) {
-    dom.sidebarContent.classList.add("hidden");
-    dom.sidebarContent.classList.remove("flex");
-  }
-  
-  window.addEventListener("resize", handleResize);
 
   initGapi();
   initGis();
@@ -236,6 +235,14 @@ function initGis() {
           }
 
           state.isAuthenticated = true;
+          state.dataSource = "youtube";
+          state.videos = [];
+          state.filteredVideos = [];
+          state.sidebarBaseVideos = [];
+          state.activeFilter = null;
+          state.nextPageToken = null;
+          state.totalResults = null;
+          state.error = null;
           render();
           fetchVideos();
         },
@@ -287,7 +294,7 @@ function checkReady() {
   if (state.gapiInited && state.gisInited) {
     dom.initializationTrouble.classList.add("hidden");
     const token = loadToken();
-    if (token && !state.isAuthenticated) {
+    if (token && !state.isAuthenticated && !state.dataSource) {
       console.log("Restoring session from token");
       // Only pass the necessary token properties to gapi
       window.gapi.client.setToken({
@@ -297,6 +304,7 @@ function checkReady() {
         token_type: token.token_type,
       });
       state.isAuthenticated = true;
+      state.dataSource = "youtube";
       // Initialize with loading state to avoid "All 0 loaded" flash
       state.loading = true;
       render();
@@ -308,6 +316,62 @@ function checkReady() {
   }
 }
 
+function updateSearchClearButton() {
+  if (!dom.searchClearButton) return;
+  const hasValue = Boolean(dom.searchInput.value);
+  dom.searchClearButton.classList.toggle("hidden", !hasValue);
+  dom.searchClearButton.classList.toggle("flex", hasValue);
+}
+
+function findAdjacentPlayableIndex(fromIndex, step) {
+  let i = fromIndex + step;
+  while (i >= 0 && i < state.filteredVideos.length) {
+    if (!checkIfDeleted(state.filteredVideos[i])) {
+      return i;
+    }
+    i += step;
+  }
+  return -1;
+}
+
+function closePlayer() {
+  try {
+    if (state.ytPlayer && state.ytPlayer.stopVideo) {
+      state.ytPlayer.stopVideo();
+    }
+  } catch {
+    /* ignore */
+  }
+  stopProgressInterval();
+  state.currentVideoIndex = -1;
+  state.currentVideoId = null;
+  state.pendingVideoId = null;
+  dom.bottomPlayer.classList.add("translate-y-full");
+  dom.fsPlayer.classList.add("translate-y-full");
+  document.body.style.paddingBottom = "0px";
+  document.body.style.overflow = "";
+  if (dom.quickScrollContainer) {
+    dom.quickScrollContainer.classList.remove("-translate-y-[80px]");
+  }
+}
+
+function checkLocalScrollFill() {
+  requestAnimationFrame(() => {
+    if (
+      state.renderLimit < state.filteredVideos.length &&
+      !dom.scrollSentinel.classList.contains("hidden")
+    ) {
+      const rect = dom.scrollSentinel.getBoundingClientRect();
+      if (rect.top < window.innerHeight && rect.bottom > 0) {
+        state.renderLimit += 50;
+        renderVideoList(true);
+        updateSentinel();
+        checkLocalScrollFill();
+      }
+    }
+  });
+}
+
 function setupEventListeners() {
   dom.authButton.addEventListener("click", handleAuthClick);
   dom.heroAuthButton.addEventListener("click", handleAuthClick);
@@ -316,35 +380,30 @@ function setupEventListeners() {
   }
   dom.signoutButton.addEventListener("click", handleSignout);
 
-  dom.playerPlayPause.addEventListener("click", () => {
-    if (!state.isPlayerReady || !state.ytPlayer) return;
-    const playerState = state.ytPlayer.getPlayerState();
-    if (playerState === 1) { // Playing
-      state.ytPlayer.pauseVideo();
-    } else {
-      state.ytPlayer.playVideo();
-    }
-  });
+  if (dom.errorRetryButton) {
+    dom.errorRetryButton.addEventListener("click", () => {
+      if (state.isAuthenticated) {
+        setError(null);
+        fetchVideos();
+      } else {
+        window.location.reload();
+      }
+    });
+  }
 
-  dom.fsPlayerPlayPause.addEventListener("click", () => {
+  const togglePlayPause = () => {
     if (!state.isPlayerReady || !state.ytPlayer) return;
     const playerState = state.ytPlayer.getPlayerState();
-    if (playerState === 1) { // Playing
+    if (playerState === 1) {
       state.ytPlayer.pauseVideo();
     } else {
       state.ytPlayer.playVideo();
     }
-  });
+  };
 
-  dom.fsPlayerThumbnail.addEventListener("click", () => {
-    if (!state.isPlayerReady || !state.ytPlayer) return;
-    const playerState = state.ytPlayer.getPlayerState();
-    if (playerState === 1) { // Playing
-      state.ytPlayer.pauseVideo();
-    } else {
-      state.ytPlayer.playVideo();
-    }
-  });
+  dom.playerPlayPause.addEventListener("click", togglePlayPause);
+  dom.fsPlayerPlayPause.addEventListener("click", togglePlayPause);
+  dom.fsPlayerThumbnail.addEventListener("click", togglePlayPause);
 
   dom.bottomPlayer.addEventListener("click", (e) => {
     // Don't trigger if they clicked a button, the progress bar, or a link
@@ -362,21 +421,27 @@ function setupEventListeners() {
   });
 
   document.addEventListener("keydown", (e) => {
-    // Ignore key presses when typing in inputs
-    if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
-
-    if (e.key === "Escape" && !dom.fsPlayer.classList.contains("translate-y-full")) {
-      dom.fsPlayer.classList.add("translate-y-full");
-      document.body.style.overflow = "";
-    } else if (e.code === "Space" || e.key === " ") {
-      e.preventDefault(); // Prevent page scrolling
-      if (!state.isPlayerReady || !state.ytPlayer) return;
-      const playerState = state.ytPlayer.getPlayerState();
-      if (playerState === 1) { // Playing
-        state.ytPlayer.pauseVideo();
-      } else {
-        state.ytPlayer.playVideo();
+    if (e.key === "Escape") {
+      if (!dom.fsPlayer.classList.contains("translate-y-full")) {
+        dom.fsPlayer.classList.add("translate-y-full");
+        document.body.style.overflow = "";
+      } else if (!dom.settingsMenu.classList.contains("hidden")) {
+        dom.settingsMenu.classList.add("hidden");
       }
+      return;
+    }
+
+    // Ignore Space when typing or focused on an interactive control, or when player is closed
+    if (
+      e.target.closest("input, textarea, select, button, a, [contenteditable]") ||
+      dom.bottomPlayer.classList.contains("translate-y-full")
+    ) {
+      return;
+    }
+
+    if (e.code === "Space" || e.key === " ") {
+      e.preventDefault();
+      togglePlayPause();
     }
   });
 
@@ -396,10 +461,11 @@ function setupEventListeners() {
         return;
       }
     }
-    if (state.currentVideoIndex > 0) {
-      playTrackByIndex(state.currentVideoIndex - 1);
-    } else {
-      if (state.ytPlayer) state.ytPlayer.seekTo(0, true);
+    const prevIdx = findAdjacentPlayableIndex(state.currentVideoIndex, -1);
+    if (prevIdx !== -1) {
+      playTrackByIndex(prevIdx);
+    } else if (state.ytPlayer && state.ytPlayer.seekTo) {
+      state.ytPlayer.seekTo(0, true);
     }
   };
 
@@ -407,7 +473,10 @@ function setupEventListeners() {
   dom.playerPrev.addEventListener("click", handlePrevClick);
 
   const handleNextClick = () => {
-    playTrackByIndex(state.currentVideoIndex + 1);
+    const nextIdx = findAdjacentPlayableIndex(state.currentVideoIndex, 1);
+    if (nextIdx !== -1) {
+      playTrackByIndex(nextIdx);
+    }
   };
 
   dom.fsPlayerNext.addEventListener("click", handleNextClick);
@@ -425,17 +494,7 @@ function setupEventListeners() {
     }
   });
 
-  dom.playerClose.addEventListener("click", () => {
-    if (state.ytPlayer) {
-      state.ytPlayer.stopVideo();
-    }
-    dom.bottomPlayer.classList.add("translate-y-full");
-    document.body.style.paddingBottom = "0px";
-    
-    if (dom.quickScrollContainer) {
-      dom.quickScrollContainer.classList.remove("-translate-y-[80px]");
-    }
-  });
+  dom.playerClose.addEventListener("click", closePlayer);
 
   const debouncedSearch = debounce((value) => {
     state.debouncedSearchTerm = value;
@@ -465,37 +524,45 @@ function setupEventListeners() {
       render();
       
       // On mobile, automatically close the filters after selecting one
-      if (window.innerWidth < 1024 && !dom.sidebarContent.classList.contains("hidden")) {
-        dom.sidebarContent.classList.add("hidden");
-        dom.sidebarContent.classList.remove("flex");
-        dom.mobileFilterToggle.querySelector("span").textContent = "Show Filters";
-        dom.mobileFilterToggle.querySelector("svg").classList.remove("rotate-180");
+      if (window.innerWidth < 1024) {
+        setMobileFiltersOpen(false);
       }
     }
   });
+
+  if (dom.activeFilterBadge) {
+    dom.activeFilterBadge.addEventListener("click", () => {
+      state.activeFilter = null;
+      filterVideos();
+      render();
+    });
+  }
   
   // Mobile filter toggle
   if (dom.mobileFilterToggle) {
     dom.mobileFilterToggle.addEventListener("click", () => {
       const isHidden = dom.sidebarContent.classList.contains("hidden");
-      if (isHidden) {
-        dom.sidebarContent.classList.remove("hidden");
-        dom.sidebarContent.classList.add("flex");
-        dom.mobileFilterToggle.querySelector("span").textContent = "Hide Filters";
-        dom.mobileFilterToggle.querySelector("svg").classList.add("rotate-180");
-      } else {
-        dom.sidebarContent.classList.add("hidden");
-        dom.sidebarContent.classList.remove("flex");
-        dom.mobileFilterToggle.querySelector("span").textContent = "Show Filters";
-        dom.mobileFilterToggle.querySelector("svg").classList.remove("rotate-180");
-      }
+      setMobileFiltersOpen(isHidden);
     });
   }
 
   dom.searchInput.addEventListener("input", (e) => {
     state.searchTerm = e.target.value;
+    updateSearchClearButton();
     debouncedSearch(e.target.value);
   });
+
+  if (dom.searchClearButton) {
+    dom.searchClearButton.addEventListener("click", () => {
+      dom.searchInput.value = "";
+      state.searchTerm = "";
+      state.debouncedSearchTerm = "";
+      updateSearchClearButton();
+      filterVideos();
+      render();
+      dom.searchInput.focus();
+    });
+  }
 
   dom.sortSelect.addEventListener("change", (e) => {
     state.sortBy = e.target.value;
@@ -520,10 +587,11 @@ function setupEventListeners() {
           state.renderLimit += 50;
           renderVideoList(true);
           updateSentinel();
+          checkLocalScrollFill();
         } else if (
           state.nextPageToken &&
           !state.loading &&
-          !state.debouncedSearchTerm
+          !state.debouncedSearchTerm.trim()
         ) {
           handleLoadMore();
         }
@@ -569,19 +637,27 @@ function setupEventListeners() {
     state.mode = state.mode === "dislike" ? "like" : "dislike";
     localStorage.setItem("dislikes-mode", state.mode);
 
+    invalidateActiveFetch();
+
     // Clear state for new mode
     state.videos = [];
     state.filteredVideos = [];
+    state.sidebarBaseVideos = [];
     state.nextPageToken = null;
     state.totalResults = null;
-    state.isFetchAll = false;
+    state.error = null;
     state.searchTerm = "";
     state.debouncedSearchTerm = "";
     dom.searchInput.value = "";
+    updateSearchClearButton();
     state.activeFilter = null;
 
     if (state.isAuthenticated) {
+      state.dataSource = "youtube";
       fetchVideos();
+    } else {
+      state.dataSource = null;
+      closePlayer();
     }
     window.scrollTo({ top: 0, behavior: "smooth" });
     render();
@@ -667,39 +743,54 @@ function handleAuthClick() {
 }
 
 function handleSignout() {
-  // Clear Google API token
-  const token = window.gapi.client.getToken();
-  if (token !== null) {
-    window.google.accounts.oauth2.revoke(token.access_token, () => {
-      console.log("Token revoked");
-    });
-    window.gapi.client.setToken(null);
-  }
+  invalidateActiveFetch();
+  closePlayer();
 
-  // Clear local storage
-  localStorage.removeItem("yt_dislikes_token");
+  // Clear Google API token only if an OAuth session is active
+  if (state.isAuthenticated) {
+    const token = window.gapi?.client?.getToken?.();
+    if (token?.access_token && window.google?.accounts?.oauth2) {
+      window.google.accounts.oauth2.revoke(token.access_token, () => {
+        console.log("Token revoked");
+      });
+    }
+    if (window.gapi?.client?.setToken) {
+      window.gapi.client.setToken(null);
+    }
+    localStorage.removeItem("yt_dislikes_token");
+  }
 
   // Reset state
   state.isAuthenticated = false;
+  state.dataSource = null;
   state.videos = [];
   state.filteredVideos = [];
+  state.sidebarBaseVideos = [];
+  state.activeFilter = null;
   state.nextPageToken = null;
+  state.totalResults = null;
+  state.error = null;
   state.searchTerm = "";
   state.debouncedSearchTerm = "";
 
   // Clear UI
   dom.searchInput.value = "";
+  updateSearchClearButton();
+  setMobileFiltersOpen(false);
 
   render();
 }
 
 function handleClearCache() {
+  if (!state.isAuthenticated) return;
+  invalidateActiveFetch();
   localStorage.removeItem(`yt_dislikes_cache_${state.mode}`);
+  state.dataSource = "youtube";
   state.videos = [];
   state.filteredVideos = [];
+  state.sidebarBaseVideos = [];
   state.nextPageToken = null;
   state.totalResults = null;
-  state.isFetchAll = false;
   state.forceRefetch = true;
   fetchVideos();
 }
@@ -720,9 +811,9 @@ function normalizeStoredVideo(v) {
   return v;
 }
 
-function loadFromCache() {
+function loadFromCache(mode = state.mode) {
   try {
-    const data = localStorage.getItem(`yt_dislikes_cache_${state.mode}`);
+    const data = localStorage.getItem(`yt_dislikes_cache_${mode}`);
     if (data) {
       const parsed = JSON.parse(data);
       if (parsed && Array.isArray(parsed.videos)) {
@@ -736,15 +827,20 @@ function loadFromCache() {
   return null;
 }
 
-function saveToCache() {
+function saveToCache(
+  mode = state.mode,
+  videos = state.videos,
+  nextPageToken = state.nextPageToken,
+  totalResults = state.totalResults,
+) {
   try {
     const data = {
-      videos: state.videos,
-      nextPageToken: state.nextPageToken,
-      totalResults: state.totalResults,
+      videos,
+      nextPageToken,
+      totalResults,
       timestamp: Date.now()
     };
-    localStorage.setItem(`yt_dislikes_cache_${state.mode}`, JSON.stringify(data));
+    localStorage.setItem(`yt_dislikes_cache_${mode}`, JSON.stringify(data));
   } catch (e) {
     console.error("Failed to save cache:", e);
   }
@@ -800,97 +896,112 @@ function slimVideo(v) {
 }
 
 let activeFetchPromise = null;
+let fetchGeneration = 0;
+
+function invalidateActiveFetch() {
+  fetchGeneration++;
+  activeFetchPromise = null;
+  state.isFetchAll = false;
+  state.loading = false;
+  state.isLoadMore = false;
+}
 
 async function fetchVideos(pageToken = null) {
   if (activeFetchPromise) {
     return activeFetchPromise;
   }
 
-  activeFetchPromise = (async () => {
+  const gen = ++fetchGeneration;
+  const fetchMode = state.mode;
+
+  const currentPromise = (async () => {
     const isLoadMore = !!pageToken;
     setLoading(true, isLoadMore);
     setError(null);
 
-  if (!isLoadMore && !state.forceRefetch) {
-    const cached = loadFromCache();
-    if (cached) {
-      state.videos = cached.videos;
-      state.nextPageToken = cached.nextPageToken;
-      state.totalResults = cached.totalResults;
-      filterVideos();
-      setLoading(false, false);
-      return;
-    }
-  }
-  
-  state.forceRefetch = false;
-
-  try {
-    if (!window.gapi?.client?.youtube) {
-      throw new Error("YouTube API client not loaded.");
-    }
-
-    let items = [];
-    let nextToken = null;
-    let total = 0;
-
-    if (state.mode === "like") {
-      // Use playlistItems for Likes to bypass the 1000-item limit of videos.list(myRating='like')
-      // 'LL' is the magic ID for the Liked Videos playlist
-      const plResponse = await window.gapi.client.youtube.playlistItems.list({
-        playlistId: "LL",
-        part: "contentDetails",
-        maxResults: 50,
-        pageToken: pageToken || "",
-      });
-
-      console.log("PlaylistItems API Response:", plResponse);
-
-      const videoIds = (plResponse.result.items || []).map(
-        (item) => item.contentDetails.videoId,
-      );
-      nextToken = plResponse.result.nextPageToken || null;
-      total = plResponse.result.pageInfo?.totalResults || 0;
-
-      if (videoIds.length > 0) {
-        const vResponse = await window.gapi.client.youtube.videos.list({
-          id: videoIds.join(","),
-          part: "snippet,contentDetails,statistics,status",
-        });
-
-        const fetchedItems = vResponse.result.items || [];
-        // Maintain the order returned by the playlist, and preserve deleted/private videos
-        const itemsMap = fetchedItems.reduce((acc, item) => {
-          acc[item.id] = item;
-          return acc;
-        }, {});
-        items = videoIds.map((id) => {
-          if (itemsMap[id]) return itemsMap[id];
-          // If videos.list doesn't return the video, it's deleted/private
-          return {
-            id: id,
-            status: { uploadStatus: "deleted" },
-            snippet: null
-          };
-        });
+    if (!isLoadMore && !state.forceRefetch) {
+      const cached = loadFromCache(fetchMode);
+      if (cached) {
+        if (gen !== fetchGeneration || state.mode !== fetchMode) return;
+        state.videos = cached.videos;
+        state.nextPageToken = cached.nextPageToken;
+        state.totalResults = cached.totalResults;
+        filterVideos();
+        setLoading(false, false);
+        return;
       }
-    } else {
-      // Use videos.list for Dislikes
-      // NOTE: This filter is known to be capped at 1000 items by the YouTube API.
-      // Since there is no "Disliked Videos" playlist, this is the only way to fetch them.
-      // Timeout wrapper for GAPI calls
-      const apiCall = window.gapi.client.youtube.videos.list({
-        myRating: state.mode,
-        part: "snippet,contentDetails,statistics,status",
-        maxResults: 50,
-        pageToken: pageToken || "",
-      });
+    }
+
+    state.forceRefetch = false;
+
+    try {
+      if (!window.gapi?.client?.youtube) {
+        throw new Error("YouTube API client not loaded.");
+      }
+
+      let items = [];
+      let nextToken = null;
+      let total = 0;
+
+      if (fetchMode === "like") {
+        // Use playlistItems for Likes to bypass the 1000-item limit of videos.list(myRating='like')
+        // 'LL' is the magic ID for the Liked Videos playlist
+        const plResponse = await window.gapi.client.youtube.playlistItems.list({
+          playlistId: "LL",
+          part: "contentDetails",
+          maxResults: 50,
+          pageToken: pageToken || "",
+        });
+
+        if (gen !== fetchGeneration || state.mode !== fetchMode) return;
+
+        const videoIds = (plResponse.result.items || []).map(
+          (item) => item.contentDetails.videoId,
+        );
+        nextToken = plResponse.result.nextPageToken || null;
+        total = plResponse.result.pageInfo?.totalResults || 0;
+
+        if (videoIds.length > 0) {
+          const vResponse = await window.gapi.client.youtube.videos.list({
+            id: videoIds.join(","),
+            part: "snippet,contentDetails,statistics,status",
+          });
+
+          if (gen !== fetchGeneration || state.mode !== fetchMode) return;
+
+          const fetchedItems = vResponse.result.items || [];
+          // Maintain the order returned by the playlist, and preserve deleted/private videos
+          const itemsMap = fetchedItems.reduce((acc, item) => {
+            acc[item.id] = item;
+            return acc;
+          }, {});
+          items = videoIds.map((id) => {
+            if (itemsMap[id]) return itemsMap[id];
+            // If videos.list doesn't return the video, it's deleted/private
+            return {
+              id: id,
+              status: { uploadStatus: "deleted" },
+              snippet: null
+            };
+          });
+        }
+      } else {
+        // Use videos.list for Dislikes
+        // NOTE: This filter is known to be capped at 1000 items by the YouTube API.
+        // Since there is no "Disliked Videos" playlist, this is the only way to fetch them.
+        const apiCall = window.gapi.client.youtube.videos.list({
+          myRating: fetchMode,
+          part: "snippet,contentDetails,statistics,status",
+          maxResults: 50,
+          pageToken: pageToken || "",
+        });
 
         const timeoutPromise = new Promise((_, reject) =>
           setTimeout(() => reject(new Error("Request timed out")), 30000),
         );
 
         const response = await Promise.race([apiCall, timeoutPromise]);
+        if (gen !== fetchGeneration || state.mode !== fetchMode) return;
 
         items = response.result.items || [];
         nextToken = response.result.nextPageToken || null;
@@ -905,11 +1016,11 @@ async function fetchVideos(pageToken = null) {
 
       state.nextPageToken = nextToken;
       state.totalResults = total;
-      saveToCache();
+      saveToCache(fetchMode, state.videos, nextToken, total);
       filterVideos();
 
       // The zero-yield fix for infinite scroll
-      if (!state.isFetchAll && state.nextPageToken && !state.debouncedSearchTerm) {
+      if (!state.isFetchAll && state.nextPageToken && !state.debouncedSearchTerm.trim()) {
         requestAnimationFrame(() => {
           const rect = dom.scrollSentinel.getBoundingClientRect();
           if (rect.top < window.innerHeight && rect.bottom > 0) {
@@ -918,30 +1029,38 @@ async function fetchVideos(pageToken = null) {
         });
       }
     } catch (err) {
+      if (gen !== fetchGeneration || state.mode !== fetchMode) return;
       console.error("Fetch error detail:", err);
       const status = err?.status || err?.result?.error?.code;
       if (status === 401) {
         localStorage.removeItem("yt_dislikes_token");
         state.isAuthenticated = false;
+        state.dataSource = null;
+        state.nextPageToken = null;
+        state.isFetchAll = false;
         setError("Session expired. Please sign in again.");
       } else {
         setError(
           err?.result?.error?.message ||
             err?.message ||
-            `Failed to fetch ${state.mode === "dislike" ? "disliked" : "liked"} videos.`,
+            `Failed to fetch ${fetchMode === "dislike" ? "disliked" : "liked"} videos.`,
         );
       }
     } finally {
-      if (!state.isFetchAll) {
+      if (gen === fetchGeneration && !state.isFetchAll) {
         setLoading(false, isLoadMore);
       }
     }
   })();
 
+  activeFetchPromise = currentPromise;
+
   try {
-    await activeFetchPromise;
+    await currentPromise;
   } finally {
-    activeFetchPromise = null;
+    if (activeFetchPromise === currentPromise) {
+      activeFetchPromise = null;
+    }
   }
 }
 
@@ -954,18 +1073,21 @@ function handleLoadMore() {
 async function handleLoadAll() {
   if (state.nextPageToken) {
     state.isFetchAll = true;
-    updateSentinel(); // Force "Loading all videos..." UI immediately
+    render();
     try {
       while (state.isFetchAll && state.nextPageToken) {
-        await fetchVideos(state.nextPageToken);
+        const tokenToFetch = state.nextPageToken;
+        await fetchVideos(tokenToFetch);
+        if (state.error || state.nextPageToken === tokenToFetch) {
+          break;
+        }
       }
     } finally {
       state.isFetchAll = false;
       // Ensure renderLimit covers all newly fetched videos so sentinel hides properly
       state.renderLimit = state.filteredVideos.length;
-      renderVideoList();
       setLoading(false, false);
-      if (!state.nextPageToken) {
+      if (!state.nextPageToken && !state.error) {
         triggerCelebration();
       }
     }
@@ -1001,17 +1123,18 @@ async function handleExportJson() {
   if (state.filteredVideos.length === 0) return;
 
   const exportData = state.filteredVideos;
-
-  const dataStr =
-    "data:text/json;charset=utf-8," +
-    encodeURIComponent(JSON.stringify(exportData, null, 2));
+  const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+    type: "application/json;charset=utf-8",
+  });
+  const objectUrl = URL.createObjectURL(blob);
   const downloadAnchorNode = document.createElement("a");
-  downloadAnchorNode.setAttribute("href", dataStr);
+  downloadAnchorNode.setAttribute("href", objectUrl);
   const fileName = state.mode === "dislike" ? "dislikes.json" : "likes.json";
   downloadAnchorNode.setAttribute("download", fileName);
   document.body.appendChild(downloadAnchorNode);
   downloadAnchorNode.click();
   downloadAnchorNode.remove();
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
 
   // Visual feedback
   const originalBg = dom.exportJsonButton.innerHTML;
@@ -1039,16 +1162,17 @@ async function loadDemoData() {
     const data = await response.json();
     
     if (Array.isArray(data)) {
+      invalidateActiveFetch();
       const normalized = data.map(normalizeStoredVideo);
       state.mode = 'like';
+      state.dataSource = 'demo';
       state.videos = normalized;
-      localStorage.setItem(`dislikes-data-${state.mode}`, JSON.stringify(normalized));
-      localStorage.setItem(`dislikes-data-${state.mode}-timestamp`, Date.now());
-      
+      state.nextPageToken = null;
+      state.totalResults = normalized.length;
+      state.error = null;
       state.activeFilter = null;
-      state.isAuthenticated = true; // Act as if authenticated
-      
-      dom.clearCacheButton.classList.add("hidden");
+      localStorage.removeItem("dislikes-data-like");
+      localStorage.removeItem("dislikes-data-like-timestamp");
       
       filterVideos();
       render();
@@ -1073,14 +1197,16 @@ function handleUploadJson(event) {
     try {
       const data = JSON.parse(e.target.result);
       if (Array.isArray(data)) {
+        invalidateActiveFetch();
         const normalized = data.map(normalizeStoredVideo);
+        state.dataSource = "upload";
         state.videos = normalized;
-        localStorage.setItem(`dislikes-data-${state.mode}`, JSON.stringify(normalized));
-        localStorage.setItem(`dislikes-data-${state.mode}-timestamp`, Date.now());
-        
+        state.nextPageToken = null;
+        state.totalResults = normalized.length;
+        state.error = null;
         state.activeFilter = null;
-        
-        dom.clearCacheButton.classList.add("hidden");
+        localStorage.removeItem(`dislikes-data-${state.mode}`);
+        localStorage.removeItem(`dislikes-data-${state.mode}-timestamp`);
         
         filterVideos();
         render();
@@ -1099,6 +1225,50 @@ function handleUploadJson(event) {
   event.target.value = "";
 }
 
+function cleanArtistName(artist) {
+  const name = artist || "Unknown";
+  return name.endsWith(" - Topic") ? name.slice(0, -8) : name;
+}
+
+function escapeHtml(str) {
+  return String(str ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function escapeRegExp(str) {
+  return String(str).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function getVideoYear(publishedAt) {
+  if (!publishedAt) return NaN;
+  return new Date(publishedAt).getUTCFullYear();
+}
+
+function formatActiveFilterLabel(filter) {
+  if (!filter) return "";
+  switch (filter.type) {
+    case "channel":
+      return `Artist: ${filter.value}`;
+    case "album": {
+      const [artist, dateStr] = filter.value.split("|");
+      const yr = dateStr ? dateStr.slice(0, 4) : "";
+      return yr ? `Album: ${artist} (${yr})` : `Album: ${artist}`;
+    }
+    case "year":
+      return `Year: ${filter.value}`;
+    case "label":
+      return `Label: ${filter.value}`;
+    case "copyright":
+      return `Copyright: ${filter.value}`;
+    default:
+      return filter.value;
+  }
+}
+
 function filterVideos() {
   let results = [...state.videos];
 
@@ -1111,12 +1281,13 @@ function filterVideos() {
   }
 
   // Search
-  if (state.debouncedSearchTerm) {
-    const lower = state.debouncedSearchTerm.toLowerCase();
+  const trimmedSearch = state.debouncedSearchTerm.trim();
+  if (trimmedSearch) {
+    const lower = trimmedSearch.toLowerCase();
     results = results.filter(
       (v) =>
-        v.title.toLowerCase().includes(lower) ||
-        v.artist.toLowerCase().includes(lower),
+        (v.title || "").toLowerCase().includes(lower) ||
+        cleanArtistName(v.artist).toLowerCase().includes(lower),
     );
   }
 
@@ -1129,8 +1300,7 @@ function filterVideos() {
     if (type === "channel") {
       results = results.filter((v) => {
         const isDeleted = checkIfDeleted(v);
-        let chName = isDeleted && !v.artist ? "Unavailable" : v.artist || "Unknown";
-        if (chName.endsWith(" - Topic")) chName = chName.slice(0, -8);
+        const chName = isDeleted && !v.artist ? "Unavailable" : cleanArtistName(v.artist);
         return chName === value;
       });
     } else if (type === "album") {
@@ -1138,15 +1308,13 @@ function filterVideos() {
       const [artist, dateStr] = value.split("|");
       results = results.filter((v) => {
         if (!v.published_at || !v.artist) return false;
-        let chName = v.artist;
-        if (chName.endsWith(" - Topic")) chName = chName.slice(0, -8);
-        if (chName !== artist) return false;
-        return v.published_at.split('T')[0] === dateStr;
+        if (cleanArtistName(v.artist) !== artist) return false;
+        return v.published_at.split("T")[0] === dateStr;
       });
     } else if (type === "year") {
       results = results.filter((v) => {
         if (!v.published_at) return false;
-        return new Date(v.published_at).getFullYear().toString() === value;
+        return getVideoYear(v.published_at).toString() === value;
       });
     } else if (type === "label") {
       results = results.filter((v) => v.label === value);
@@ -1175,12 +1343,16 @@ function filterVideos() {
       case "views-high":
         return b.views - a.views;
       case "channel-az": {
-        const artistCompare = a.artist.localeCompare(b.artist);
+        const artistCompare = cleanArtistName(a.artist).localeCompare(
+          cleanArtistName(b.artist),
+          undefined,
+          { sensitivity: "base" },
+        );
         if (artistCompare !== 0) return artistCompare;
         
         // Truncate to just the day (YYYY-MM-DD)
-        const dateA = a.published_at ? a.published_at.split('T')[0] : '';
-        const dateB = b.published_at ? b.published_at.split('T')[0] : '';
+        const dateA = a.published_at ? a.published_at.split("T")[0] : "";
+        const dateB = b.published_at ? b.published_at.split("T")[0] : "";
         
         if (dateA !== dateB) {
           if (!dateA) return 1;
@@ -1190,10 +1362,14 @@ function filterVideos() {
         }
         
         // If uploaded on the same day, sort by title (useful if tracks have track numbers)
-        return a.title.localeCompare(b.title);
+        return (a.title || "").localeCompare(b.title || "", undefined, {
+          sensitivity: "base",
+        });
       }
       case "title-az":
-        return a.title.localeCompare(b.title);
+        return (a.title || "").localeCompare(b.title || "", undefined, {
+          sensitivity: "base",
+        });
       default:
         return 0;
     }
@@ -1201,6 +1377,10 @@ function filterVideos() {
 
   state.filteredVideos = results;
   state.renderLimit = 50; // Reset render limit on filter/sort
+  state.currentVideoIndex = state.currentVideoId
+    ? results.findIndex((v) => v.video_id === state.currentVideoId)
+    : -1;
+  updatePrevNextButtons();
 }
 
 function setLoading(isLoading, isLoadMore = false) {
@@ -1223,13 +1403,12 @@ function applyTheme(theme) {
   if (theme === "dark") {
     isDark = true;
   } else if (theme === "system") {
-    isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
   }
   
-  if (isDark) {
-    document.documentElement.classList.add("dark");
-  } else {
-    document.documentElement.classList.remove("dark");
+  document.documentElement.classList.toggle("dark", isDark);
+  if (dom.themeColorMeta) {
+    dom.themeColorMeta.setAttribute("content", isDark ? "#0a0a0a" : "#ffffff");
   }
 }
 
@@ -1250,6 +1429,11 @@ function applyCompactMode(isCompact) {
 function render() {
   const isReady = state.gapiInited && state.gisInited;
   const isLoadMore = state.isLoadMore;
+  const hasAppData =
+    state.isAuthenticated ||
+    state.dataSource === "demo" ||
+    state.dataSource === "upload";
+  const trimmedSearch = state.debouncedSearchTerm.trim();
 
   // Auth Buttons
   if (isReady) {
@@ -1281,31 +1465,58 @@ function render() {
   document.title = isDislike ? "Dislikes" : "Likes";
   updateFavicon(state.mode);
 
-  // Auth State Views
-  if (state.isAuthenticated) {
+  // Auth & Session Views
+  if (hasAppData) {
     dom.viewWelcome.classList.add("hidden");
     dom.viewContent.classList.remove("hidden");
 
     dom.authIndicator.classList.remove("hidden");
+    dom.authIndicator.classList.add("flex");
 
-    // Hide sign-in button in header when authenticated if desired,
-    // but user might want to switch accounts.
-    // Current design keeps it but maybe we change text?
-    // For now, let's just update the views.
-    dom.authButton.classList.add("hidden"); // Hide header login button when auth'd
+    if (state.isAuthenticated && state.dataSource === "youtube") {
+      if (dom.authStatusText) dom.authStatusText.textContent = "Authenticated";
+      dom.signoutButton.textContent = "Sign out";
+      dom.authButton.classList.add("hidden");
+      dom.clearCacheButton.classList.remove("hidden");
+    } else if (state.dataSource === "demo") {
+      if (dom.authStatusText) dom.authStatusText.textContent = "Demo";
+      dom.signoutButton.textContent = "Exit demo";
+      dom.authButton.classList.toggle("hidden", state.isAuthenticated);
+      dom.clearCacheButton.classList.add("hidden");
+    } else {
+      if (dom.authStatusText) dom.authStatusText.textContent = "Local file";
+      dom.signoutButton.textContent = state.isAuthenticated ? "Sign out" : "Close file";
+      dom.authButton.classList.toggle("hidden", state.isAuthenticated);
+      dom.clearCacheButton.classList.add("hidden");
+    }
   } else {
     dom.viewWelcome.classList.remove("hidden");
     dom.viewContent.classList.add("hidden");
     dom.authIndicator.classList.add("hidden");
+    dom.authIndicator.classList.remove("flex");
     dom.authButton.classList.remove("hidden");
   }
 
   // Error
   if (state.error) {
     dom.errorContainer.classList.remove("hidden");
+    dom.errorContainer.classList.add("flex");
     dom.errorMessage.textContent = state.error;
   } else {
     dom.errorContainer.classList.add("hidden");
+    dom.errorContainer.classList.remove("flex");
+  }
+
+  // Active Sidebar Filter Chip
+  if (dom.activeFilterBadge && dom.activeFilterLabel) {
+    if (state.activeFilter) {
+      dom.activeFilterLabel.textContent = formatActiveFilterLabel(state.activeFilter);
+      dom.activeFilterBadge.classList.remove("hidden");
+      dom.activeFilterBadge.classList.add("inline-flex");
+    } else {
+      dom.activeFilterBadge.classList.add("hidden");
+      dom.activeFilterBadge.classList.remove("inline-flex");
+    }
   }
 
   // Results Count
@@ -1316,7 +1527,7 @@ function render() {
 
   if (state.loading && !isLoadMore) {
     countText = "Loading...";
-  } else if (!state.debouncedSearchTerm && !state.musicOnly && !state.unavailableOnly) {
+  } else if (!trimmedSearch && !state.musicOnly && !state.unavailableOnly && !state.activeFilter) {
     if (state.nextPageToken) {
       if (totalCount && totalCount > currentCount) {
         countText = `${fmt(currentCount)} of about ${fmt(totalCount)} loaded`;
@@ -1327,18 +1538,19 @@ function render() {
       countText = `All ${fmt(currentCount)} loaded`;
     }
   } else {
-    let modifiers = [];
-    if (state.unavailableOnly) modifiers.push('unavailable');
-    if (state.musicOnly) modifiers.push('music');
-    let modsStr = modifiers.length > 0 && !state.debouncedSearchTerm ? ' ' + modifiers.join(' ') : '';
+    const modifiers = [];
+    if (state.unavailableOnly) modifiers.push("unavailable");
+    if (state.musicOnly) modifiers.push("music");
+    const modsStr = modifiers.length > 0 && !trimmedSearch ? " " + modifiers.join(" ") : "";
     countText = `Found ${fmt(currentCount)}${modsStr} videos`;
   }
 
   dom.resultsCount.textContent = countText;
 
   // Load All Button State
-  if (state.nextPageToken && !state.debouncedSearchTerm) {
+  if (state.nextPageToken && !trimmedSearch) {
     dom.loadAllButton.classList.remove("hidden");
+    dom.loadAllButton.classList.add("inline-flex");
     if (state.isFetchAll) {
       dom.loadAllButton.textContent = "Loading all...";
       dom.loadAllButton.disabled = true;
@@ -1350,19 +1562,21 @@ function render() {
     }
   } else {
     dom.loadAllButton.classList.add("hidden");
+    dom.loadAllButton.classList.remove("inline-flex");
   }
 
   renderSidebar();
 
   // Loading & Empty States
-  if (state.isAuthenticated) {
+  if (hasAppData) {
     if (state.loading && !isLoadMore) {
       dom.emptyState.classList.add("hidden");
       dom.videoGrid.classList.remove("hidden");
       renderSkeletons();
-    } else if (state.videos.length === 0) {
+    } else if (state.filteredVideos.length === 0) {
       dom.emptyState.classList.remove("hidden");
       dom.videoGrid.classList.add("hidden");
+      dom.videoGrid.innerHTML = "";
     } else {
       dom.emptyState.classList.add("hidden");
       dom.videoGrid.classList.remove("hidden");
@@ -1376,6 +1590,7 @@ function render() {
 }
 
 function updateSentinel() {
+  const trimmedSearch = state.debouncedSearchTerm.trim();
   if (state.isFetchAll) {
     dom.scrollSentinel.classList.remove("hidden");
     dom.scrollSentinel.innerHTML = `
@@ -1387,7 +1602,7 @@ function updateSentinel() {
 
   if (
     state.renderLimit < state.filteredVideos.length ||
-    (state.nextPageToken && !state.debouncedSearchTerm)
+    (state.nextPageToken && !trimmedSearch)
   ) {
     dom.scrollSentinel.classList.remove("hidden");
     if (state.loading && state.isLoadMore) {
@@ -1408,45 +1623,36 @@ function renderVideoList(append = false) {
     dom.videoGrid.innerHTML = "";
   }
 
-  const start = append ? state.renderLimit - 50 : 0;
+  const start = append ? dom.videoGrid.children.length : 0;
   const end = Math.min(state.renderLimit, state.filteredVideos.length);
   const itemsToRender = state.filteredVideos.slice(start, end);
 
   itemsToRender.forEach((video) => {
     const clone = dom.videoTemplate.content.cloneNode(true);
 
-    const title = video.title;
+    const title = video.title || "Unavailable";
     const isDeleted = checkIfDeleted(video);
     const thumbnail = `https://i.ytimg.com/vi/${video.video_id}/mqdefault.jpg`;
-    const viewCount = video.views
-      ? new Intl.NumberFormat("en-US", {
-          notation: "compact",
-          compactDisplay: "short",
-        }).format(video.views)
-      : "N/A";
 
     // Image & Link
     const img = clone.querySelector(".video-thumbnail");
     const overlay = clone.querySelector(".deleted-overlay");
 
-    img.src = thumbnail || "";
+    img.src = thumbnail;
     img.alt = title;
 
     if (isDeleted) {
       overlay.classList.remove("hidden");
+      overlay.classList.add("flex");
     }
 
     // 404 check (thumbnail doesn't exist)
     img.onerror = () => {
       if (!video._is404) {
         video._is404 = true;
-        // If the user is currently sorting by deleted, we should refresh the list
-        if (state.sortBy === "deleted-first") {
-          filterVideos();
-          renderVideoList();
-        }
       }
       overlay.classList.remove("hidden");
+      overlay.classList.add("flex");
       img.src =
         "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="; // Transparent pixel
     };
@@ -1457,18 +1663,19 @@ function renderVideoList(append = false) {
     const playBtn = clone.querySelector(".video-play-btn");
     if (!isDeleted) {
       playBtn.addEventListener("click", () => {
-        const index = state.filteredVideos.findIndex(v => v.video_id === video.video_id);
-        const channelUrl = video.channel_id ? `${baseUrl}/channel/${video.channel_id}` : null;
+        const index = state.filteredVideos.findIndex((v) => v.video_id === video.video_id);
+        const channelUrl = video.channel_id ? `${baseUrl}/channel/${encodeURIComponent(video.channel_id)}` : null;
         playVideo(video.video_id, title, video.artist || "Unknown channel", thumbnail, channelUrl, index);
       });
     } else {
       playBtn.classList.add("cursor-not-allowed");
+      playBtn.disabled = true;
     }
 
-    // External Links (Title + Icon)
+    // External Links
     const links = clone.querySelectorAll(".video-link");
     links.forEach(
-      (l) => (l.href = `${baseUrl}/watch?v=${video.video_id}`),
+      (l) => (l.href = `${baseUrl}/watch?v=${encodeURIComponent(video.video_id)}`),
     );
 
     // Title
@@ -1477,12 +1684,11 @@ function renderVideoList(append = false) {
 
     // Channel Info
     const channelEl = clone.querySelector(".channel-title");
-    let chName = video.artist || "Unknown channel";
-    if (chName.endsWith(" - Topic")) chName = chName.slice(0, -8);
+    const chName = cleanArtistName(video.artist || "Unknown channel");
     const chId = video.channel_id;
 
     if (chId && !isDeleted) {
-      channelEl.innerHTML = `<a href="${baseUrl}/channel/${chId}" target="_blank" class="hover:text-black hover:underline">${highlightMatch(chName, state.debouncedSearchTerm)}</a>`;
+      channelEl.innerHTML = `<a href="${baseUrl}/channel/${encodeURIComponent(chId)}" target="_blank" rel="noopener noreferrer" class="hover:text-black dark:hover:text-white hover:underline">${highlightMatch(chName, state.debouncedSearchTerm)}</a>`;
     } else {
       channelEl.innerHTML = highlightMatch(chName, state.debouncedSearchTerm);
     }
@@ -1533,7 +1739,10 @@ function renderSkeletons() {
 }
 
 function renderSidebar() {
-  if (state.videos.length === 0) return;
+  if (state.videos.length === 0) {
+    dom.sidebarListContainer.innerHTML = "";
+    return;
+  }
 
   const data = calculateAnalytics();
   let html = "";
@@ -1542,11 +1751,12 @@ function renderSidebar() {
     html = data.topChannels.map((ch) => {
       const isActive = state.activeFilter && state.activeFilter.type === "channel" && state.activeFilter.value === ch.name;
       const bgClass = isActive ? "bg-gray-100 dark:bg-gray-800" : "hover:bg-gray-50 dark:hover:bg-gray-900";
+      const safeName = escapeHtml(ch.name);
       
       return `
-        <div class="sidebar-filter-item flex items-center gap-3 text-sm text-gray-900 dark:text-gray-100 p-1.5 rounded cursor-pointer transition-colors ${bgClass}" data-type="channel" data-value="${ch.name}">
+        <div class="sidebar-filter-item flex items-center gap-3 text-sm text-gray-900 dark:text-gray-100 p-1.5 rounded cursor-pointer transition-colors ${bgClass}" data-type="channel" data-value="${safeName}">
             <span class="w-8 flex justify-center font-bold text-gray-700 bg-gray-100 dark:bg-gray-800 dark:text-gray-300 rounded text-[10px] py-1 shrink-0">${ch.count}</span>
-            <span class="truncate pr-2">${ch.name}</span>
+            <span class="truncate pr-2">${safeName}</span>
         </div>
       `;
     }).join("");
@@ -1555,14 +1765,17 @@ function renderSidebar() {
       const val = `${album.artist}|${album.date}`;
       const isActive = state.activeFilter && state.activeFilter.type === "album" && state.activeFilter.value === val;
       const bgClass = isActive ? "bg-gray-100 dark:bg-gray-800" : "hover:bg-gray-50 dark:hover:bg-gray-900";
+      const safeVal = escapeHtml(val);
+      const safeArtist = escapeHtml(album.artist);
+      const safeThumb = escapeHtml(album.thumbnail);
       
       return `
-        <div class="sidebar-filter-item flex gap-3 items-center p-1.5 rounded cursor-pointer transition-colors ${bgClass}" data-type="album" data-value="${val}">
+        <div class="sidebar-filter-item flex gap-3 items-center p-1.5 rounded cursor-pointer transition-colors ${bgClass}" data-type="album" data-value="${safeVal}">
           <div class="shrink-0 relative group">
-             <img src="${album.thumbnail}" alt="${album.artist}" class="w-12 h-12 object-cover rounded border border-gray-200 dark:border-gray-800 shadow-sm transition-opacity">
+             <img src="${safeThumb}" alt="${safeArtist}" loading="lazy" class="w-12 h-12 object-cover rounded border border-gray-200 dark:border-gray-800 shadow-sm transition-opacity">
           </div>
           <div class="flex flex-col gap-0.5 overflow-hidden">
-            <span class="text-[13px] font-medium text-gray-900 dark:text-gray-100 line-clamp-1">${album.artist}</span>
+            <span class="text-[13px] font-medium text-gray-900 dark:text-gray-100 line-clamp-1">${safeArtist}</span>
             <div class="flex items-center gap-2 text-[11px] text-gray-500">
               <span class="truncate">${album.year}</span>
               <span class="shrink-0">•</span>
@@ -1576,14 +1789,15 @@ function renderSidebar() {
     html = data.releaseYears.map((ry) => {
       const isActive = state.activeFilter && state.activeFilter.type === "year" && state.activeFilter.value === ry.year.toString();
       const bgClass = isActive ? "bg-gray-100 dark:bg-gray-800" : "hover:bg-gray-50 dark:hover:bg-gray-900";
+      const safeYear = escapeHtml(ry.year);
       
       return `
-        <div class="sidebar-filter-item flex items-center gap-3 text-sm text-gray-900 dark:text-gray-100 p-1.5 rounded cursor-pointer transition-colors ${bgClass}" data-type="year" data-value="${ry.year}">
-          <span class="w-10 font-mono text-gray-500 shrink-0">${ry.year}</span>
+        <div class="sidebar-filter-item flex items-center gap-3 text-sm text-gray-900 dark:text-gray-100 p-1.5 rounded cursor-pointer transition-colors ${bgClass}" data-type="year" data-value="${safeYear}">
+          <span class="w-10 font-mono text-gray-500 shrink-0">${safeYear}</span>
           <div class="flex-1 bg-gray-200 dark:bg-gray-800 rounded-full h-1.5 overflow-hidden">
             <div class="bg-gray-400 dark:bg-gray-500 h-full rounded-full" style="width: ${ry.percent}%"></div>
           </div>
-          <span class="text-[10px] text-gray-500 font-mono whitespace-nowrap text-right shrink-0 min-w-[70px]">${ry.count}</span>
+          <span class="text-[10px] text-gray-500 font-mono whitespace-nowrap text-right shrink-0 min-w-[28px]">${ry.count}</span>
         </div>
       `;
     }).join("");
@@ -1591,11 +1805,12 @@ function renderSidebar() {
     html = data.topLabels.map((lbl) => {
       const isActive = state.activeFilter && state.activeFilter.type === "label" && state.activeFilter.value === lbl.name;
       const bgClass = isActive ? "bg-gray-100 dark:bg-gray-800" : "hover:bg-gray-50 dark:hover:bg-gray-900";
+      const safeName = escapeHtml(lbl.name);
       
       return `
-        <div class="sidebar-filter-item flex items-center gap-3 text-sm text-gray-900 dark:text-gray-100 p-1.5 rounded cursor-pointer transition-colors ${bgClass}" data-type="label" data-value="${lbl.name}">
+        <div class="sidebar-filter-item flex items-center gap-3 text-sm text-gray-900 dark:text-gray-100 p-1.5 rounded cursor-pointer transition-colors ${bgClass}" data-type="label" data-value="${safeName}">
             <span class="w-8 flex justify-center font-bold text-gray-700 bg-gray-100 dark:bg-gray-800 dark:text-gray-300 rounded text-[10px] py-1 shrink-0">${lbl.count}</span>
-            <span class="truncate pr-2">${lbl.name}</span>
+            <span class="truncate pr-2">${safeName}</span>
         </div>
       `;
     }).join("");
@@ -1603,11 +1818,12 @@ function renderSidebar() {
     html = data.topCopyrights.map((cpy) => {
       const isActive = state.activeFilter && state.activeFilter.type === "copyright" && state.activeFilter.value === cpy.name;
       const bgClass = isActive ? "bg-gray-100 dark:bg-gray-800" : "hover:bg-gray-50 dark:hover:bg-gray-900";
+      const safeName = escapeHtml(cpy.name);
       
       return `
-        <div class="sidebar-filter-item flex items-center gap-3 text-sm text-gray-900 dark:text-gray-100 p-1.5 rounded cursor-pointer transition-colors ${bgClass}" data-type="copyright" data-value="${cpy.name}">
+        <div class="sidebar-filter-item flex items-center gap-3 text-sm text-gray-900 dark:text-gray-100 p-1.5 rounded cursor-pointer transition-colors ${bgClass}" data-type="copyright" data-value="${safeName}">
             <span class="w-8 flex justify-center font-bold text-gray-700 bg-gray-100 dark:bg-gray-800 dark:text-gray-300 rounded text-[10px] py-1 shrink-0">${cpy.count}</span>
-            <span class="truncate pr-2">${cpy.name}</span>
+            <span class="truncate pr-2">${safeName}</span>
         </div>
       `;
     }).join("");
@@ -1627,11 +1843,10 @@ function calculateAnalytics() {
     const isDeleted = checkIfDeleted(v);
 
     // Channels
-    let chName =
+    const chName =
       isDeleted && !v.artist
         ? "Unavailable"
-        : v.artist || "Unknown";
-    if (chName.endsWith(" - Topic")) chName = chName.slice(0, -8);
+        : cleanArtistName(v.artist);
     const chId = v.channel_id;
 
     if (!channels[chName]) {
@@ -1639,9 +1854,9 @@ function calculateAnalytics() {
     }
     channels[chName].count++;
 
-    // Release Years
+    // Release Years (UTC so YYYY-01-01T00:00:00Z doesn't shift into YYYY-1)
     if (!isDeleted && v.published_at) {
-      const year = new Date(v.published_at).getFullYear();
+      const year = getVideoYear(v.published_at);
       if (!isNaN(year)) {
         years[year] = (years[year] || 0) + 1;
       }
@@ -1649,13 +1864,13 @@ function calculateAnalytics() {
 
     // Top Albums (cluster by channel + exact day)
     if (!isDeleted && v.published_at && v.artist && chName !== "Music Library Uploads") {
-      const date = v.published_at.split('T')[0];
+      const date = v.published_at.split("T")[0];
       const albumKey = `${chName}|${date}`;
       if (!albums[albumKey]) {
         albums[albumKey] = {
            artist: chName,
            date: date,
-           year: new Date(v.published_at).getFullYear(),
+           year: getVideoYear(v.published_at),
            thumbnail: `https://i.ytimg.com/vi/${v.video_id}/mqdefault.jpg`,
            video_id: v.video_id,
            count: 0
@@ -1682,18 +1897,18 @@ function calculateAnalytics() {
     .sort((a, b) => b.count - a.count)
     .slice(0, 100);
 
-  const totalVideos = (state.sidebarBaseVideos || state.filteredVideos).length;
+  const maxYearCount = Math.max(1, ...Object.values(years));
   const releaseYears = Object.entries(years)
     .map(([year, count]) => ({
       year,
       count,
-      percent: (count / totalVideos) * 100,
+      percent: (count / maxYearCount) * 100,
     }))
     .sort((a, b) => b.year - a.year);
 
   const topAlbums = Object.values(albums)
     // Only consider it an album if there's at least 3 tracks
-    .filter(a => a.count >= 3)
+    .filter((a) => a.count >= 3)
     .sort((a, b) => b.count - a.count)
     .slice(0, 100);
 
@@ -1716,19 +1931,20 @@ function getDynamicMetadata(video) {
       notation: "compact",
       compactDisplay: "short",
     }).format(n || 0);
-  const full = (n) => new Intl.NumberFormat("en-US").format(n || 0);
 
   switch (state.sortBy) {
     case "views-high":
       return `${compact(video.views)} views`;
     case "duration-long":
       return formatDuration(video.duration);
-    case "upload-new":
+    case "upload-new": {
       if (!video.published_at) return "Unknown date";
-      return new Date(video.published_at).toLocaleDateString(
-        undefined,
-        { year: "numeric", month: "short", day: "numeric" },
-      );
+      const opts = { year: "numeric", month: "short", day: "numeric" };
+      if (video.published_at.endsWith("T00:00:00Z")) {
+        opts.timeZone = "UTC";
+      }
+      return new Date(video.published_at).toLocaleDateString(undefined, opts);
+    }
     case "comments-most":
       return `${compact(video.comments)} comments`;
     default:
@@ -1751,9 +1967,22 @@ function formatDuration(duration) {
 }
 
 function highlightMatch(text, term) {
-  if (!term) return text;
-  const regex = new RegExp(`(${term})`, "gi");
-  return text.replace(regex, "<mark>$1</mark>");
+  const raw = String(text ?? "");
+  const trimmed = (term || "").trim();
+  if (!trimmed) return escapeHtml(raw);
+
+  const regex = new RegExp(escapeRegExp(trimmed), "gi");
+  let result = "";
+  let lastIndex = 0;
+  let match;
+  while ((match = regex.exec(raw)) !== null) {
+    result += escapeHtml(raw.slice(lastIndex, match.index));
+    result += `<mark>${escapeHtml(match[0])}</mark>`;
+    lastIndex = regex.lastIndex;
+    if (match[0].length === 0) break;
+  }
+  result += escapeHtml(raw.slice(lastIndex));
+  return result;
 }
 
 function parseDuration(duration) {
@@ -1819,10 +2048,16 @@ function initYTPlayer() {
           state.isPlayerReady = true;
           dom.playerPlayPause.disabled = false;
           dom.fsPlayerPlayPause.disabled = false;
+          if (state.pendingVideoId) {
+            const vid = state.pendingVideoId;
+            state.pendingVideoId = null;
+            state.ytPlayer.loadVideoById(vid);
+          }
         },
         onStateChange: onPlayerStateChange,
         onError: (event) => {
           console.error("YouTube API Error:", event.data);
+          stopProgressInterval();
           dom.playerIconLoading.classList.add("hidden");
           dom.playerIconPlay.classList.remove("hidden");
           dom.playerIconPause.classList.add("hidden");
@@ -1868,9 +2103,12 @@ function onPlayerStateChange(event) {
     dom.fsPlayerPlayPause.disabled = false;
     stopProgressInterval();
 
-    if (event.data === 0 && state.currentVideoIndex >= 0 && state.currentVideoIndex < state.filteredVideos.length - 1) {
-      // Autoplay next track when finished
-      playTrackByIndex(state.currentVideoIndex + 1);
+    if (event.data === 0 && state.currentVideoIndex >= 0) {
+      // Autoplay next playable track when finished
+      const nextIdx = findAdjacentPlayableIndex(state.currentVideoIndex, 1);
+      if (nextIdx !== -1) {
+        playTrackByIndex(nextIdx);
+      }
     }
   } else if (event.data === 3) { // Buffering
     dom.playerIconLoading.classList.remove("hidden");
@@ -1884,6 +2122,8 @@ function onPlayerStateChange(event) {
 }
 
 function playVideo(videoId, title, artist, thumbUrl, channelUrl, index = -1) {
+  stopProgressInterval();
+  state.currentVideoId = videoId;
   state.currentVideoIndex = index;
   updatePrevNextButtons();
 
@@ -1893,16 +2133,25 @@ function playVideo(videoId, title, artist, thumbUrl, channelUrl, index = -1) {
   if (dom.quickScrollContainer) {
     dom.quickScrollContainer.classList.add("-translate-y-[80px]");
   }
+
+  // Reset progress UI for the new track
+  dom.fsPlayerProgress.value = 0;
+  dom.bottomPlayerProgressBar.style.width = "0%";
+  dom.fsPlayerTimeCurrent.innerText = "0:00";
+  dom.fsPlayerTimeTotal.innerText = "-:--";
+  dom.playerTimeCurrent.innerText = "0:00";
+  dom.playerTimeTotal.innerText = "-:--";
   
   dom.playerThumbnail.src = thumbUrl;
   dom.playerTitle.innerText = title;
   
-  let cleanArtist = artist || "Unknown channel";
-  if (cleanArtist.endsWith(" - Topic")) cleanArtist = cleanArtist.slice(0, -8);
+  const cleanArtist = cleanArtistName(artist || "Unknown channel");
   
   if (channelUrl) {
-    dom.playerArtist.innerHTML = `<a href="${channelUrl}" target="_blank" class="hover:underline">${cleanArtist}</a>`;
-    dom.fsPlayerArtist.innerHTML = `<a href="${channelUrl}" target="_blank" class="hover:underline">${cleanArtist}</a>`;
+    const safeUrl = escapeHtml(channelUrl);
+    const safeArtist = escapeHtml(cleanArtist);
+    dom.playerArtist.innerHTML = `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="hover:underline">${safeArtist}</a>`;
+    dom.fsPlayerArtist.innerHTML = `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="hover:underline">${safeArtist}</a>`;
   } else {
     dom.playerArtist.innerText = cleanArtist;
     dom.fsPlayerArtist.innerText = cleanArtist;
@@ -1939,21 +2188,27 @@ function playVideo(videoId, title, artist, thumbUrl, channelUrl, index = -1) {
   dom.fsPlayerIconPause.classList.add("hidden");
 
   if (state.isPlayerReady && state.ytPlayer) {
+    state.pendingVideoId = null;
     state.ytPlayer.loadVideoById(videoId);
+  } else {
+    state.pendingVideoId = videoId;
   }
 }
 
 function updatePrevNextButtons() {
-  if (state.currentVideoIndex === -1) {
+  if (state.currentVideoIndex === -1 && !state.currentVideoId) {
     dom.fsPlayerPrev.disabled = true;
     dom.fsPlayerNext.disabled = true;
     dom.playerPrev.disabled = true;
     dom.playerNext.disabled = true;
   } else {
+    const hasNext =
+      state.currentVideoIndex >= 0 &&
+      findAdjacentPlayableIndex(state.currentVideoIndex, 1) !== -1;
     dom.fsPlayerPrev.disabled = false; // Always allow seeking to start
-    dom.fsPlayerNext.disabled = state.currentVideoIndex >= state.filteredVideos.length - 1;
+    dom.fsPlayerNext.disabled = !hasNext;
     dom.playerPrev.disabled = false;
-    dom.playerNext.disabled = state.currentVideoIndex >= state.filteredVideos.length - 1;
+    dom.playerNext.disabled = !hasNext;
   }
 }
 
@@ -1961,10 +2216,10 @@ function playTrackByIndex(index) {
   if (index >= 0 && index < state.filteredVideos.length) {
     const video = state.filteredVideos[index];
     const baseUrl = video.is_music ? "https://music.youtube.com" : "https://www.youtube.com";
-    const channelUrl = video.channel_id ? `${baseUrl}/channel/${video.channel_id}` : null;
-    let title = video.title;
+    const channelUrl = video.channel_id ? `${baseUrl}/channel/${encodeURIComponent(video.channel_id)}` : null;
+    let title = video.title || "Unavailable";
     if (state.mode === "dislike") {
-      title = video.title.replace(/^\[.*?\]\s*/, '');
+      title = title.replace(/^\[.*?\]\s*/, "");
     }
     const thumbnail = `https://i.ytimg.com/vi/${video.video_id}/mqdefault.jpg`;
     playVideo(video.video_id, title, video.artist || "Unknown channel", thumbnail, channelUrl, index);
