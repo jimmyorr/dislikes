@@ -133,6 +133,13 @@
         font-family: inherit;
       }
 
+      /* iOS Safari zooms the page when focusing an input under 16px; keep the search field at 16px on phones */
+      @media (max-width: 639px) {
+        #search-input {
+          font-size: 16px;
+        }
+      }
+
       /* Minimal scrollbar */
       ::-webkit-scrollbar {
         width: 6px;
