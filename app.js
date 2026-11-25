@@ -240,11 +240,7 @@ function showToast(message, type = "info") {
   dom.toast.classList.toggle("dark:bg-white", !isError);
   dom.toast.classList.toggle("dark:text-black", !isError);
 
-  const playerOpen =
-    dom.bottomPlayer &&
-    !dom.bottomPlayer.classList.contains("translate-y-full") &&
-    dom.fsPlayer &&
-    dom.fsPlayer.classList.contains("translate-y-full");
+  const playerOpen = isSheetShown(dom.bottomPlayer) && !isFsPlayerOpen();
   dom.toast.style.bottom = playerOpen ? "88px" : "24px";
 
   dom.toast.classList.remove("opacity-0", "translate-y-2");
@@ -1086,14 +1082,66 @@ function playNextTrack(fromAutoSkip = false) {
 
 let fsPlayerReturnFocus = null;
 
+// Slide-up sheets (the mini player and the full-screen player) start off-screen with
+// `translate-y-full invisible`. Their open state lives in data-shown, because the
+// classes change a frame or a transition later than the state does.
+function isSheetShown(el) {
+  return Boolean(el && el.dataset.shown === "1");
+}
+
+function showSheet(el) {
+  if (!el || isSheetShown(el)) return;
+  el.dataset.shown = "1";
+  clearTimeout(el._sheetTimer);
+  cancelAnimationFrame(el._sheetRaf);
+  el.classList.remove("invisible");
+  // Let the browser paint the sheet (and its big blurred backdrop) off-screen for a
+  // frame before the slide starts. Otherwise iOS Safari spends the first frames of the
+  // transition rasterizing, and the sheet jumps partway up instead of gliding.
+  el.style.willChange = "transform";
+  el._sheetRaf = requestAnimationFrame(() => {
+    el._sheetRaf = requestAnimationFrame(() => {
+      el.classList.remove("translate-y-full");
+      el._sheetTimer = setTimeout(() => {
+        el.style.willChange = "";
+      }, getTransitionMs(el) + 50);
+    });
+  });
+}
+
+function hideSheet(el) {
+  if (!el) return;
+  const wasShown = isSheetShown(el);
+  delete el.dataset.shown;
+  clearTimeout(el._sheetTimer);
+  cancelAnimationFrame(el._sheetRaf);
+  el.classList.add("translate-y-full");
+  if (!wasShown) {
+    el.classList.add("invisible");
+    el.style.willChange = "";
+    return;
+  }
+  // Only hide it once it has slid off-screen. Hiding it straight away (as before)
+  // made the sheet vanish on the first frame, so closing looked like a snap.
+  el._sheetTimer = setTimeout(() => {
+    el.classList.add("invisible");
+    el.style.willChange = "";
+  }, getTransitionMs(el) + 50);
+}
+
+function getTransitionMs(el) {
+  const d = getComputedStyle(el).transitionDuration.split(",")[0];
+  return (parseFloat(d) || 0) * (d.trim().endsWith("ms") ? 1 : 1000);
+}
+
 function isFsPlayerOpen() {
-  return Boolean(dom.fsPlayer && !dom.fsPlayer.classList.contains("translate-y-full"));
+  return isSheetShown(dom.fsPlayer);
 }
 
 function openFsPlayer() {
   if (isFsPlayerOpen()) return;
   fsPlayerReturnFocus = document.activeElement;
-  dom.fsPlayer.classList.remove("translate-y-full", "invisible");
+  showSheet(dom.fsPlayer);
   dom.fsPlayer.setAttribute("aria-hidden", "false");
   // Make sure we stop body scrolling while full screen is open
   document.body.style.overflow = "hidden";
@@ -1104,7 +1152,7 @@ function openFsPlayer() {
 function closeFsPlayer(restoreFocus = true) {
   if (!dom.fsPlayer) return;
   const wasOpen = isFsPlayerOpen();
-  dom.fsPlayer.classList.add("translate-y-full", "invisible");
+  hideSheet(dom.fsPlayer);
   dom.fsPlayer.setAttribute("aria-hidden", "true");
   document.body.style.overflow = "";
   if (wasOpen && restoreFocus) {
@@ -1135,7 +1183,7 @@ function closePlayer() {
   state.pendingVideoId = null;
   syncNowPlayingCards();
   setAudioPlaying(false);
-  dom.bottomPlayer.classList.add("translate-y-full", "invisible");
+  hideSheet(dom.bottomPlayer);
   closeFsPlayer(false);
   document.body.style.paddingBottom = "0px";
   if (dom.fastScrubber) {
@@ -1292,7 +1340,7 @@ function setupEventListeners() {
     // Ignore Space when typing or focused on an interactive control, or when player is closed
     if (
       e.target.closest("input, textarea, select, button, a, [contenteditable]") ||
-      dom.bottomPlayer.classList.contains("translate-y-full")
+      !isSheetShown(dom.bottomPlayer)
     ) {
       return;
     }
@@ -5092,7 +5140,7 @@ function playVideo(
   syncNowPlayingCards();
   setAudioPlaying(false);
 
-  dom.bottomPlayer.classList.remove("translate-y-full", "invisible");
+  showSheet(dom.bottomPlayer);
   document.body.style.paddingBottom = "72px"; // Height of bottom player
   
   if (dom.fastScrubber) {
