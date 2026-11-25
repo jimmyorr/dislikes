@@ -930,6 +930,23 @@
       .wh-fp-row .wh-num {
         text-align: right;
       }
+      /* Touch devices can't hover for the row's title tooltip, so they get
+         the description as a line under each row instead of the hint. */
+      .wh-fp-desc {
+        display: none;
+        grid-column: 1 / -1;
+        margin-top: -6px;
+        font-size: 12px;
+        color: var(--wh-muted);
+      }
+      @media (hover: none), (pointer: coarse) {
+        .wh-fp-desc {
+          display: block;
+        }
+        .wh-hover-only {
+          display: none;
+        }
+      }
       .wh-panel .wh-small {
         margin-top: 8px;
       }
