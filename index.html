@@ -255,6 +255,10 @@
 
           <button
             id="settings-button"
+            type="button"
+            aria-haspopup="true"
+            aria-expanded="false"
+            aria-controls="settings-menu"
             class="p-2 text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors rounded-full hover:bg-gray-50 dark:hover:bg-gray-800"
             title="Settings"
             aria-label="Settings"
@@ -284,13 +288,13 @@
             <div class="px-4 py-3">
               <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Appearance</label>
               <div class="space-y-3">
-                <div class="flex items-center justify-between">
-                  <span class="text-sm text-gray-700 dark:text-gray-200">Theme</span>
-                  <select id="theme-select" class="text-xs bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded px-1.5 py-1 text-gray-700 dark:text-gray-200 focus:outline-none cursor-pointer">
-                    <option value="system">System</option>
-                    <option value="light">Light</option>
-                    <option value="dark">Dark</option>
-                  </select>
+                <div class="space-y-1.5">
+                  <span class="block text-sm text-gray-700 dark:text-gray-200">Theme</span>
+                  <div id="theme-toggle-group" role="radiogroup" aria-label="Theme" class="grid grid-cols-3 gap-0.5 p-0.5 bg-gray-100 dark:bg-gray-800 rounded-md">
+                    <button type="button" role="radio" data-theme-value="system" aria-checked="true" class="theme-option py-1 text-xs font-medium rounded transition-colors">System</button>
+                    <button type="button" role="radio" data-theme-value="light" aria-checked="false" class="theme-option py-1 text-xs font-medium rounded transition-colors">Light</button>
+                    <button type="button" role="radio" data-theme-value="dark" aria-checked="false" class="theme-option py-1 text-xs font-medium rounded transition-colors">Dark</button>
+                  </div>
                 </div>
                 <label class="flex items-center justify-between cursor-pointer">
                   <span class="text-sm text-gray-700 dark:text-gray-200">Compact grid</span>
@@ -452,20 +456,56 @@
               </button>
             </div>
 
-            <div class="flex items-center gap-2 shrink-0 overflow-x-auto pb-1 md:pb-0">
-              <select
-                id="sort-select"
-                aria-label="Sort videos"
-                class="flex-grow px-3 py-1.5 border border-gray-200 dark:border-gray-800 rounded text-sm focus:outline-none focus:border-black dark:focus:border-gray-500 bg-white dark:bg-[#121212] dark:text-gray-200 min-w-[130px]"
-              >
-                <option value="date-new">Recent</option>
-                <option value="views-high">Views</option>
-                <option value="duration-long">Duration</option>
-                <option value="upload-new">Upload date</option>
-                <option value="comments-most">Comment count</option>
-                <option value="channel-az">Channel</option>
-                <option value="title-az">Title</option>
-              </select>
+            <div class="flex items-center gap-2 shrink-0">
+              <div id="sort-dropdown" class="relative flex-grow min-w-[140px]">
+                <button
+                  type="button"
+                  id="sort-trigger"
+                  aria-haspopup="listbox"
+                  aria-expanded="false"
+                  aria-controls="sort-menu"
+                  aria-label="Sort videos"
+                  class="w-full flex items-center justify-between gap-2 px-3 py-1.5 border border-gray-200 dark:border-gray-800 rounded text-sm bg-white dark:bg-[#121212] text-gray-900 dark:text-gray-200 hover:border-gray-400 dark:hover:border-gray-600 focus:outline-none focus:border-black dark:focus:border-gray-500 transition-colors"
+                >
+                  <span id="sort-label" class="truncate">Recent</span>
+                  <svg id="sort-chevron" class="w-4 h-4 text-gray-500 dark:text-gray-400 shrink-0 transition-transform duration-150" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                </button>
+                <div
+                  id="sort-menu"
+                  role="listbox"
+                  aria-label="Sort videos"
+                  class="hidden absolute left-0 right-0 sm:right-auto sm:min-w-[180px] top-full mt-1.5 bg-white dark:bg-[#121212] border border-gray-200 dark:border-gray-800 shadow-xl rounded-lg py-1 z-40"
+                >
+                  <button type="button" role="option" data-value="date-new" aria-selected="true" class="dropdown-option w-full flex items-center justify-between gap-3 px-3 py-2 text-sm text-left transition-colors">
+                    <span>Recent</span>
+                    <svg class="check-icon w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
+                  </button>
+                  <button type="button" role="option" data-value="views-high" aria-selected="false" class="dropdown-option w-full flex items-center justify-between gap-3 px-3 py-2 text-sm text-left transition-colors">
+                    <span>Views</span>
+                    <svg class="check-icon w-4 h-4 shrink-0 opacity-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
+                  </button>
+                  <button type="button" role="option" data-value="duration-long" aria-selected="false" class="dropdown-option w-full flex items-center justify-between gap-3 px-3 py-2 text-sm text-left transition-colors">
+                    <span>Duration</span>
+                    <svg class="check-icon w-4 h-4 shrink-0 opacity-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
+                  </button>
+                  <button type="button" role="option" data-value="upload-new" aria-selected="false" class="dropdown-option w-full flex items-center justify-between gap-3 px-3 py-2 text-sm text-left transition-colors">
+                    <span>Upload date</span>
+                    <svg class="check-icon w-4 h-4 shrink-0 opacity-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
+                  </button>
+                  <button type="button" role="option" data-value="comments-most" aria-selected="false" class="dropdown-option w-full flex items-center justify-between gap-3 px-3 py-2 text-sm text-left transition-colors">
+                    <span>Comment count</span>
+                    <svg class="check-icon w-4 h-4 shrink-0 opacity-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
+                  </button>
+                  <button type="button" role="option" data-value="channel-az" aria-selected="false" class="dropdown-option w-full flex items-center justify-between gap-3 px-3 py-2 text-sm text-left transition-colors">
+                    <span>Channel</span>
+                    <svg class="check-icon w-4 h-4 shrink-0 opacity-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
+                  </button>
+                  <button type="button" role="option" data-value="title-az" aria-selected="false" class="dropdown-option w-full flex items-center justify-between gap-3 px-3 py-2 text-sm text-left transition-colors">
+                    <span>Title</span>
+                    <svg class="check-icon w-4 h-4 shrink-0 opacity-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
+                  </button>
+                </div>
+              </div>
 
               <button
                 id="shuffle-play-button"
@@ -576,16 +616,45 @@
               <svg class="w-4 h-4 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>
             <div id="sidebar-content" class="hidden lg:flex flex-col gap-6">
-              <div class="relative">
-                <select id="sidebar-filter-select" aria-label="Filter category" class="w-full appearance-none bg-transparent border border-gray-200 dark:border-gray-800 rounded px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 focus:outline-none focus:border-black dark:focus:border-white cursor-pointer">
-                  <option value="channels">Filter by: Artists</option>
-                  <option value="albums">Filter by: Albums</option>
-                  <option value="years">Filter by: Years</option>
-                  <option value="labels">Filter by: Labels</option>
-                  <option value="copyrights">Filter by: Copyrights</option>
-                </select>
-                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+              <div id="sidebar-filter-dropdown" class="relative">
+                <button
+                  type="button"
+                  id="sidebar-filter-trigger"
+                  aria-haspopup="listbox"
+                  aria-expanded="false"
+                  aria-controls="sidebar-filter-menu"
+                  aria-label="Filter category"
+                  class="w-full flex items-center justify-between gap-2 bg-white dark:bg-[#121212] border border-gray-200 dark:border-gray-800 rounded px-3 py-2 text-sm font-medium text-gray-900 dark:text-gray-200 hover:border-gray-400 dark:hover:border-gray-600 focus:outline-none focus:border-black dark:focus:border-white transition-colors"
+                >
+                  <span class="truncate"><span class="text-gray-500 dark:text-gray-400 font-normal">Filter by:</span> <span id="sidebar-filter-label">Artists</span></span>
+                  <svg id="sidebar-filter-chevron" class="w-4 h-4 text-gray-500 dark:text-gray-400 shrink-0 transition-transform duration-150" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                </button>
+                <div
+                  id="sidebar-filter-menu"
+                  role="listbox"
+                  aria-label="Filter category"
+                  class="hidden absolute left-0 right-0 top-full mt-1.5 bg-white dark:bg-[#121212] border border-gray-200 dark:border-gray-800 shadow-xl rounded-lg py-1 z-30"
+                >
+                  <button type="button" role="option" data-value="channels" aria-selected="true" class="dropdown-option w-full flex items-center justify-between gap-3 px-3 py-2 text-sm text-left transition-colors">
+                    <span>Artists</span>
+                    <svg class="check-icon w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
+                  </button>
+                  <button type="button" role="option" data-value="albums" aria-selected="false" class="dropdown-option w-full flex items-center justify-between gap-3 px-3 py-2 text-sm text-left transition-colors">
+                    <span>Albums</span>
+                    <svg class="check-icon w-4 h-4 shrink-0 opacity-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
+                  </button>
+                  <button type="button" role="option" data-value="years" aria-selected="false" class="dropdown-option w-full flex items-center justify-between gap-3 px-3 py-2 text-sm text-left transition-colors">
+                    <span>Years</span>
+                    <svg class="check-icon w-4 h-4 shrink-0 opacity-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
+                  </button>
+                  <button type="button" role="option" data-value="labels" aria-selected="false" class="dropdown-option w-full flex items-center justify-between gap-3 px-3 py-2 text-sm text-left transition-colors">
+                    <span>Labels</span>
+                    <svg class="check-icon w-4 h-4 shrink-0 opacity-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
+                  </button>
+                  <button type="button" role="option" data-value="copyrights" aria-selected="false" class="dropdown-option w-full flex items-center justify-between gap-3 px-3 py-2 text-sm text-left transition-colors">
+                    <span>Copyrights</span>
+                    <svg class="check-icon w-4 h-4 shrink-0 opacity-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
+                  </button>
                 </div>
               </div>
               <div id="sidebar-list-container" class="space-y-4 max-h-[80vh] overflow-y-auto overscroll-contain pr-2 pb-12">

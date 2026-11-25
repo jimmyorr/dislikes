@@ -69,7 +69,11 @@ const dom = {
   activeFilterLabel: document.getElementById("active-filter-label"),
   searchInput: document.getElementById("search-input"),
   searchClearButton: document.getElementById("search-clear-button"),
-  sortSelect: document.getElementById("sort-select"),
+  sortDropdown: document.getElementById("sort-dropdown"),
+  sortTrigger: document.getElementById("sort-trigger"),
+  sortLabel: document.getElementById("sort-label"),
+  sortChevron: document.getElementById("sort-chevron"),
+  sortMenu: document.getElementById("sort-menu"),
   shufflePlayButton: document.getElementById("shuffle-play-button"),
 
   emptyState: document.getElementById("empty-state"),
@@ -80,7 +84,11 @@ const dom = {
   uploadJsonInput: document.getElementById("upload-json-input"),
   clearCacheButton: document.getElementById("clear-cache-button"),
   loadAllButton: document.getElementById("load-all-button"),
-  sidebarFilterSelect: document.getElementById("sidebar-filter-select"),
+  sidebarFilterDropdown: document.getElementById("sidebar-filter-dropdown"),
+  sidebarFilterTrigger: document.getElementById("sidebar-filter-trigger"),
+  sidebarFilterLabel: document.getElementById("sidebar-filter-label"),
+  sidebarFilterChevron: document.getElementById("sidebar-filter-chevron"),
+  sidebarFilterMenu: document.getElementById("sidebar-filter-menu"),
   sidebarListContainer: document.getElementById("sidebar-list-container"),
   mobileFilterToggle: document.getElementById("mobile-filter-toggle"),
   sidebarContent: document.getElementById("sidebar-content"),
@@ -137,7 +145,7 @@ const dom = {
 
   settingsButton: document.getElementById("settings-button"),
   settingsMenu: document.getElementById("settings-menu"),
-  themeSelect: document.getElementById("theme-select"),
+  themeToggleGroup: document.getElementById("theme-toggle-group"),
   themeColorMeta: document.getElementById("theme-color-meta"),
   compactToggle: document.getElementById("compact-toggle"),
   musicToggle: document.getElementById("music-toggle"),
@@ -184,8 +192,174 @@ function showToast(message, type = "info") {
 
 window.showToast = showToast;
 
+function closeAllPopovers(exceptMenu = null) {
+  if (dom.settingsMenu && dom.settingsMenu !== exceptMenu) {
+    dom.settingsMenu.classList.add("hidden");
+    if (dom.settingsButton) dom.settingsButton.setAttribute("aria-expanded", "false");
+  }
+  if (dom.sortMenu && dom.sortMenu !== exceptMenu) {
+    dom.sortMenu.classList.add("hidden");
+    if (dom.sortTrigger) dom.sortTrigger.setAttribute("aria-expanded", "false");
+    if (dom.sortChevron) dom.sortChevron.classList.remove("rotate-180");
+  }
+  if (dom.sidebarFilterMenu && dom.sidebarFilterMenu !== exceptMenu) {
+    dom.sidebarFilterMenu.classList.add("hidden");
+    if (dom.sidebarFilterTrigger) dom.sidebarFilterTrigger.setAttribute("aria-expanded", "false");
+    if (dom.sidebarFilterChevron) dom.sidebarFilterChevron.classList.remove("rotate-180");
+  }
+}
+
+function isAnyPopoverOpen() {
+  return Boolean(
+    (dom.settingsMenu && !dom.settingsMenu.classList.contains("hidden")) ||
+      (dom.sortMenu && !dom.sortMenu.classList.contains("hidden")) ||
+      (dom.sidebarFilterMenu && !dom.sidebarFilterMenu.classList.contains("hidden"))
+  );
+}
+
+function updateThemeToggleUI(theme) {
+  if (!dom.themeToggleGroup) return;
+  const buttons = dom.themeToggleGroup.querySelectorAll(".theme-option");
+  buttons.forEach((btn) => {
+    const isActive = btn.dataset.themeValue === theme;
+    btn.setAttribute("aria-checked", String(isActive));
+    btn.tabIndex = isActive ? 0 : -1;
+    btn.classList.toggle("bg-white", isActive);
+    btn.classList.toggle("dark:bg-[#121212]", isActive);
+    btn.classList.toggle("text-black", isActive);
+    btn.classList.toggle("dark:text-white", isActive);
+    btn.classList.toggle("shadow-sm", isActive);
+    btn.classList.toggle("text-gray-500", !isActive);
+    btn.classList.toggle("dark:text-gray-400", !isActive);
+    btn.classList.toggle("hover:text-black", !isActive);
+    btn.classList.toggle("dark:hover:text-white", !isActive);
+  });
+}
+
+function setupCustomDropdown({ container, trigger, menu, chevron, labelEl, getValue, onSelect }) {
+  if (!container || !trigger || !menu) return;
+
+  const getOptions = () => Array.from(menu.querySelectorAll(".dropdown-option"));
+
+  const syncUI = () => {
+    const currentValue = getValue();
+    getOptions().forEach((opt) => {
+      const isSelected = opt.dataset.value === currentValue;
+      opt.setAttribute("aria-selected", String(isSelected));
+      opt.classList.add("focus:outline-none", "focus:bg-gray-100", "dark:focus:bg-gray-800");
+      opt.classList.toggle("font-medium", isSelected);
+      opt.classList.toggle("text-black", isSelected);
+      opt.classList.toggle("dark:text-white", isSelected);
+      opt.classList.toggle("bg-gray-50", isSelected);
+      opt.classList.toggle("dark:bg-white/5", isSelected);
+      opt.classList.toggle("text-gray-700", !isSelected);
+      opt.classList.toggle("dark:text-gray-300", !isSelected);
+      opt.classList.toggle("hover:bg-gray-50", !isSelected);
+      opt.classList.toggle("dark:hover:bg-gray-800", !isSelected);
+
+      const check = opt.querySelector(".check-icon");
+      if (check) check.classList.toggle("opacity-0", !isSelected);
+
+      if (isSelected && labelEl) {
+        const textSpan = opt.querySelector("span");
+        if (textSpan) labelEl.textContent = textSpan.textContent;
+      }
+    });
+  };
+
+  const openMenu = (focusTarget = "selected") => {
+    closeAllPopovers(menu);
+    syncUI();
+    menu.classList.remove("hidden");
+    trigger.setAttribute("aria-expanded", "true");
+    if (chevron) chevron.classList.add("rotate-180");
+
+    const options = getOptions();
+    if (!options.length) return;
+    let toFocus = options.find((o) => o.dataset.value === getValue()) || options[0];
+    if (focusTarget === "first") toFocus = options[0];
+    else if (focusTarget === "last") toFocus = options[options.length - 1];
+    toFocus?.focus();
+  };
+
+  const closeMenu = (restoreFocus = false) => {
+    menu.classList.add("hidden");
+    trigger.setAttribute("aria-expanded", "false");
+    if (chevron) chevron.classList.remove("rotate-180");
+    if (restoreFocus) trigger.focus();
+  };
+
+  syncUI();
+
+  trigger.addEventListener("click", () => {
+    const isHidden = menu.classList.contains("hidden");
+    if (isHidden) {
+      openMenu("selected");
+    } else {
+      closeMenu(false);
+    }
+  });
+
+  trigger.addEventListener("keydown", (e) => {
+    if (!menu.classList.contains("hidden")) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      openMenu("selected");
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      openMenu("selected");
+    }
+  });
+
+  menu.addEventListener("click", (e) => {
+    const opt = e.target.closest(".dropdown-option");
+    if (!opt) return;
+    const newValue = opt.dataset.value;
+    const prevValue = getValue();
+    closeMenu(false);
+    if (newValue && newValue !== prevValue) {
+      onSelect(newValue);
+    }
+    syncUI();
+  });
+
+  menu.addEventListener("keydown", (e) => {
+    if (menu.classList.contains("hidden")) return;
+    const options = getOptions();
+    if (!options.length) return;
+    const currentIdx = options.indexOf(document.activeElement);
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      const nextIdx = currentIdx >= 0 ? (currentIdx + 1) % options.length : 0;
+      options[nextIdx]?.focus();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      const prevIdx = currentIdx >= 0 ? (currentIdx - 1 + options.length) % options.length : options.length - 1;
+      options[prevIdx]?.focus();
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      options[0]?.focus();
+    } else if (e.key === "End") {
+      e.preventDefault();
+      options[options.length - 1]?.focus();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      closeMenu(true);
+    } else if (e.key === "Tab") {
+      closeMenu(false);
+    }
+  });
+}
+
 function setMobileFiltersOpen(isOpen) {
   if (!dom.sidebarContent || !dom.mobileFilterToggle) return;
+  if (!isOpen && dom.sidebarFilterMenu) {
+    dom.sidebarFilterMenu.classList.add("hidden");
+    if (dom.sidebarFilterTrigger) dom.sidebarFilterTrigger.setAttribute("aria-expanded", "false");
+    if (dom.sidebarFilterChevron) dom.sidebarFilterChevron.classList.remove("rotate-180");
+  }
   dom.sidebarContent.classList.toggle("hidden", !isOpen);
   dom.sidebarContent.classList.toggle("flex", isOpen);
   dom.mobileFilterToggle.setAttribute("aria-expanded", String(isOpen));
@@ -205,7 +379,7 @@ function init() {
   setupMediaSessionHandlers();
   
   applyTheme(state.theme);
-  dom.themeSelect.value = state.theme;
+  updateThemeToggleUI(state.theme);
   
   dom.compactToggle.checked = state.compactMode;
   applyCompactMode(state.compactMode);
@@ -628,8 +802,20 @@ function setupEventListeners() {
       if (!dom.fsPlayer.classList.contains("translate-y-full")) {
         dom.fsPlayer.classList.add("translate-y-full");
         document.body.style.overflow = "";
-      } else if (!dom.settingsMenu.classList.contains("hidden")) {
-        dom.settingsMenu.classList.add("hidden");
+      } else if (isAnyPopoverOpen()) {
+        const activeEl = document.activeElement;
+        if (dom.sortMenu && !dom.sortMenu.classList.contains("hidden") && dom.sortDropdown?.contains(activeEl)) {
+          dom.sortTrigger?.focus();
+        } else if (
+          dom.sidebarFilterMenu &&
+          !dom.sidebarFilterMenu.classList.contains("hidden") &&
+          dom.sidebarFilterDropdown?.contains(activeEl)
+        ) {
+          dom.sidebarFilterTrigger?.focus();
+        } else if (dom.settingsMenu && !dom.settingsMenu.classList.contains("hidden") && dom.settingsMenu.contains(activeEl)) {
+          dom.settingsButton?.focus();
+        }
+        closeAllPopovers();
       }
       return;
     }
@@ -683,9 +869,17 @@ function setupEventListeners() {
     render();
   }, 300);
 
-  dom.sidebarFilterSelect.addEventListener("change", (e) => {
-    state.sidebarCategory = e.target.value;
-    renderSidebar();
+  setupCustomDropdown({
+    container: dom.sidebarFilterDropdown,
+    trigger: dom.sidebarFilterTrigger,
+    menu: dom.sidebarFilterMenu,
+    chevron: dom.sidebarFilterChevron,
+    labelEl: dom.sidebarFilterLabel,
+    getValue: () => state.sidebarCategory,
+    onSelect: (newValue) => {
+      state.sidebarCategory = newValue;
+      renderSidebar();
+    },
   });
 
   // Sidebar item clicks
@@ -745,10 +939,18 @@ function setupEventListeners() {
     });
   }
 
-  dom.sortSelect.addEventListener("change", (e) => {
-    state.sortBy = e.target.value;
-    filterVideos();
-    render();
+  setupCustomDropdown({
+    container: dom.sortDropdown,
+    trigger: dom.sortTrigger,
+    menu: dom.sortMenu,
+    chevron: dom.sortChevron,
+    labelEl: dom.sortLabel,
+    getValue: () => state.sortBy,
+    onSelect: (newValue) => {
+      state.sortBy = newValue;
+      filterVideos();
+      render();
+    },
   });
 
   dom.copyIdsButton.addEventListener("click", handleCopyIds);
@@ -847,22 +1049,74 @@ function setupEventListeners() {
   // Settings Menu Logic
   dom.settingsButton.addEventListener("click", (e) => {
     e.stopPropagation();
-    dom.settingsMenu.classList.toggle("hidden");
+    const willOpen = dom.settingsMenu.classList.contains("hidden");
+    closeAllPopovers(dom.settingsMenu);
+    dom.settingsMenu.classList.toggle("hidden", !willOpen);
+    dom.settingsButton.setAttribute("aria-expanded", String(willOpen));
   });
 
   document.addEventListener("click", (e) => {
-    if (!dom.settingsMenu.contains(e.target) && !dom.settingsButton.contains(e.target)) {
+    if (
+      dom.settingsMenu &&
+      !dom.settingsMenu.classList.contains("hidden") &&
+      !dom.settingsMenu.contains(e.target) &&
+      !dom.settingsButton.contains(e.target)
+    ) {
       dom.settingsMenu.classList.add("hidden");
+      dom.settingsButton.setAttribute("aria-expanded", "false");
+    }
+    if (
+      dom.sortMenu &&
+      !dom.sortMenu.classList.contains("hidden") &&
+      !dom.sortDropdown.contains(e.target)
+    ) {
+      dom.sortMenu.classList.add("hidden");
+      dom.sortTrigger.setAttribute("aria-expanded", "false");
+      dom.sortChevron.classList.remove("rotate-180");
+    }
+    if (
+      dom.sidebarFilterMenu &&
+      !dom.sidebarFilterMenu.classList.contains("hidden") &&
+      !dom.sidebarFilterDropdown.contains(e.target)
+    ) {
+      dom.sidebarFilterMenu.classList.add("hidden");
+      dom.sidebarFilterTrigger.setAttribute("aria-expanded", "false");
+      dom.sidebarFilterChevron.classList.remove("rotate-180");
     }
   });
 
   // Theme Logic
-  dom.themeSelect.addEventListener("change", (e) => {
-    const newTheme = e.target.value;
+  const selectTheme = (newTheme) => {
+    if (!newTheme || newTheme === state.theme) return;
     state.theme = newTheme;
     localStorage.setItem("dislikes-theme", newTheme);
     applyTheme(newTheme);
-  });
+    updateThemeToggleUI(newTheme);
+  };
+
+  if (dom.themeToggleGroup) {
+    dom.themeToggleGroup.addEventListener("click", (e) => {
+      const btn = e.target.closest(".theme-option");
+      if (!btn) return;
+      selectTheme(btn.dataset.themeValue);
+    });
+
+    dom.themeToggleGroup.addEventListener("keydown", (e) => {
+      if (e.key !== "ArrowRight" && e.key !== "ArrowLeft" && e.key !== "ArrowDown" && e.key !== "ArrowUp") {
+        return;
+      }
+      const buttons = Array.from(dom.themeToggleGroup.querySelectorAll(".theme-option"));
+      if (!buttons.length) return;
+      e.preventDefault();
+      const currentIdx = buttons.findIndex((b) => b.dataset.themeValue === state.theme);
+      const delta = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : -1;
+      const nextBtn = buttons[(Math.max(0, currentIdx) + delta + buttons.length) % buttons.length];
+      if (nextBtn) {
+        selectTheme(nextBtn.dataset.themeValue);
+        nextBtn.focus();
+      }
+    });
+  }
 
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
     if (state.theme === "system") {
