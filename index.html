@@ -88,7 +88,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=2.2.3" />
+    <link rel="stylesheet" href="styles.css?v=2.2.4" />
     <script>
       (function () {
         try {
@@ -1094,28 +1094,33 @@
         .now-playing-badge i:nth-child(2) { transform: scaleY(1); }
         .now-playing-badge i:nth-child(3) { transform: scaleY(0.5); }
       }
-      /* Thumbnail placeholder: a soft skeleton shimmer until the image arrives, then a quick
-         fade-in. The shimmer only runs on cards that are still loading. */
+      /* Thumbnail placeholder: a soft skeleton shimmer until the image arrives.
+         The shimmer animates background-position, not transform or opacity, on purpose:
+         those run as GPU animations in WebKit, which gives every loading card its own
+         compositing layer. With a screenful of cards loading at once, iOS Safari stopped
+         painting the page at all on first load (blank until a touch) - see v2.2.4. */
       .video-play-btn .video-thumbnail {
-        transition: transform 300ms, opacity 220ms ease-out;
+        transition: transform 300ms;
       }
       .video-play-btn.thumb-loading .video-thumbnail {
-        opacity: 0;
+        visibility: hidden;
       }
       .video-play-btn.thumb-loading::before {
         content: "";
         position: absolute;
         inset: 0;
-        background: linear-gradient(100deg, transparent 20%, rgb(0 0 0 / 0.05) 50%, transparent 80%);
-        transform: translateX(-100%);
+        background-image: linear-gradient(100deg, transparent 35%, rgb(0 0 0 / 0.05) 50%, transparent 65%);
+        background-size: 300% 100%;
+        background-repeat: no-repeat;
         animation: thumb-shimmer 1.4s ease-in-out infinite;
         pointer-events: none;
       }
       .dark .video-play-btn.thumb-loading::before {
-        background: linear-gradient(100deg, transparent 20%, rgb(255 255 255 / 0.06) 50%, transparent 80%);
+        background-image: linear-gradient(100deg, transparent 35%, rgb(255 255 255 / 0.06) 50%, transparent 65%);
       }
       @keyframes thumb-shimmer {
-        to { transform: translateX(100%); }
+        from { background-position: 100% 0; }
+        to { background-position: 0% 0; }
       }
       @media (prefers-reduced-motion: reduce) {
         .video-play-btn.thumb-loading::before { animation: none; display: none; }
@@ -3086,9 +3091,9 @@
         },
       );
     </script>
-    <script src="version.js?v=2.2.3"></script>
-    <script src="app.js?v=2.2.3"></script>
-    <script src="history.js?v=2.2.3"></script>
+    <script src="version.js?v=2.2.4"></script>
+    <script src="app.js?v=2.2.4"></script>
+    <script src="history.js?v=2.2.4"></script>
     <script>
       if ("serviceWorker" in navigator) {
         // Reload at most once when a genuinely newer SW_VERSION activates over an older running page
