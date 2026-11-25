@@ -1930,6 +1930,18 @@
             for (const k of keys) await caches.delete(k);
           }
           localStorage.clear();
+          if ("indexedDB" in window) {
+            try {
+              if (window.closeLibraryDb) await window.closeLibraryDb();
+            } catch {
+              /* ignore */
+            }
+            await new Promise((resolve) => {
+              const req = indexedDB.deleteDatabase("dislikes");
+              req.onsuccess = req.onerror = req.onblocked = () => resolve();
+              setTimeout(resolve, 2000);
+            });
+          }
           window.location.href =
             window.location.origin +
             window.location.pathname +
