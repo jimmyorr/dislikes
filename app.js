@@ -545,7 +545,7 @@ function updateHeroCountDisplay(targetCount, animateSignature = null) {
     return;
   }
 
-  const fmt = (n) => new Intl.NumberFormat().format(n);
+  const fmt = formatCount;
   const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
 
   if (
@@ -2454,6 +2454,47 @@ function matchesVideoSearch(v, lowerQuery) {
 // which made A–Z sorts of a few thousand items take 100ms+ on desktop (several times that on phones).
 const TEXT_COLLATOR = new Intl.Collator(undefined, { sensitivity: "base" });
 
+// Intl formatters are costly to construct; build them once instead of per card / per render.
+const COMPACT_NUMBER_FORMAT = new Intl.NumberFormat("en-US", {
+  notation: "compact",
+  compactDisplay: "short",
+});
+const COUNT_NUMBER_FORMAT = new Intl.NumberFormat();
+const DAY_DATE_FORMAT = new Intl.DateTimeFormat(undefined, { year: "numeric", month: "short", day: "numeric" });
+const DAY_DATE_FORMAT_UTC = new Intl.DateTimeFormat(undefined, {
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+  timeZone: "UTC",
+});
+const MONTH_DATE_FORMAT = new Intl.DateTimeFormat(undefined, { year: "numeric", month: "short" });
+const MONTH_DATE_FORMAT_UTC = new Intl.DateTimeFormat(undefined, {
+  year: "numeric",
+  month: "short",
+  timeZone: "UTC",
+});
+
+function formatCompactNumber(n) {
+  return COMPACT_NUMBER_FORMAT.format(n || 0);
+}
+
+function formatCount(n) {
+  return COUNT_NUMBER_FORMAT.format(n);
+}
+
+// Midnight-UTC dates are release dates parsed from "Released on:" and must not shift a day in western time zones.
+function formatPublishedDate(publishedAt, withDay = true) {
+  const isUtcMidnight = String(publishedAt).endsWith("T00:00:00Z");
+  const formatter = withDay
+    ? isUtcMidnight
+      ? DAY_DATE_FORMAT_UTC
+      : DAY_DATE_FORMAT
+    : isUtcMidnight
+      ? MONTH_DATE_FORMAT_UTC
+      : MONTH_DATE_FORMAT;
+  return formatter.format(new Date(publishedAt));
+}
+
 function compareText(a, b) {
   return TEXT_COLLATOR.compare(a || "", b || "");
 }
@@ -3138,8 +3179,7 @@ function formatScrubberTooltip(checkpoint, video, index, total) {
   if (!video || !checkpoint) {
     return { primary: "", sub: "" };
   }
-  const compact = (n) =>
-    new Intl.NumberFormat("en-US", { notation: "compact", compactDisplay: "short" }).format(n || 0);
+  const compact = formatCompactNumber;
 
   switch (state.sortBy) {
     case "title-az":
@@ -3157,9 +3197,7 @@ function formatScrubberTooltip(checkpoint, video, index, total) {
         return { primary: "No date", sub: video.title || "" };
       }
       const yr = getVideoYear(video.published_at);
-      const opts = { year: "numeric", month: "short" };
-      if (video.published_at.endsWith("T00:00:00Z")) opts.timeZone = "UTC";
-      const sub = new Date(video.published_at).toLocaleDateString(undefined, opts);
+      const sub = formatPublishedDate(video.published_at, false);
       return { primary: String(yr), sub };
     }
     case "views-high":
@@ -3550,7 +3588,7 @@ function render() {
   // Library Stats Hero Count & Subtitle
   const currentCount = state.filteredVideos.length;
   const totalCount = state.totalResults;
-  const fmt = (n) => new Intl.NumberFormat().format(n);
+  const fmt = formatCount;
   const hasViewCap = state.maxViews !== null && !state.unavailableOnly;
 
   let countText = "";
@@ -3920,11 +3958,7 @@ function calculateAnalytics() {
 }
 
 function getDynamicMetadata(video) {
-  const compact = (n) =>
-    new Intl.NumberFormat("en-US", {
-      notation: "compact",
-      compactDisplay: "short",
-    }).format(n || 0);
+  const compact = formatCompactNumber;
 
   switch (state.sortBy) {
     case "views-high":
@@ -3933,11 +3967,7 @@ function getDynamicMetadata(video) {
       return formatDuration(video.duration);
     case "upload-new": {
       if (!video.published_at) return "Unknown date";
-      const opts = { year: "numeric", month: "short", day: "numeric" };
-      if (video.published_at.endsWith("T00:00:00Z")) {
-        opts.timeZone = "UTC";
-      }
-      return new Date(video.published_at).toLocaleDateString(undefined, opts);
+      return formatPublishedDate(video.published_at, true);
     }
     case "comments-most":
       return `${compact(video.comments)} comments`;
