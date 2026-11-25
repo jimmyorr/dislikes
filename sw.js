@@ -1,4 +1,4 @@
-const SW_VERSION = "2.1.4";
+const SW_VERSION = "2.2.0";
 const CACHE_NAME = `dislikes-v${SW_VERSION}`;
 const ASSETS = [
   "./",
@@ -7,6 +7,8 @@ const ASSETS = [
   "./styles.css",
   "./version.js",
   "./app.js",
+  "./history.js",
+  "./history-worker.js",
   "./manifest.json",
   "./icon.png",
 ];

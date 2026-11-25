@@ -88,7 +88,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=2.1.4" />
+    <link rel="stylesheet" href="styles.css?v=2.2.0" />
     <script>
       (function () {
         try {
@@ -214,6 +214,754 @@
           #181818 75%
         );
         background-size: 200% 100%;
+      }
+
+      /* ---- Watch history + Insights (history.js). Plain CSS: styles.css is a prebuilt Tailwind build. ---- */
+      :root {
+        --wh-fg: #0a0a0a;
+        --wh-muted: #6b7280;
+        --wh-line: rgba(0, 0, 0, 0.1);
+        --wh-soft: #f4f4f5;
+        --wh-panel: #ffffff;
+        --wh-accent: #e11d48;
+        --wh-accent-soft: rgba(225, 29, 72, 0.12);
+        --wh-prev: #d4d4d8;
+        --wh-up: #15803d;
+        --wh-down: #b91c1c;
+        --wh-artists: #ede9fe;
+        --wh-albums: #dcfce7;
+        --wh-tracks: #dbeafe;
+      }
+      .dark {
+        --wh-fg: #f1f1f1;
+        --wh-muted: #a3a3a3;
+        --wh-line: rgba(255, 255, 255, 0.1);
+        --wh-soft: #171717;
+        --wh-panel: #111111;
+        --wh-accent: #fb7185;
+        --wh-accent-soft: rgba(251, 113, 133, 0.16);
+        --wh-prev: #3f3f46;
+        --wh-up: #4ade80;
+        --wh-down: #f87171;
+        --wh-artists: #2e1065;
+        --wh-albums: #052e16;
+        --wh-tracks: #172554;
+      }
+      .plays-badge {
+        position: absolute;
+        right: 6px;
+        bottom: 6px;
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        padding: 1px 7px 1px 6px;
+        border-radius: 999px;
+        background: rgba(0, 0, 0, 0.72);
+        color: #fff;
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 18px;
+        font-variant-numeric: tabular-nums;
+        pointer-events: none;
+      }
+      .plays-badge::before {
+        content: "";
+        width: 0;
+        height: 0;
+        border-left: 6px solid currentColor;
+        border-top: 3.5px solid transparent;
+        border-bottom: 3.5px solid transparent;
+      }
+      .plays-badge[hidden],
+      [data-wh-state][hidden],
+      .wh-insights[hidden] {
+        display: none !important;
+      }
+      body.wh-insights-open #view-content,
+      body.wh-insights-open #view-welcome,
+      body.wh-insights-open #topbar-app-controls,
+      body.wh-insights-open #fast-scrubber {
+        display: none !important;
+      }
+      body.wh-insights-open .wh-insights-btn {
+        background: var(--wh-soft);
+        color: var(--wh-fg);
+      }
+      @media (max-width: 639px) {
+        .wh-insights-btn-label {
+          display: none;
+        }
+        .wh-insights-btn {
+          padding: 0 9px;
+        }
+      }
+
+      /* Dialog */
+      .wh-dialog {
+        width: min(520px, calc(100vw - 32px));
+        max-height: calc(100dvh - 32px);
+        padding: 24px;
+        border: 1px solid var(--wh-line);
+        border-radius: 20px;
+        background: var(--wh-panel);
+        color: var(--wh-fg);
+        box-shadow: 0 24px 64px rgba(0, 0, 0, 0.25);
+      }
+      .wh-dialog::backdrop {
+        background: rgba(0, 0, 0, 0.45);
+        backdrop-filter: blur(2px);
+      }
+      .wh-dialog-x {
+        position: absolute;
+        top: 14px;
+        right: 14px;
+        padding: 6px;
+        border-radius: 999px;
+        color: var(--wh-muted);
+      }
+      .wh-dialog-x:hover {
+        background: var(--wh-soft);
+        color: var(--wh-fg);
+      }
+      .wh-dialog-title {
+        font-size: 19px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        margin: 0 32px 6px 0;
+      }
+      .wh-dialog-sub {
+        font-size: 13.5px;
+        color: var(--wh-muted);
+        margin-bottom: 16px;
+      }
+      .wh-dropzone {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        padding: 26px 16px;
+        border: 1.5px dashed var(--wh-line);
+        border-radius: 14px;
+        background: var(--wh-soft);
+        text-align: center;
+        font-size: 14px;
+        cursor: pointer;
+        transition: border-color 0.15s, background 0.15s;
+      }
+      .wh-dropzone.wh-drag {
+        border-color: var(--wh-accent);
+        background: var(--wh-accent-soft);
+      }
+      .wh-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 36px;
+        padding: 0 16px;
+        border-radius: 999px;
+        border: 1px solid var(--wh-line);
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--wh-fg);
+        background: transparent;
+      }
+      .wh-btn:hover {
+        background: var(--wh-soft);
+      }
+      .wh-btn-primary {
+        background: var(--wh-fg);
+        color: var(--wh-panel);
+        border-color: var(--wh-fg);
+      }
+      .wh-btn-primary:hover {
+        background: var(--wh-fg);
+        opacity: 0.88;
+      }
+      .wh-steps {
+        margin-top: 16px;
+        font-size: 13px;
+      }
+      .wh-steps summary {
+        cursor: pointer;
+        font-weight: 600;
+        padding: 4px 0;
+      }
+      .wh-steps ol {
+        list-style: decimal;
+        padding-left: 20px;
+        margin: 8px 0;
+        display: grid;
+        gap: 5px;
+        color: var(--wh-fg);
+      }
+      .wh-steps a,
+      .wh-link {
+        text-decoration: underline;
+        text-underline-offset: 2px;
+        color: var(--wh-fg);
+        font-weight: 500;
+      }
+      .wh-steps .wh-small {
+        color: var(--wh-muted);
+      }
+      .wh-progress,
+      .wh-split {
+        height: 8px;
+        border-radius: 999px;
+        background: var(--wh-soft);
+        overflow: hidden;
+      }
+      .wh-progress span,
+      .wh-split span {
+        display: block;
+        height: 100%;
+        width: 4%;
+        border-radius: 999px;
+        background: var(--wh-accent);
+        transition: width 0.2s;
+      }
+      .wh-split {
+        margin: 12px 0 4px;
+      }
+      .wh-error {
+        color: var(--wh-down);
+        font-size: 13.5px;
+      }
+      .wh-error:empty,
+      #wh-done-liked:empty {
+        display: none;
+      }
+      .wh-done-stats {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        margin-bottom: 8px;
+      }
+      .wh-dialog-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 18px;
+      }
+      #wh-done-liked {
+        margin-top: 10px;
+      }
+
+      /* Insights page */
+      .wh-insights {
+        flex: 1;
+        width: 100%;
+        color: var(--wh-fg);
+      }
+      .wh-insights-inner {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 20px 16px 48px;
+      }
+      @media (min-width: 640px) {
+        .wh-insights-inner {
+          padding: 28px 24px 64px;
+        }
+      }
+      .wh-insights-top {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+      .wh-back {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        height: 32px;
+        padding: 0 10px 0 4px;
+        border-radius: 999px;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--wh-muted);
+      }
+      .wh-back:hover {
+        background: var(--wh-soft);
+        color: var(--wh-fg);
+      }
+      .wh-title {
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: -0.03em;
+      }
+      .wh-controls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px 16px;
+        margin-bottom: 16px;
+      }
+      .wh-tabs {
+        display: inline-flex;
+        padding: 3px;
+        border-radius: 999px;
+        background: var(--wh-soft);
+      }
+      .wh-tabs button {
+        height: 30px;
+        padding: 0 13px;
+        border-radius: 999px;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--wh-muted);
+      }
+      .wh-tabs button[aria-pressed="true"] {
+        background: var(--wh-panel);
+        color: var(--wh-fg);
+        font-weight: 600;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+      }
+      .wh-check {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--wh-muted);
+        cursor: pointer;
+      }
+      .wh-check input {
+        accent-color: var(--wh-accent);
+        width: 15px;
+        height: 15px;
+      }
+      .wh-stepper {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-left: auto;
+      }
+      .wh-stepper button {
+        width: 30px;
+        height: 30px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        color: var(--wh-fg);
+      }
+      .wh-stepper button:hover:not(:disabled) {
+        background: var(--wh-soft);
+      }
+      .wh-stepper button:disabled {
+        opacity: 0.3;
+        cursor: default;
+      }
+      .wh-period-label {
+        font-size: 14px;
+        font-weight: 600;
+        min-width: 9ch;
+        text-align: center;
+        font-variant-numeric: tabular-nums;
+      }
+      .wh-note {
+        font-size: 13px;
+        color: var(--wh-muted);
+        margin: 0 0 16px;
+      }
+      .wh-insights .wh-note.wh-small {
+        margin-top: 24px;
+      }
+      .wh-muted {
+        color: var(--wh-muted);
+      }
+      .wh-small {
+        font-size: 12px;
+      }
+      .wh-empty {
+        padding: 48px 16px;
+        text-align: center;
+        color: var(--wh-muted);
+        border: 1px dashed var(--wh-line);
+        border-radius: 16px;
+      }
+      .wh-up {
+        color: var(--wh-up);
+      }
+      .wh-down {
+        color: var(--wh-down);
+      }
+      #insights-body {
+        display: grid;
+        gap: 16px;
+      }
+      .wh-hero {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 16px;
+        padding: 20px;
+        border-radius: 18px;
+        background: var(--wh-soft);
+      }
+      @media (min-width: 768px) {
+        .wh-hero {
+          grid-template-columns: minmax(200px, 1fr) 1.6fr;
+          align-items: end;
+          padding: 24px 28px;
+        }
+      }
+      .wh-hero-total {
+        display: flex;
+        flex-direction: column;
+      }
+      .wh-delta {
+        font-size: 12.5px;
+        font-weight: 600;
+        margin-bottom: 4px;
+      }
+      .wh-hero-number {
+        font-size: 48px;
+        font-weight: 800;
+        letter-spacing: -0.04em;
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+      }
+      .wh-hero-unit {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--wh-muted);
+        margin-top: 4px;
+      }
+      .wh-legend {
+        display: flex;
+        justify-content: flex-end;
+        gap: 14px;
+        font-size: 11.5px;
+        color: var(--wh-muted);
+        margin-bottom: 8px;
+      }
+      .wh-legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .wh-key {
+        width: 9px;
+        height: 9px;
+        border-radius: 2px;
+        background: var(--wh-accent);
+      }
+      .wh-key-prev {
+        background: var(--wh-prev);
+      }
+      .wh-bars {
+        display: flex;
+        align-items: stretch;
+        gap: 6px;
+        height: 120px;
+      }
+      .wh-bars-many {
+        gap: 2px;
+      }
+      .wh-bar-group {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+      .wh-bar-pair {
+        flex: 1;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        gap: 2px;
+        border-bottom: 1px solid var(--wh-line);
+      }
+      .wh-bar {
+        display: block;
+        flex: 1;
+        max-width: 22px;
+        min-height: 1px;
+        border-radius: 3px 3px 0 0;
+        background: var(--wh-accent);
+      }
+      .wh-bar-prev {
+        background: var(--wh-prev);
+      }
+      .wh-bar-label {
+        height: 18px;
+        padding-top: 4px;
+        font-size: 11px;
+        line-height: 14px;
+        color: var(--wh-muted);
+        text-align: center;
+        white-space: nowrap;
+        overflow: visible;
+      }
+      .wh-cards {
+        display: grid;
+        gap: 16px;
+      }
+      @media (min-width: 900px) {
+        .wh-cards {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+      }
+      .wh-card,
+      .wh-panel {
+        border: 1px solid var(--wh-line);
+        border-radius: 16px;
+        background: var(--wh-panel);
+        overflow: hidden;
+        min-width: 0;
+      }
+      .wh-card-head,
+      .wh-panel-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 12px 16px;
+        font-size: 12.5px;
+      }
+      .wh-card-artists .wh-card-head {
+        background: var(--wh-artists);
+      }
+      .wh-card-albums .wh-card-head {
+        background: var(--wh-albums);
+      }
+      .wh-card-tracks .wh-card-head {
+        background: var(--wh-tracks);
+      }
+      .wh-card-title {
+        font-size: 14px;
+        font-weight: 700;
+      }
+      .wh-card-count {
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+      }
+      .wh-card-body {
+        padding: 14px 16px 12px;
+      }
+      .wh-card-foot {
+        margin-top: 8px;
+        font-size: 12px;
+        color: var(--wh-muted);
+      }
+      .wh-top {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+        text-align: left;
+        margin-bottom: 8px;
+        border-radius: 10px;
+      }
+      .wh-top img {
+        width: 64px;
+        height: 64px;
+        border-radius: 10px;
+        object-fit: cover;
+        flex-shrink: 0;
+        background: var(--wh-soft);
+      }
+      .wh-top > span {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+      .wh-top-rank {
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--wh-muted);
+      }
+      .wh-top-name {
+        font-size: 15px;
+        font-weight: 700;
+        line-height: 1.25;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+      }
+      .wh-top-sub {
+        font-size: 12px;
+        color: var(--wh-muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .wh-top:hover .wh-top-name,
+      .wh-list-item:hover .wh-name {
+        text-decoration: underline;
+      }
+      .wh-list {
+        display: grid;
+      }
+      .wh-list-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        padding: 5px 0;
+        font-size: 13px;
+        text-align: left;
+        color: var(--wh-fg);
+      }
+      .wh-rank {
+        width: 14px;
+        flex-shrink: 0;
+        color: var(--wh-muted);
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+      }
+      .wh-name {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .wh-num {
+        flex-shrink: 0;
+        color: var(--wh-muted);
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+      }
+      .wh-list-thumbs img {
+        width: 40px;
+        height: 40px;
+        border-radius: 6px;
+        object-fit: cover;
+        flex-shrink: 0;
+        background: var(--wh-soft);
+      }
+      .wh-row {
+        display: grid;
+        gap: 16px;
+      }
+      @media (min-width: 900px) {
+        .wh-row {
+          grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+        }
+      }
+      .wh-panel {
+        padding-bottom: 14px;
+      }
+      .wh-panel > :not(.wh-panel-head) {
+        margin-left: 16px;
+        margin-right: 16px;
+      }
+      .wh-clock-bars {
+        display: flex;
+        align-items: flex-end;
+        gap: 3px;
+        height: 140px;
+        border-bottom: 1px solid var(--wh-line);
+      }
+      .wh-clock-col {
+        flex: 1;
+        height: 100%;
+        display: flex;
+        align-items: flex-end;
+      }
+      .wh-clock-col .wh-bar {
+        max-width: none;
+        opacity: 0.45;
+      }
+      .wh-clock-col .wh-bar-hot {
+        opacity: 1;
+      }
+      .wh-clock-ticks {
+        position: relative;
+        height: 20px;
+        font-size: 11px;
+        color: var(--wh-muted);
+      }
+      .wh-clock-ticks span {
+        position: absolute;
+        top: 4px;
+      }
+      .wh-fp-row {
+        display: grid;
+        grid-template-columns: 108px 1fr 40px;
+        align-items: center;
+        gap: 10px;
+        padding: 6px 0;
+        font-size: 13px;
+      }
+      .wh-fp-track {
+        position: relative;
+        height: 8px;
+        border-radius: 999px;
+        background: var(--wh-soft);
+      }
+      .wh-fp-fill {
+        position: absolute;
+        inset: 0 auto 0 0;
+        border-radius: 999px;
+        background: var(--wh-accent);
+      }
+      .wh-fill-soft {
+        opacity: 0.45;
+      }
+      .wh-fp-avg {
+        position: absolute;
+        top: -4px;
+        width: 2px;
+        height: 16px;
+        margin-left: -1px;
+        background: var(--wh-fg);
+        border-radius: 1px;
+      }
+      .wh-fp-row .wh-num {
+        text-align: right;
+      }
+      .wh-panel .wh-small {
+        margin-top: 8px;
+      }
+      .wh-facts {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+      }
+      @media (min-width: 900px) {
+        .wh-facts {
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+      }
+      .wh-fact {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: 16px;
+        border: 1px solid var(--wh-line);
+        border-radius: 16px;
+      }
+      .wh-fact-value {
+        display: block;
+        font-size: 24px;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        font-variant-numeric: tabular-nums;
+        line-height: 1.15;
+      }
+      .wh-fact-label {
+        display: block;
+        font-size: 12.5px;
+      }
+      .wh-likes-stats {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-bottom: 8px;
+      }
+      .wh-likes-stats .wh-link {
+        font-size: 12.5px;
+      }
+      .wh-subhead {
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--wh-muted);
+        margin-top: 12px;
       }
     </style>
   </head>
@@ -414,6 +1162,28 @@
               <button
                 type="button"
                 role="option"
+                data-value="plays-most"
+                data-requires-history
+                aria-selected="false"
+                class="hidden dropdown-option w-full flex items-center justify-between gap-3 px-3.5 py-2 text-[13.5px] text-left transition-colors"
+              >
+                <span>Most played</span>
+                <svg class="check-icon w-4 h-4 shrink-0 opacity-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
+              </button>
+              <button
+                type="button"
+                role="option"
+                data-value="played-recent"
+                data-requires-history
+                aria-selected="false"
+                class="hidden dropdown-option w-full flex items-center justify-between gap-3 px-3.5 py-2 text-[13.5px] text-left transition-colors"
+              >
+                <span>Last played</span>
+                <svg class="check-icon w-4 h-4 shrink-0 opacity-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
+              </button>
+              <button
+                type="button"
+                role="option"
                 data-value="views-high"
                 aria-selected="false"
                 class="dropdown-option w-full flex items-center justify-between gap-3 px-3.5 py-2 text-[13.5px] text-left transition-colors"
@@ -605,6 +1375,18 @@
                       ></span>
                     </span>
                   </label>
+
+                  <label data-requires-history class="hidden flex items-center justify-between cursor-pointer py-0.5">
+                    <span class="text-[13.5px] text-gray-700 dark:text-gray-200"
+                      >Never played</span
+                    >
+                    <span class="relative inline-flex items-center">
+                      <input type="checkbox" id="never-played-toggle" class="sr-only peer" />
+                      <span
+                        class="w-9 h-5 bg-gray-200 dark:bg-[#333333] rounded-full peer peer-checked:bg-gray-900 dark:peer-checked:bg-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white dark:peer-checked:after:bg-black after:rounded-full after:h-4 after:w-4 after:transition-transform peer-checked:after:translate-x-4 transition-colors"
+                      ></span>
+                    </span>
+                  </label>
                 </div>
               </div>
             </div>
@@ -640,6 +1422,17 @@
             class="h-9 px-4 rounded-full text-[13px] font-medium bg-gray-900 text-white dark:bg-white dark:text-black hover:opacity-90 transition-opacity opacity-50 cursor-not-allowed"
           >
             <span id="auth-text">Loading...</span>
+          </button>
+
+          <button
+            id="insights-button"
+            type="button"
+            data-wh-insights
+            class="wh-insights-btn h-9 px-3 inline-flex items-center gap-1.5 rounded-full text-[13px] font-medium text-gray-600 dark:text-[#cfcfcf] hover:text-black dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#212121] transition-colors"
+            title="Listening insights from your watch history"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /></svg>
+            <span class="wh-insights-btn-label">Insights</span>
           </button>
 
           <button
@@ -731,6 +1524,23 @@
                     ></span>
                   </span>
                 </label>
+              </div>
+            </div>
+
+            <hr class="my-1 border-gray-100 dark:border-white/10" />
+
+            <div class="px-4 py-3">
+              <span
+                class="block text-[11px] font-semibold text-gray-400 dark:text-[#999999] uppercase tracking-[0.1em] mb-1.5"
+                >Watch history</span
+              >
+              <p id="wh-settings-status" class="text-[12px] text-gray-500 dark:text-[#aaaaaa] mb-2">Not imported</p>
+              <div class="flex flex-wrap gap-x-3 gap-y-1 text-[13px]">
+                <button type="button" data-wh-import class="font-medium text-gray-900 dark:text-white hover:underline">
+                  <span data-requires-no-history>Import from Takeout</span><span data-requires-history class="hidden">Replace</span>
+                </button>
+                <button type="button" data-wh-insights data-requires-history class="hidden font-medium text-gray-900 dark:text-white hover:underline">Insights</button>
+                <button type="button" id="wh-settings-remove" data-requires-history class="hidden text-red-600 dark:text-red-400 hover:underline">Remove</button>
               </div>
             </div>
 
@@ -834,6 +1644,13 @@
         >
           Local only · Data never leaves your browser · Drop a JSON file anywhere
         </p>
+        <button
+          type="button"
+          data-wh-import
+          class="mt-4 text-[13px] text-gray-500 dark:text-[#aaaaaa] hover:text-black dark:hover:text-white underline underline-offset-2"
+        >
+          Import your YouTube watch history for play counts and insights
+        </button>
         <div
           id="initialization-trouble"
           class="hidden mt-8 text-xs text-gray-500 dark:text-[#888888]"
@@ -850,6 +1667,48 @@
           </p>
         </div>
       </div>
+
+      <!-- Listening Insights (from imported watch history; history.js) -->
+      <section id="view-insights" class="wh-insights" hidden aria-labelledby="insights-title">
+        <div class="wh-insights-inner">
+          <div class="wh-insights-top">
+            <button type="button" id="insights-close" class="wh-back" aria-label="Back to library">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>
+              <span>Library</span>
+            </button>
+            <h2 id="insights-title" class="wh-title">Listening insights</h2>
+          </div>
+          <div class="wh-controls">
+            <div id="insights-period-tabs" class="wh-tabs" role="group" aria-label="Period">
+              <button type="button" data-period="week" aria-pressed="true">Week</button>
+              <button type="button" data-period="month" aria-pressed="false">Month</button>
+              <button type="button" data-period="year" aria-pressed="false">Year</button>
+              <button type="button" data-period="all" aria-pressed="false">All time</button>
+            </div>
+            <label class="wh-check">
+              <input type="checkbox" id="insights-music-toggle" checked />
+              <span>Music only</span>
+            </label>
+            <div class="wh-stepper">
+              <button type="button" id="insights-prev" aria-label="Previous period">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>
+              </button>
+              <span id="insights-period-label" class="wh-period-label" aria-live="polite"></span>
+              <button type="button" id="insights-next" aria-label="Next period">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6" /></svg>
+              </button>
+            </div>
+          </div>
+          <p id="insights-likes-note" class="wh-note" hidden>
+            Load your likes too (sign in, demo, or a likes.json file) to see albums, decades, listening time, and likes vs plays.
+          </p>
+          <div id="insights-body"></div>
+          <p class="wh-note wh-small">
+            Built from your Google Takeout watch history on this device. A play is each time a video started, so skips count too.
+            <button type="button" class="wh-link" data-wh-import>Import a newer history</button>
+          </p>
+        </div>
+      </section>
 
       <!-- Full-Bleed App Workspace -->
       <div id="view-content" class="hidden flex-1 w-full">
@@ -925,6 +1784,17 @@
                         <polyline points="17 8 12 3 7 8" />
                         <line x1="12" y1="3" x2="12" y2="15" />
                       </svg>
+                    </button>
+
+                    <button
+                      id="wh-import-button"
+                      type="button"
+                      data-wh-import
+                      title="Import watch history (Google Takeout)"
+                      aria-label="Import watch history"
+                      class="p-1.5 rounded-md text-gray-400 dark:text-[#9a9a9a] hover:text-black dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /><path d="M12 7v5l3 2" /></svg>
                     </button>
 
                     <button
@@ -1827,10 +2697,69 @@
           Drop JSON file to load
         </p>
         <p class="text-xs text-gray-500 dark:text-[#aaaaaa] mt-1">
-          Supports likes.json and dislikes.json exports
+          Supports likes.json, dislikes.json, and Google Takeout watch history
         </p>
       </div>
     </div>
+
+    <!-- Watch history import (history.js) -->
+    <dialog id="wh-dialog" class="wh-dialog" aria-labelledby="wh-dialog-title">
+      <button type="button" class="wh-dialog-x" data-wh-close aria-label="Close">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+      </button>
+      <h2 id="wh-dialog-title" class="wh-dialog-title">Import watch history</h2>
+
+      <div data-wh-state="intro">
+        <p class="wh-dialog-sub">Adds your own play counts to the library and unlocks Insights. The file is read on this device and never uploaded.</p>
+        <div id="wh-dropzone" class="wh-dropzone" role="button" tabindex="-1">
+          <strong>Drop your Takeout .zip or watch-history.json here</strong>
+          <button type="button" id="wh-choose" class="wh-btn wh-btn-primary">Choose file</button>
+          <input type="file" id="wh-file-input" accept=".json,.zip,application/json,application/zip" hidden />
+        </div>
+        <details class="wh-steps">
+          <summary>How to get it from Google Takeout</summary>
+          <ol>
+            <li>Open <a href="https://takeout.google.com/" target="_blank" rel="noopener noreferrer">takeout.google.com</a> and sign in with your YouTube account.</li>
+            <li>Click <b>Deselect all</b>, then tick <b>YouTube and YouTube Music</b>.</li>
+            <li>Click <b>All YouTube data included</b>, then <b>Deselect all</b>, and tick only <b>history</b>.</li>
+            <li>Click <b>Multiple formats</b> and set <b>History</b> to <b>JSON</b> (the default, HTML, can't be read).</li>
+            <li>Click <b>Next step</b>, keep <b>Export once</b> and <b>.zip</b>, then <b>Create export</b>.</li>
+            <li>When Google emails you (minutes to hours), download the .zip and drop it here. No need to unzip.</li>
+          </ol>
+          <p class="wh-small">History only goes back as far as YouTube kept it (check your auto-delete setting). Import again any time to refresh; the new file replaces the old one.</p>
+        </details>
+      </div>
+
+      <div data-wh-state="progress" hidden>
+        <p id="wh-progress-label" class="wh-dialog-sub" aria-live="polite">Reading file…</p>
+        <div class="wh-progress"><span id="wh-progress-bar"></span></div>
+      </div>
+
+      <div data-wh-state="error" hidden>
+        <p id="wh-error-message" class="wh-error" role="alert"></p>
+        <div class="wh-dialog-actions">
+          <button type="button" id="wh-retry" class="wh-btn wh-btn-primary">Try another file</button>
+        </div>
+      </div>
+
+      <div data-wh-state="done" hidden>
+        <p class="wh-dialog-sub"><b>History imported.</b></p>
+        <div class="wh-done-stats">
+          <div><span id="wh-done-plays" class="wh-fact-value"></span><span class="wh-fact-label">plays</span></div>
+          <div><span id="wh-done-videos" class="wh-fact-value"></span><span class="wh-fact-label">videos</span></div>
+          <div><span id="wh-done-years" class="wh-fact-value"></span><span class="wh-fact-label">of history</span></div>
+        </div>
+        <p id="wh-done-range" class="wh-muted wh-small"></p>
+        <div class="wh-split"><span id="wh-done-music-bar"></span></div>
+        <p id="wh-done-split" class="wh-muted wh-small"></p>
+        <p id="wh-done-liked" class="wh-small"></p>
+        <p id="wh-done-saved" class="wh-error wh-small"></p>
+        <div class="wh-dialog-actions">
+          <button type="button" id="wh-done-library" class="wh-btn wh-btn-primary">View most played</button>
+          <button type="button" id="wh-done-insights" class="wh-btn">Open Insights</button>
+        </div>
+      </div>
+    </dialog>
 
     <!-- Toast Notification -->
     <div
@@ -1874,6 +2803,7 @@
               <polygon points="6 4 20 12 6 20 6 4"></polygon>
             </svg>
           </div>
+          <span class="plays-badge" hidden></span>
           <div
             class="deleted-overlay hidden absolute inset-0 bg-gray-100/95 dark:bg-[#161616]/95 items-center justify-center text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-[#888888]"
           >
@@ -1973,8 +2903,9 @@
         },
       );
     </script>
-    <script src="version.js?v=2.1.4"></script>
-    <script src="app.js?v=2.1.4"></script>
+    <script src="version.js?v=2.2.0"></script>
+    <script src="app.js?v=2.2.0"></script>
+    <script src="history.js?v=2.2.0"></script>
     <script>
       if ("serviceWorker" in navigator) {
         // Reload at most once when a genuinely newer SW_VERSION activates over an older running page
