@@ -442,8 +442,11 @@ function whPeriodLabel(type, range) {
   }
   if (type === "week") {
     const last = new Date(range.end.getTime() - 1);
-    // "Nov 16 – 22, 2026" fits next to the filter on a phone; "Nov 16 to Nov 22, 2026" doesn't
-    if (typeof WH_LONG_DAY_FMT.formatRange === "function") return WH_LONG_DAY_FMT.formatRange(range.start, last);
+    // "Nov 16 – 22" fits next to the filter on a phone; "Nov 16 to Nov 22, 2026" doesn't.
+    // The year is only spelled out for weeks outside the year the history ends in.
+    const dataYear = new Date(wh.data.meta.last * 1000).getFullYear();
+    const fmt = range.start.getFullYear() === dataYear && last.getFullYear() === dataYear ? WH_SHORT_DAY_FMT : WH_LONG_DAY_FMT;
+    if (typeof fmt.formatRange === "function") return fmt.formatRange(range.start, last);
     return `${WH_SHORT_DAY_FMT.format(range.start)} to ${WH_LONG_DAY_FMT.format(last)}`;
   }
   if (type === "month") return WH_MONTH_LONG_FMT.format(range.start);
@@ -785,6 +788,9 @@ function whRenderInsights() {
   if (nextBtn) nextBtn.disabled = type === "all" || range.end.getTime() > m.last * 1000;
   if (prevBtn) prevBtn.hidden = type === "all";
   if (nextBtn) nextBtn.hidden = type === "all";
+  const latestBtn = document.getElementById("insights-latest");
+  // "Latest", not "This week": the history ends when the Takeout export was made, which may be weeks ago
+  if (latestBtn) latestBtn.hidden = type === "all" || range.end.getTime() > m.last * 1000;
   const filterSelect = document.getElementById("insights-filter");
   if (filterSelect) {
     const podcastOption = filterSelect.querySelector('option[value="podcasts"]');
@@ -1597,6 +1603,11 @@ function whSetupEvents() {
   };
   on("insights-prev", "click", () => step(-1));
   on("insights-next", "click", () => step(1));
+  on("insights-latest", "click", () => {
+    // The period holding the newest play, i.e. where repeatedly pressing "next" would end up
+    wh.period.anchor = wh.data.meta.last * 1000;
+    whRenderInsights();
+  });
   on("insights-filter", "change", (e) => {
     wh.filter = e.target.value;
     try {
