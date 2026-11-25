@@ -1060,6 +1060,39 @@ function playNextTrack(fromAutoSkip = false) {
   }
 }
 
+let fsPlayerReturnFocus = null;
+
+function isFsPlayerOpen() {
+  return Boolean(dom.fsPlayer && !dom.fsPlayer.classList.contains("translate-y-full"));
+}
+
+function openFsPlayer() {
+  if (isFsPlayerOpen()) return;
+  fsPlayerReturnFocus = document.activeElement;
+  dom.fsPlayer.classList.remove("translate-y-full", "invisible");
+  dom.fsPlayer.setAttribute("aria-hidden", "false");
+  // Make sure we stop body scrolling while full screen is open
+  document.body.style.overflow = "hidden";
+  // Move focus into the dialog once it is visible
+  requestAnimationFrame(() => dom.fsPlayerClose?.focus({ preventScroll: true }));
+}
+
+function closeFsPlayer(restoreFocus = true) {
+  if (!dom.fsPlayer) return;
+  const wasOpen = isFsPlayerOpen();
+  dom.fsPlayer.classList.add("translate-y-full", "invisible");
+  dom.fsPlayer.setAttribute("aria-hidden", "true");
+  document.body.style.overflow = "";
+  if (wasOpen && restoreFocus) {
+    const target =
+      fsPlayerReturnFocus && document.contains(fsPlayerReturnFocus) && fsPlayerReturnFocus !== document.body
+        ? fsPlayerReturnFocus
+        : dom.bottomPlayerTrackInfo;
+    target?.focus?.({ preventScroll: true });
+  }
+  fsPlayerReturnFocus = null;
+}
+
 function closePlayer() {
   try {
     if (state.ytPlayer && state.ytPlayer.stopVideo) {
@@ -1077,9 +1110,8 @@ function closePlayer() {
   state.currentVideoId = null;
   state.pendingVideoId = null;
   dom.bottomPlayer.classList.add("translate-y-full", "invisible");
-  dom.fsPlayer.classList.add("translate-y-full", "invisible");
+  closeFsPlayer(false);
   document.body.style.paddingBottom = "0px";
-  document.body.style.overflow = "";
   if (dom.fastScrubber) {
     dom.fastScrubber.classList.remove("bottom-24");
     dom.fastScrubber.classList.add("bottom-6");
@@ -1155,21 +1187,43 @@ function setupEventListeners() {
     if (e.target.closest("button") || e.target.closest("input") || e.target.closest("a") || e.target.closest("#bottom-player-progress-container")) {
       return;
     }
-    dom.fsPlayer.classList.remove("translate-y-full", "invisible");
-    // Make sure we stop body scrolling while full screen is open
-    document.body.style.overflow = "hidden";
+    openFsPlayer();
   });
 
-  dom.fsPlayerClose.addEventListener("click", () => {
-    dom.fsPlayer.classList.add("translate-y-full", "invisible");
-    document.body.style.overflow = "";
+  if (dom.bottomPlayerTrackInfo) {
+    dom.bottomPlayerTrackInfo.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        e.stopPropagation(); // don't let the global Space shortcut toggle playback
+        openFsPlayer();
+      }
+    });
+  }
+
+  dom.fsPlayerClose.addEventListener("click", () => closeFsPlayer());
+
+  // Keep keyboard focus inside the full-screen player while it is open
+  dom.fsPlayer.addEventListener("keydown", (e) => {
+    if (e.key !== "Tab" || !isFsPlayerOpen()) return;
+    const focusables = Array.from(
+      dom.fsPlayer.querySelectorAll('button:not([disabled]), input:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'),
+    ).filter((el) => el.offsetParent !== null || el === document.activeElement);
+    if (!focusables.length) return;
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    if (e.shiftKey && (document.activeElement === first || !dom.fsPlayer.contains(document.activeElement))) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && (document.activeElement === last || !dom.fsPlayer.contains(document.activeElement))) {
+      e.preventDefault();
+      first.focus();
+    }
   });
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
-      if (!dom.fsPlayer.classList.contains("translate-y-full")) {
-        dom.fsPlayer.classList.add("translate-y-full", "invisible");
-        document.body.style.overflow = "";
+      if (isFsPlayerOpen()) {
+        closeFsPlayer();
       } else if (isAnyPopoverOpen()) {
         const activeEl = document.activeElement;
         if (dom.sortMenu && !dom.sortMenu.classList.contains("hidden") && dom.sortDropdown?.contains(activeEl)) {
@@ -1386,6 +1440,9 @@ function setupEventListeners() {
   );
 
   observer.observe(dom.scrollSentinel);
+
+  // Thumbnails that failed while offline are left pending; load them once we're back online
+  window.addEventListener("online", () => hydrateVisibleThumbnails());
 
   // Delegated card playback handler (zero per-card listener closures)
   dom.videoGrid.addEventListener("click", (e) => {
@@ -3083,6 +3140,7 @@ function teardownCardImage(card) {
   img.onerror = null;
   delete img.dataset.pendingSrc;
   img.removeAttribute("src");
+  card._boundVideoId = null;
 }
 
 function releaseVideoCard(card) {
@@ -3126,10 +3184,32 @@ function hydrateCardThumbnail(card, video) {
   }
 
   img.onerror = () => {
+    img.onerror = null;
+    if (card._boundVideoId && card._boundVideoId !== video.video_id) return; // card was reused
+
+    // Offline: a failed thumbnail says nothing about the video. Leave it pending and retry
+    // when the connection comes back instead of marking the track Unavailable.
+    if (navigator.onLine === false) {
+      img.removeAttribute("src");
+      img.dataset.pendingSrc = thumbnail;
+      return;
+    }
+    // Online but flaky: retry once before concluding the video is gone
+    if (img.dataset.retriedFor !== video.video_id) {
+      img.dataset.retriedFor = video.video_id;
+      img.removeAttribute("src");
+      img.dataset.pendingSrc = thumbnail;
+      setTimeout(() => {
+        if (card._boundVideoId === video.video_id && img.dataset.pendingSrc) {
+          hydrateCardThumbnail(card, video);
+        }
+      }, 1500);
+      return;
+    }
+
     video._is404 = true;
     overlay.classList.remove("hidden");
     overlay.classList.add("flex");
-    img.onerror = null;
     img.src = BLANK_PIXEL;
   };
   img.src = thumbnail;
@@ -3161,6 +3241,10 @@ function scheduleThumbnailHydration(delayMs = 140) {
 }
 
 function acquireVideoCard(video, index, deferThumbnail = false) {
+  return bindVideoCard(createVideoCard(), video, index, deferThumbnail);
+}
+
+function createVideoCard() {
   let card = virtualGrid.cardPool.pop();
   if (!card) {
     const clone = dom.videoTemplate.content.cloneNode(true);
@@ -3175,7 +3259,12 @@ function acquireVideoCard(video, index, deferThumbnail = false) {
       metadataEl: card.querySelector(".dynamic-metadata"),
     };
   }
+  return card;
+}
 
+// Fill a card for `video`. Cards are re-bound in place when the list changes (filter, sort,
+// search, new pages), so an unchanged thumbnail is left alone instead of being reloaded.
+function bindVideoCard(card, video, index, deferThumbnail = false) {
   const { playBtn, img, overlay, links, titleEl, channelEl, metadataEl } = card._refs;
   const title = video.title || "Unavailable";
   const isDeleted = checkIfDeleted(video);
@@ -3192,13 +3281,21 @@ function acquireVideoCard(video, index, deferThumbnail = false) {
   playBtn.disabled = Boolean(isDeleted);
   playBtn.classList.toggle("cursor-not-allowed", Boolean(isDeleted));
 
-  if (deferThumbnail || scrubberState.isDragging) {
+  const keepImage =
+    !isDeleted &&
+    card._boundVideoId === video.video_id &&
+    !img.dataset.pendingSrc &&
+    img.getAttribute("src") === thumbnail;
+  if (keepImage) {
+    // Same video already showing: leave the loaded thumbnail as is
+  } else if (deferThumbnail || scrubberState.isDragging) {
     img.onerror = null;
     img.removeAttribute("src");
     img.dataset.pendingSrc = thumbnail;
   } else {
     hydrateCardThumbnail(card, video);
   }
+  card._boundVideoId = video.video_id;
 
   const watchHref = `${baseUrl}/watch?v=${encodeURIComponent(video.video_id)}`;
   for (let i = 0; i < links.length; i++) {
@@ -3238,9 +3335,21 @@ function renderVirtualGrid(force = false, anchorRow = null, deferThumbnails = fa
   }
 
   if (virtualGrid.renderedVersion !== virtualGrid.listVersion) {
-    resetVirtualGridDOM();
-    dom.videoGrid.innerHTML = "";
+    // The list changed: re-bind the cards already on screen in place rather than tearing the
+    // whole grid down, which flickered every thumbnail on each filter change and Load all page.
     virtualGrid.renderedVersion = virtualGrid.listVersion;
+    if (virtualGrid.renderedCards.size === 0) {
+      dom.videoGrid.innerHTML = "";
+    } else {
+      for (const [idx, card] of virtualGrid.renderedCards.entries()) {
+        if (idx >= totalItems) {
+          releaseVideoCard(card);
+          virtualGrid.renderedCards.delete(idx);
+        } else {
+          bindVideoCard(card, state.filteredVideos[idx], idx, deferThumbnails);
+        }
+      }
+    }
     force = true;
   }
 
@@ -4134,9 +4243,12 @@ function renderSkeletons() {
   }
 }
 
+let lastSidebarHtml = "";
+
 function renderSidebar() {
   if (state.videos.length === 0) {
     dom.sidebarListContainer.innerHTML = "";
+    lastSidebarHtml = "";
     return;
   }
 
@@ -4235,8 +4347,13 @@ function renderSidebar() {
     html = data.topCopyrights.map((cpy) => renderNameCountRow(cpy.name, cpy.count)).join("");
   }
 
-  dom.sidebarListContainer.innerHTML =
+  const nextHtml =
     html || '<div class="text-gray-500 dark:text-[#888888] text-xs px-2.5 py-3">No data available</div>';
+  // Skip identical rebuilds (e.g. Load all pages that don't change the top lists) so album art doesn't flicker
+  if (nextHtml !== lastSidebarHtml) {
+    lastSidebarHtml = nextHtml;
+    dom.sidebarListContainer.innerHTML = nextHtml;
+  }
 }
 
 function calculateAnalytics() {
