@@ -658,6 +658,42 @@
           background: var(--wh-soft);
         }
       }
+      /* Only shown when you've paged back; jumps to the period with the newest plays */
+      .wh-stepper .wh-latest {
+        width: auto;
+        height: 30px;
+        margin-left: 2px;
+        padding: 0 11px;
+        font-size: 12.5px;
+        font-weight: 600;
+        gap: 3px;
+        color: var(--wh-accent);
+        background: var(--wh-accent-soft);
+      }
+      /* Phones: icon only, so the date, arrows and filter stay on one line */
+      @media (max-width: 479px) {
+        .wh-stepper .wh-latest {
+          width: 30px;
+          padding: 0;
+        }
+        .wh-latest-text {
+          display: none;
+        }
+      }
+      .wh-period-label {
+        white-space: nowrap;
+      }
+      /* Bigger invisible tap area on touch screens without changing the layout */
+      @media (pointer: coarse) {
+        .wh-stepper button {
+          position: relative;
+        }
+        .wh-stepper button::after {
+          content: "";
+          position: absolute;
+          inset: -7px -3px;
+        }
+      }
       .wh-stepper button[hidden] {
         display: none;
       }
@@ -2058,6 +2094,10 @@
               <span id="insights-period-label" class="wh-period-label" aria-live="polite"></span>
               <button type="button" id="insights-next" aria-label="Next period">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6" /></svg>
+              </button>
+              <button type="button" id="insights-latest" class="wh-latest" title="Jump to the latest period" aria-label="Jump to the latest period" hidden>
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 17l5-5-5-5M13 17l5-5-5-5" /></svg>
+                <span class="wh-latest-text">Latest</span>
               </button>
             </div>
           </div>
