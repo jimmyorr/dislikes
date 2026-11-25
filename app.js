@@ -1552,11 +1552,23 @@ function setupEventListeners() {
   );
 
   let resizeRafPending = false;
+  let lastResizeWidth = window.innerWidth;
   window.addEventListener("resize", () => {
     if (resizeRafPending) return;
     resizeRafPending = true;
     requestAnimationFrame(() => {
       resizeRafPending = false;
+      const width = window.innerWidth;
+      if (width === lastResizeWidth) {
+        // Height-only resize (mobile URL bar showing/hiding while scrolling): columns and card
+        // size are unchanged, so skip the full re-measure and just fill any newly exposed rows.
+        if (state.filteredVideos.length > 0 && !dom.viewContent.classList.contains("hidden")) {
+          renderVirtualGrid(false);
+          scheduleScrubberLayoutRefresh();
+        }
+        return;
+      }
+      lastResizeWidth = width;
       virtualGrid.cols = 0;
       virtualGrid.rowHeight = 0;
       scrubberState.renderedSignature = "";
