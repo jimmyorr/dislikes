@@ -88,7 +88,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=2.1.3" />
+    <link rel="stylesheet" href="styles.css?v=2.1.4" />
     <script>
       (function () {
         try {
@@ -1266,6 +1266,9 @@
         <!-- Left: Track Info -->
         <div
           id="bottom-player-track-info"
+          role="button"
+          tabindex="0"
+          aria-label="Open full-screen player"
           class="flex items-center justify-start gap-3 shrink-0 w-1/3 cursor-pointer min-w-0 relative z-10"
         >
           <img
@@ -1460,6 +1463,10 @@
     <!-- Full Screen Player UI -->
     <div
       id="full-screen-player"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Now playing"
+      aria-hidden="true"
       class="invisible fixed inset-0 z-[60] bg-white dark:bg-[#0d0d0d] transition-transform duration-500 translate-y-full flex flex-col overflow-hidden"
     >
       <!-- Blurred Background -->
@@ -1930,6 +1937,18 @@
             for (const k of keys) await caches.delete(k);
           }
           localStorage.clear();
+          if ("indexedDB" in window) {
+            try {
+              if (window.closeLibraryDb) await window.closeLibraryDb();
+            } catch {
+              /* ignore */
+            }
+            await new Promise((resolve) => {
+              const req = indexedDB.deleteDatabase("dislikes");
+              req.onsuccess = req.onerror = req.onblocked = () => resolve();
+              setTimeout(resolve, 2000);
+            });
+          }
           window.location.href =
             window.location.origin +
             window.location.pathname +
@@ -1954,8 +1973,8 @@
         },
       );
     </script>
-    <script src="version.js?v=2.1.3"></script>
-    <script src="app.js?v=2.1.3"></script>
+    <script src="version.js?v=2.1.4"></script>
+    <script src="app.js?v=2.1.4"></script>
     <script>
       if ("serviceWorker" in navigator) {
         // Reload at most once when a genuinely newer SW_VERSION activates over an older running page

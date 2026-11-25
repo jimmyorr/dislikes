@@ -38,6 +38,11 @@ const state = {
   accessToken: null,
   isAuthenticated: false,
   dataSource: null, // 'youtube' | 'demo' | 'upload' | null
+  // True while showing a saved YouTube library without a valid token (expired sign-in).
+  authExpired: false,
+  // Demo / uploaded data and the mode it belongs to, so switching Likes/Dislikes doesn't discard it.
+  localLibrary: null, // { source: 'demo' | 'upload', mode, videos } | null
+  noticeKind: "error", // 'error' | 'notice' — styling for the banner above the library
   theme: localStorage.getItem("dislikes-theme") || "system",
   compactMode: localStorage.getItem("dislikes-compact") !== null ? localStorage.getItem("dislikes-compact") === "true" : true,
   musicOnly: localStorage.getItem("dislikes-music-only") !== null ? localStorage.getItem("dislikes-music-only") === "true" : true,
@@ -576,31 +581,120 @@ function updateHeroCountDisplay(targetCount, animateSignature = null) {
   }
 }
 
-function tryRestoreCustomUpload() {
+const SESSION_EXPIRED_NOTICE = "Your YouTube sign-in expired. Showing your saved library — sign in to refresh it.";
+
+function resetLibraryView() {
+  state.videos = [];
+  state.filteredVideos = [];
+  state.sidebarBaseVideos = [];
+  state.nextPageToken = null;
+  state.totalResults = null;
+  state.error = null;
+  state.noticeKind = "error";
+  state.searchTerm = "";
+  state.debouncedSearchTerm = "";
+  if (dom.searchInput) dom.searchInput.value = "";
+  updateSearchClearButton();
+}
+
+function showNotice(message) {
+  state.noticeKind = "notice";
+  state.error = message;
+}
+
+function applyLocalLibrary() {
+  const lib = state.localLibrary;
+  if (!lib) return;
+  state.dataSource = lib.source;
+  state.error = null;
+  if (lib.mode === state.mode) {
+    state.videos = lib.videos;
+    state.totalResults = lib.videos.length;
+  } else {
+    state.videos = [];
+    state.totalResults = 0;
+  }
+  state.nextPageToken = null;
+  filterVideos();
+}
+
+async function tryRestoreCustomUpload() {
   try {
-    const raw = localStorage.getItem("yt_dislikes_custom_upload");
-    if (!raw) return false;
-    const parsed = JSON.parse(raw);
-    if (!parsed || !Array.isArray(parsed.videos) || parsed.videos.length === 0) {
-      localStorage.removeItem("yt_dislikes_custom_upload");
+    const parsed = await storeGet("yt_dislikes_custom_upload");
+    if (!parsed) return false;
+    if (!Array.isArray(parsed.videos) || parsed.videos.length === 0) {
+      storeDelete("yt_dislikes_custom_upload");
       return false;
-    }
-    if (parsed.mode === "like" || parsed.mode === "dislike") {
-      state.mode = parsed.mode;
     }
     const normalized = normalizeImportedDataset(parsed.videos);
     if (!normalized.length) return false;
-    state.dataSource = "upload";
-    state.videos = normalized;
-    state.nextPageToken = null;
-    state.totalResults = normalized.length;
-    state.error = null;
-    filterVideos();
+    if (state.dataSource) return false; // something else loaded meanwhile
+    if (parsed.mode === "like" || parsed.mode === "dislike") {
+      state.mode = parsed.mode;
+    }
+    state.localLibrary = { source: "upload", mode: state.mode, videos: normalized };
+    applyLocalLibrary();
     return true;
   } catch {
-    localStorage.removeItem("yt_dislikes_custom_upload");
+    storeDelete("yt_dislikes_custom_upload");
     return false;
   }
+}
+
+// Show a saved YouTube library for `mode` without hitting the API. Returns false if none is saved.
+async function showCachedYoutubeLibrary(mode) {
+  const cached = await loadFromCache(mode);
+  if (state.mode !== mode) return false;
+  if (!cached || !cached.videos.length) {
+    state.videos = [];
+    state.nextPageToken = null;
+    state.totalResults = null;
+    filterVideos();
+    return false;
+  }
+  state.videos = cached.videos;
+  state.nextPageToken = cached.nextPageToken;
+  state.totalResults = cached.totalResults;
+  filterVideos();
+  return true;
+}
+
+// Signed out because the token expired: keep the saved library on screen instead of
+// dropping back to the welcome page.
+async function tryRestoreExpiredYoutubeSession() {
+  const otherMode = state.mode === "like" ? "dislike" : "like";
+  let mode = state.mode;
+  let cached = await loadFromCache(mode);
+  if (!cached || !cached.videos.length) {
+    mode = otherMode;
+    cached = await loadFromCache(mode);
+  }
+  // Bail if nothing is saved, or the user already picked demo / upload / sign-in meanwhile
+  if (!cached || !cached.videos.length || state.dataSource || state.isAuthenticated) return false;
+  state.mode = mode;
+  state.videos = cached.videos;
+  state.nextPageToken = cached.nextPageToken;
+  state.totalResults = cached.totalResults;
+  state.dataSource = "youtube";
+  state.authExpired = true;
+  showNotice(SESSION_EXPIRED_NOTICE);
+  filterVideos();
+  return true;
+}
+
+function handleAuthExpired() {
+  try {
+    localStorage.removeItem("yt_dislikes_token");
+  } catch {
+    /* ignore */
+  }
+  state.accessToken = null;
+  state.isAuthenticated = false;
+  state.isFetchAll = false;
+  state.authExpired = true;
+  state.dataSource = "youtube";
+  showNotice(SESSION_EXPIRED_NOTICE);
+  render();
 }
 
 function init() {
@@ -639,10 +733,14 @@ function init() {
     render();
     loadDemoData();
   } else {
-    if (!loadToken()) {
-      tryRestoreCustomUpload();
-    }
     render();
+    if (!loadToken()) {
+      (async () => {
+        const restored =
+          (await tryRestoreCustomUpload()) || (await tryRestoreExpiredYoutubeSession());
+        if (restored) render();
+      })();
+    }
   }
 
   // If it's taking too long (e.g. 8 seconds), show the troubleshooting link
@@ -669,20 +767,14 @@ function initGis() {
             return;
           }
           saveToken(resp);
-          localStorage.removeItem("yt_dislikes_custom_upload");
+          storeDelete("yt_dislikes_custom_upload");
+          invalidateActiveFetch();
+          resetLibraryView();
           state.accessToken = resp.access_token;
           state.isAuthenticated = true;
+          state.authExpired = false;
+          state.localLibrary = null;
           state.dataSource = "youtube";
-          state.videos = [];
-          state.filteredVideos = [];
-          state.sidebarBaseVideos = [];
-          state.searchTerm = "";
-          state.debouncedSearchTerm = "";
-          dom.searchInput.value = "";
-          updateSearchClearButton();
-          state.nextPageToken = null;
-          state.totalResults = null;
-          state.error = null;
           render();
           fetchVideos();
         },
@@ -968,6 +1060,39 @@ function playNextTrack(fromAutoSkip = false) {
   }
 }
 
+let fsPlayerReturnFocus = null;
+
+function isFsPlayerOpen() {
+  return Boolean(dom.fsPlayer && !dom.fsPlayer.classList.contains("translate-y-full"));
+}
+
+function openFsPlayer() {
+  if (isFsPlayerOpen()) return;
+  fsPlayerReturnFocus = document.activeElement;
+  dom.fsPlayer.classList.remove("translate-y-full", "invisible");
+  dom.fsPlayer.setAttribute("aria-hidden", "false");
+  // Make sure we stop body scrolling while full screen is open
+  document.body.style.overflow = "hidden";
+  // Move focus into the dialog once it is visible
+  requestAnimationFrame(() => dom.fsPlayerClose?.focus({ preventScroll: true }));
+}
+
+function closeFsPlayer(restoreFocus = true) {
+  if (!dom.fsPlayer) return;
+  const wasOpen = isFsPlayerOpen();
+  dom.fsPlayer.classList.add("translate-y-full", "invisible");
+  dom.fsPlayer.setAttribute("aria-hidden", "true");
+  document.body.style.overflow = "";
+  if (wasOpen && restoreFocus) {
+    const target =
+      fsPlayerReturnFocus && document.contains(fsPlayerReturnFocus) && fsPlayerReturnFocus !== document.body
+        ? fsPlayerReturnFocus
+        : dom.bottomPlayerTrackInfo;
+    target?.focus?.({ preventScroll: true });
+  }
+  fsPlayerReturnFocus = null;
+}
+
 function closePlayer() {
   try {
     if (state.ytPlayer && state.ytPlayer.stopVideo) {
@@ -985,9 +1110,8 @@ function closePlayer() {
   state.currentVideoId = null;
   state.pendingVideoId = null;
   dom.bottomPlayer.classList.add("translate-y-full", "invisible");
-  dom.fsPlayer.classList.add("translate-y-full", "invisible");
+  closeFsPlayer(false);
   document.body.style.paddingBottom = "0px";
-  document.body.style.overflow = "";
   if (dom.fastScrubber) {
     dom.fastScrubber.classList.remove("bottom-24");
     dom.fastScrubber.classList.add("bottom-6");
@@ -1016,7 +1140,9 @@ function setupEventListeners() {
 
   if (dom.errorRetryButton) {
     dom.errorRetryButton.addEventListener("click", () => {
-      if (state.isAuthenticated) {
+      if (state.authExpired && !state.isAuthenticated) {
+        handleAuthClick();
+      } else if (state.isAuthenticated) {
         setError(null);
         fetchVideos();
       } else {
@@ -1061,21 +1187,43 @@ function setupEventListeners() {
     if (e.target.closest("button") || e.target.closest("input") || e.target.closest("a") || e.target.closest("#bottom-player-progress-container")) {
       return;
     }
-    dom.fsPlayer.classList.remove("translate-y-full", "invisible");
-    // Make sure we stop body scrolling while full screen is open
-    document.body.style.overflow = "hidden";
+    openFsPlayer();
   });
 
-  dom.fsPlayerClose.addEventListener("click", () => {
-    dom.fsPlayer.classList.add("translate-y-full", "invisible");
-    document.body.style.overflow = "";
+  if (dom.bottomPlayerTrackInfo) {
+    dom.bottomPlayerTrackInfo.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        e.stopPropagation(); // don't let the global Space shortcut toggle playback
+        openFsPlayer();
+      }
+    });
+  }
+
+  dom.fsPlayerClose.addEventListener("click", () => closeFsPlayer());
+
+  // Keep keyboard focus inside the full-screen player while it is open
+  dom.fsPlayer.addEventListener("keydown", (e) => {
+    if (e.key !== "Tab" || !isFsPlayerOpen()) return;
+    const focusables = Array.from(
+      dom.fsPlayer.querySelectorAll('button:not([disabled]), input:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'),
+    ).filter((el) => el.offsetParent !== null || el === document.activeElement);
+    if (!focusables.length) return;
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    if (e.shiftKey && (document.activeElement === first || !dom.fsPlayer.contains(document.activeElement))) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && (document.activeElement === last || !dom.fsPlayer.contains(document.activeElement))) {
+      e.preventDefault();
+      first.focus();
+    }
   });
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
-      if (!dom.fsPlayer.classList.contains("translate-y-full")) {
-        dom.fsPlayer.classList.add("translate-y-full", "invisible");
-        document.body.style.overflow = "";
+      if (isFsPlayerOpen()) {
+        closeFsPlayer();
       } else if (isAnyPopoverOpen()) {
         const activeEl = document.activeElement;
         if (dom.sortMenu && !dom.sortMenu.classList.contains("hidden") && dom.sortDropdown?.contains(activeEl)) {
@@ -1281,6 +1429,7 @@ function setupEventListeners() {
       if (
         entries[0].isIntersecting &&
         state.nextPageToken &&
+        state.accessToken &&
         !state.loading &&
         !state.debouncedSearchTerm.trim()
       ) {
@@ -1291,6 +1440,9 @@ function setupEventListeners() {
   );
 
   observer.observe(dom.scrollSentinel);
+
+  // Thumbnails that failed while offline are left pending; load them once we're back online
+  window.addEventListener("online", () => hydrateVisibleThumbnails());
 
   // Delegated card playback handler (zero per-card listener closures)
   dom.videoGrid.addEventListener("click", (e) => {
@@ -1582,7 +1734,7 @@ function setupEventListeners() {
     });
   });
 
-  const selectMode = (nextMode) => {
+  const selectMode = async (nextMode) => {
     if (!nextMode || (nextMode !== "like" && nextMode !== "dislike") || nextMode === state.mode) {
       return;
     }
@@ -1591,28 +1743,28 @@ function setupEventListeners() {
     updateModeToggleUI(state.mode);
 
     invalidateActiveFetch();
-
-    // Clear state for new mode
-    state.videos = [];
-    state.filteredVideos = [];
-    state.sidebarBaseVideos = [];
-    state.nextPageToken = null;
-    state.totalResults = null;
-    state.error = null;
-    state.searchTerm = "";
-    state.debouncedSearchTerm = "";
-    dom.searchInput.value = "";
-    updateSearchClearButton();
+    resetLibraryView();
+    window.scrollTo({ top: 0, behavior: "auto" });
 
     if (state.isAuthenticated) {
       state.dataSource = "youtube";
       fetchVideos();
+    } else if (state.authExpired) {
+      // Expired sign-in: show whatever is saved for this mode and offer to sign in for the rest
+      const hasCache = await showCachedYoutubeLibrary(nextMode);
+      if (state.mode !== nextMode || !state.authExpired) return;
+      showNotice(
+        hasCache
+          ? SESSION_EXPIRED_NOTICE
+          : `Sign in to load your ${nextMode === "dislike" ? "disliked" : "liked"} videos.`,
+      );
+    } else if (state.localLibrary) {
+      // Demo / uploaded file: keep it around; the other mode just shows an explanatory empty state
+      applyLocalLibrary();
     } else {
-      localStorage.removeItem("yt_dislikes_custom_upload");
       state.dataSource = null;
       closePlayer();
     }
-    window.scrollTo({ top: 0, behavior: "auto" });
     render();
   };
 
@@ -1822,31 +1974,28 @@ function handleSignout() {
   invalidateActiveFetch();
   closePlayer();
 
+  const wasYoutube = state.isAuthenticated || state.authExpired || state.dataSource === "youtube";
+
   // Clear Google OAuth token only if an OAuth session is active
   if (state.isAuthenticated) {
     if (state.accessToken && window.google?.accounts?.oauth2) {
       window.google.accounts.oauth2.revoke(state.accessToken, () => {});
     }
-    localStorage.removeItem("yt_dislikes_token");
   }
-  localStorage.removeItem("yt_dislikes_custom_upload");
+  if (wasYoutube) {
+    localStorage.removeItem("yt_dislikes_token");
+    // Signing out should not leave the library readable on this device
+    clearYoutubeCaches();
+  }
+  storeDelete("yt_dislikes_custom_upload");
 
   // Reset state
   state.accessToken = null;
   state.isAuthenticated = false;
+  state.authExpired = false;
+  state.localLibrary = null;
   state.dataSource = null;
-  state.videos = [];
-  state.filteredVideos = [];
-  state.sidebarBaseVideos = [];
-  state.nextPageToken = null;
-  state.totalResults = null;
-  state.error = null;
-  state.searchTerm = "";
-  state.debouncedSearchTerm = "";
-
-  // Clear UI
-  dom.searchInput.value = "";
-  updateSearchClearButton();
+  resetLibraryView();
   setMobileFiltersOpen(false);
 
   render();
@@ -1855,13 +2004,15 @@ function handleSignout() {
 function handleClearCache() {
   if (!state.isAuthenticated) return;
   invalidateActiveFetch();
-  localStorage.removeItem(`yt_dislikes_cache_${state.mode}`);
+  // Keep the saved copy until the fresh fetch replaces it, so a failed refresh (e.g. expired
+  // sign-in) can fall back to it instead of losing the library.
   state.dataSource = "youtube";
   state.videos = [];
   state.filteredVideos = [];
   state.sidebarBaseVideos = [];
   state.nextPageToken = null;
   state.totalResults = null;
+  state.error = null;
   state.forceRefetch = true;
   fetchVideos();
 }
@@ -1924,16 +2075,157 @@ function normalizeImportedDataset(rawArray) {
   return valid.map((item, idx) => normalizeStoredVideo(item, !hasExplicitMusicFlag, idx));
 }
 
-function loadFromCache(mode = state.mode) {
+// --- Persistent library storage (IndexedDB, falling back to localStorage) ---
+// localStorage caps out around 5MB, which a few thousand likes plus an uploaded file can exceed
+// (writes then failed silently). IndexedDB has far more room and stores objects without JSON.
+
+const IDB_NAME = "dislikes";
+const IDB_STORE = "kv";
+const LIBRARY_KEYS = ["yt_dislikes_cache_like", "yt_dislikes_cache_dislike", "yt_dislikes_custom_upload"];
+
+function cacheKeyForMode(mode) {
+  return `yt_dislikes_cache_${mode}`;
+}
+
+function openLibraryDb() {
+  return new Promise((resolve) => {
+    try {
+      if (!("indexedDB" in window)) return resolve(null);
+      const req = indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = () => {
+        if (!req.result.objectStoreNames.contains(IDB_STORE)) {
+          req.result.createObjectStore(IDB_STORE);
+        }
+      };
+      req.onsuccess = () => {
+        const db = req.result;
+        // Let another tab (or the emergency reset) upgrade/delete the database
+        db.onversionchange = () => db.close();
+        resolve(db);
+      };
+      req.onerror = () => resolve(null);
+      req.onblocked = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+function idbRequest(db, mode, fn) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, mode);
+    const req = fn(tx.objectStore(IDB_STORE));
+    tx.oncomplete = () => resolve(req.result);
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
+}
+
+// One-time move of the old localStorage library copies into IndexedDB.
+async function migrateLegacyLibraryStorage(db) {
+  if (!db) return;
+  for (const key of LIBRARY_KEYS) {
+    let raw = null;
+    try {
+      raw = localStorage.getItem(key);
+    } catch {
+      /* ignore */
+    }
+    if (!raw) continue;
+    try {
+      await idbRequest(db, "readwrite", (store) => store.put(JSON.parse(raw), key));
+    } catch (e) {
+      console.warn("Library migration failed for", key, e);
+      continue;
+    }
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+const libraryDbReady = openLibraryDb().then(async (db) => {
+  await migrateLegacyLibraryStorage(db);
+  return db;
+});
+
+// Used by the emergency reset in index.html so the database can be deleted without being blocked
+window.closeLibraryDb = async () => {
+  const db = await libraryDbReady;
+  if (db) db.close();
+};
+
+async function storeGet(key) {
+  const db = await libraryDbReady;
+  if (db) {
+    try {
+      return (await idbRequest(db, "readonly", (store) => store.get(key))) ?? null;
+    } catch (e) {
+      console.warn("IndexedDB read failed:", e);
+    }
+  }
   try {
-    const data = localStorage.getItem(`yt_dislikes_cache_${mode}`);
-    if (data) {
-      const parsed = JSON.parse(data);
-      if (parsed && Array.isArray(parsed.videos)) {
-        parsed.videos = parsed.videos
-          .filter((v) => !isLibraryUploadVideo(v))
-          .map((v, idx) => normalizeStoredVideo(v, false, idx));
-      }
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function storeSet(key, value) {
+  const db = await libraryDbReady;
+  if (db) {
+    try {
+      await idbRequest(db, "readwrite", (store) => store.put(value, key));
+      return true;
+    } catch (e) {
+      console.warn("IndexedDB write failed:", e);
+    }
+  }
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch (e) {
+    console.error("Failed to save library:", e);
+    return false;
+  }
+}
+
+async function storeDelete(key) {
+  const db = await libraryDbReady;
+  if (db) {
+    try {
+      await idbRequest(db, "readwrite", (store) => store.delete(key));
+    } catch {
+      /* ignore */
+    }
+  }
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    /* ignore */
+  }
+}
+
+// _is404 is a per-session guess from a failed thumbnail load (often just a flaky connection),
+// so never persist it or the track stays "Unavailable" forever.
+function stripSessionFields(videos) {
+  return videos.map((v) => {
+    if (!v || typeof v !== "object" || !("_is404" in v)) return v;
+    const { _is404, ...rest } = v;
+    return rest;
+  });
+}
+
+async function loadFromCache(mode = state.mode) {
+  try {
+    const parsed = await storeGet(cacheKeyForMode(mode));
+    if (parsed && Array.isArray(parsed.videos)) {
+      parsed.videos = parsed.videos
+        .filter((v) => !isLibraryUploadVideo(v))
+        .map((v, idx) => normalizeStoredVideo(v, false, idx));
       return parsed;
     }
   } catch (e) {
@@ -1948,22 +2240,16 @@ function saveToCache(
   nextPageToken = state.nextPageToken,
   totalResults = state.totalResults,
 ) {
-  try {
-    const data = {
-      videos,
-      nextPageToken,
-      totalResults,
-      timestamp: Date.now()
-    };
-    // _is404 is a per-session guess from a failed thumbnail load (often just a flaky connection),
-    // so never persist it or the track stays "Unavailable" forever.
-    localStorage.setItem(
-      `yt_dislikes_cache_${mode}`,
-      JSON.stringify(data, (key, value) => (key === "_is404" ? undefined : value)),
-    );
-  } catch (e) {
-    console.error("Failed to save cache:", e);
-  }
+  return storeSet(cacheKeyForMode(mode), {
+    videos: stripSessionFields(videos),
+    nextPageToken,
+    totalResults,
+    timestamp: Date.now(),
+  });
+}
+
+function clearYoutubeCaches() {
+  return Promise.all(["like", "dislike"].map((m) => storeDelete(cacheKeyForMode(m))));
 }
 
 // --- Logic ---
@@ -2018,9 +2304,13 @@ function slimVideo(v) {
 let activeFetchPromise = null;
 let fetchGeneration = 0;
 let lastCacheSaveTs = 0;
+// Bumped only when the library is replaced (mode switch, sign-in/out, demo/upload), unlike
+// fetchGeneration which also moves on every load-more page.
+let libraryEpoch = 0;
 
 function invalidateActiveFetch() {
   fetchGeneration++;
+  libraryEpoch++;
   activeFetchPromise = null;
   state.isFetchAll = false;
   state.loading = false;
@@ -2065,6 +2355,146 @@ async function youtubeApiGet(endpoint, params = {}, timeoutMs = 30000) {
   }
 }
 
+// Fetch one 50-item page of liked/disliked videos as slimmed records.
+async function fetchYoutubePage(mode, pageToken = null) {
+  let items = [];
+  let nextToken = null;
+  let total = 0;
+
+  if (mode === "like") {
+    // Use playlistItems for Likes to bypass the 1000-item limit of videos.list(myRating='like')
+    // 'LL' is the magic ID for the Liked Videos playlist
+    const plResult = await youtubeApiGet("playlistItems", {
+      playlistId: "LL",
+      part: "contentDetails",
+      maxResults: 50,
+      pageToken: pageToken || "",
+    });
+
+    const videoIds = (plResult.items || []).map((item) => item.contentDetails.videoId);
+    nextToken = plResult.nextPageToken || null;
+    total = plResult.pageInfo?.totalResults || 0;
+
+    if (videoIds.length > 0) {
+      const vResult = await youtubeApiGet("videos", {
+        id: videoIds.join(","),
+        part: "snippet,contentDetails,statistics,status",
+      });
+
+      const itemsMap = (vResult.items || []).reduce((acc, item) => {
+        acc[item.id] = item;
+        return acc;
+      }, {});
+      // Maintain the order returned by the playlist, and preserve deleted/private videos
+      items = videoIds.map(
+        (id) => itemsMap[id] || { id, status: { uploadStatus: "deleted" }, snippet: null },
+      );
+    }
+  } else {
+    // Use videos.list for Dislikes
+    // NOTE: This filter is known to be capped at 1000 items by the YouTube API.
+    // Since there is no "Disliked Videos" playlist, this is the only way to fetch them.
+    const result = await youtubeApiGet("videos", {
+      myRating: mode,
+      part: "snippet,contentDetails,statistics,status",
+      maxResults: 50,
+      pageToken: pageToken || "",
+    });
+    items = result.items || [];
+    nextToken = result.nextPageToken || null;
+    total = result.pageInfo?.totalResults || 0;
+  }
+
+  return {
+    videos: items.map(slimVideo).filter((v) => !isLibraryUploadVideo(v)),
+    nextToken,
+    total,
+  };
+}
+
+function withOrigIdx(videos) {
+  return videos.map((v, idx) => (v._origIdx === idx ? v : { ...v, _origIdx: idx }));
+}
+
+// Lists are newest-first, so new likes appear at the head of page 1. Replace the head of the
+// saved list with the fresh page (picking up new and removed likes) and keep the saved tail.
+// Returns null when page 1 doesn't overlap the saved list at all (50+ new items).
+function mergeFreshFirstPage(savedVideos, freshVideos) {
+  const freshIds = new Set(freshVideos.map((v) => v.video_id));
+  const savedIndex = new Map();
+  savedVideos.forEach((v, i) => {
+    if (!savedIndex.has(v.video_id)) savedIndex.set(v.video_id, i);
+  });
+
+  // The last fresh item we already know marks where page 1 ends in the saved list. A single
+  // re-liked old video can also overlap far down the list, so only trust a position near the head.
+  let boundary = -1;
+  for (let i = freshVideos.length - 1; i >= 0; i--) {
+    const pos = savedIndex.get(freshVideos[i].video_id);
+    if (pos !== undefined && pos < freshVideos.length + 50) {
+      boundary = pos;
+      break;
+    }
+  }
+  if (boundary === -1) return null;
+
+  const head = savedVideos.slice(0, boundary + 1);
+  const headIds = new Set(head.map((v) => v.video_id));
+  const tail = savedVideos.slice(boundary + 1).filter((v) => !freshIds.has(v.video_id));
+  const added = freshVideos.filter((v) => !savedIndex.has(v.video_id)).length;
+  const removed = [...headIds].filter((id) => !freshIds.has(id)).length;
+  return { videos: [...freshVideos, ...tail], added, removed };
+}
+
+// After showing the saved library, quietly fetch page 1 so new likes/dislikes show up
+// without a manual refresh.
+async function revalidateFirstPage(mode) {
+  if (!state.accessToken) return;
+  const epoch = libraryEpoch;
+  const stillCurrent = () =>
+    epoch === libraryEpoch && state.mode === mode && state.dataSource === "youtube" && state.isAuthenticated;
+  try {
+    const fresh = await fetchYoutubePage(mode, null);
+    if (!stillCurrent()) return;
+
+    const merged = mergeFreshFirstPage(state.videos, fresh.videos);
+    let added;
+    if (merged) {
+      added = merged.added;
+      if (merged.added === 0 && merged.removed === 0) {
+        // Nothing new; still refresh counts/stats for the first page
+        const changed = fresh.videos.some((v, i) => {
+          const old = state.videos[i];
+          return !old || old.video_id !== v.video_id || old.views !== v.views || old.title !== v.title;
+        });
+        if (!changed) return;
+      }
+      state.videos = withOrigIdx(merged.videos);
+    } else {
+      // Too many changes to stitch together: start over from the fresh first page
+      added = fresh.videos.length;
+      state.videos = withOrigIdx(fresh.videos);
+      state.nextPageToken = fresh.nextToken;
+    }
+    state.totalResults = fresh.total || state.totalResults;
+    saveToCache(mode, state.videos, state.nextPageToken, state.totalResults);
+    filterVideos();
+    render();
+    if (added > 0) {
+      const noun = mode === "dislike" ? "dislike" : "like";
+      showToast(`${added.toLocaleString()} new ${noun}${added === 1 ? "" : "s"}`);
+    }
+  } catch (err) {
+    if (!stillCurrent()) return;
+    const status = err?.status || err?.result?.error?.code;
+    if (status === 401) {
+      handleAuthExpired();
+    } else {
+      console.warn("Background refresh failed:", err);
+    }
+  }
+}
+
 async function fetchVideos(pageToken = null) {
   if (activeFetchPromise) {
     return activeFetchPromise;
@@ -2079,14 +2509,15 @@ async function fetchVideos(pageToken = null) {
     setError(null);
 
     if (!isLoadMore && !state.forceRefetch) {
-      const cached = loadFromCache(fetchMode);
+      const cached = await loadFromCache(fetchMode);
+      if (gen !== fetchGeneration || state.mode !== fetchMode) return;
       if (cached) {
-        if (gen !== fetchGeneration || state.mode !== fetchMode) return;
         state.videos = cached.videos;
         state.nextPageToken = cached.nextPageToken;
         state.totalResults = cached.totalResults;
         filterVideos();
         setLoading(false, false);
+        revalidateFirstPage(fetchMode);
         return;
       }
     }
@@ -2094,89 +2525,31 @@ async function fetchVideos(pageToken = null) {
     state.forceRefetch = false;
 
     try {
-      let items = [];
-      let nextToken = null;
-      let total = 0;
+      const page = await fetchYoutubePage(fetchMode, pageToken);
+      if (gen !== fetchGeneration || state.mode !== fetchMode) return;
 
-      if (fetchMode === "like") {
-        // Use playlistItems for Likes to bypass the 1000-item limit of videos.list(myRating='like')
-        // 'LL' is the magic ID for the Liked Videos playlist
-        const plResult = await youtubeApiGet("playlistItems", {
-          playlistId: "LL",
-          part: "contentDetails",
-          maxResults: 50,
-          pageToken: pageToken || "",
-        });
-
-        if (gen !== fetchGeneration || state.mode !== fetchMode) return;
-
-        const videoIds = (plResult.items || []).map(
-          (item) => item.contentDetails.videoId,
-        );
-        nextToken = plResult.nextPageToken || null;
-        total = plResult.pageInfo?.totalResults || 0;
-
-        if (videoIds.length > 0) {
-          const vResult = await youtubeApiGet("videos", {
-            id: videoIds.join(","),
-            part: "snippet,contentDetails,statistics,status",
-          });
-
-          if (gen !== fetchGeneration || state.mode !== fetchMode) return;
-
-          const fetchedItems = vResult.items || [];
-          // Maintain the order returned by the playlist, and preserve deleted/private videos
-          const itemsMap = fetchedItems.reduce((acc, item) => {
-            acc[item.id] = item;
-            return acc;
-          }, {});
-          items = videoIds.map((id) => {
-            if (itemsMap[id]) return itemsMap[id];
-            // If videos.list doesn't return the video, it's deleted/private
-            return {
-              id: id,
-              status: { uploadStatus: "deleted" },
-              snippet: null,
-            };
-          });
-        }
-      } else {
-        // Use videos.list for Dislikes
-        // NOTE: This filter is known to be capped at 1000 items by the YouTube API.
-        // Since there is no "Disliked Videos" playlist, this is the only way to fetch them.
-        const result = await youtubeApiGet("videos", {
-          myRating: fetchMode,
-          part: "snippet,contentDetails,statistics,status",
-          maxResults: 50,
-          pageToken: pageToken || "",
-        });
-
-        if (gen !== fetchGeneration || state.mode !== fetchMode) return;
-
-        items = result.items || [];
-        nextToken = result.nextPageToken || null;
-        total = result.pageInfo?.totalResults || 0;
-      }
-
-      const slimmedItems = items.map(slimVideo).filter((v) => !isLibraryUploadVideo(v));
       if (isLoadMore) {
+        // Page tokens are offsets, so likes added since the list was saved can shift a few
+        // already-loaded items onto this page; skip those duplicates.
+        const known = new Set(state.videos.map((v) => v.video_id));
         const baseIdx = state.videos.length;
+        const newOnes = page.videos.filter((v) => !known.has(v.video_id));
         state.videos = [
           ...state.videos,
-          ...slimmedItems.map((v, idx) => ({ ...v, _origIdx: baseIdx + idx })),
+          ...newOnes.map((v, idx) => ({ ...v, _origIdx: baseIdx + idx })),
         ];
       } else {
-        state.videos = slimmedItems.map((v, idx) => ({ ...v, _origIdx: idx }));
+        state.videos = page.videos.map((v, idx) => ({ ...v, _origIdx: idx }));
       }
 
-      state.nextPageToken = nextToken;
-      state.totalResults = total;
-      // During "Load all", re-serializing the whole (growing) library into localStorage on every
-      // 50-item page is quadratic and blocks the main thread; save every few seconds and on the last page.
+      state.nextPageToken = page.nextToken;
+      state.totalResults = page.total;
+      // During "Load all", re-serializing the whole (growing) library on every 50-item page
+      // is quadratic and blocks the main thread; save every few seconds and on the last page.
       const now = Date.now();
-      if (!state.isFetchAll || !nextToken || now - lastCacheSaveTs > 3000) {
+      if (!state.isFetchAll || !page.nextToken || now - lastCacheSaveTs > 3000) {
         lastCacheSaveTs = now;
-        saveToCache(fetchMode, state.videos, nextToken, total);
+        saveToCache(fetchMode, state.videos, page.nextToken, page.total);
       }
       filterVideos();
 
@@ -2194,13 +2567,13 @@ async function fetchVideos(pageToken = null) {
       console.error("Fetch error detail:", err);
       const status = err?.status || err?.result?.error?.code;
       if (status === 401) {
-        localStorage.removeItem("yt_dislikes_token");
-        state.accessToken = null;
-        state.isAuthenticated = false;
-        state.dataSource = null;
-        state.nextPageToken = null;
-        state.isFetchAll = false;
-        setError("Session expired. Please sign in again.");
+        state.loading = false;
+        state.isLoadMore = false;
+        handleAuthExpired();
+        if (!state.videos.length) {
+          // Nothing loaded for this mode yet; fall back to whatever is saved
+          showCachedYoutubeLibrary(fetchMode).then(() => render());
+        }
       } else {
         setError(
           err?.result?.error?.message ||
@@ -2227,12 +2600,16 @@ async function fetchVideos(pageToken = null) {
 }
 
 function handleLoadMore() {
-  if (state.nextPageToken) {
+  if (state.nextPageToken && state.accessToken) {
     fetchVideos(state.nextPageToken);
   }
 }
 
 async function handleLoadAll() {
+  if (state.nextPageToken && !state.accessToken) {
+    handleAuthClick();
+    return;
+  }
   if (state.nextPageToken) {
     state.isFetchAll = true;
     render();
@@ -2324,20 +2701,11 @@ async function loadDemoData() {
     if (Array.isArray(data)) {
       invalidateActiveFetch();
       const normalized = normalizeImportedDataset(data);
+      resetLibraryView();
       state.mode = "like";
-      state.dataSource = "demo";
-      state.videos = normalized;
-      state.nextPageToken = null;
-      state.totalResults = normalized.length;
-      state.error = null;
-      state.searchTerm = "";
-      state.debouncedSearchTerm = "";
-      dom.searchInput.value = "";
-      updateSearchClearButton();
-      localStorage.removeItem("dislikes-data-like");
-      localStorage.removeItem("dislikes-data-like-timestamp");
-
-      filterVideos();
+      state.authExpired = false;
+      state.localLibrary = { source: "demo", mode: "like", videos: normalized };
+      applyLocalLibrary();
       render();
     } else {
       showToast("Invalid JSON format in demo data", "error");
@@ -2379,27 +2747,11 @@ function loadUploadedJsonFile(file) {
           state.mode = modeFromName;
           localStorage.setItem("dislikes-mode", modeFromName);
         }
-        state.dataSource = "upload";
-        state.videos = normalized;
-        state.nextPageToken = null;
-        state.totalResults = normalized.length;
-        state.error = null;
-        state.searchTerm = "";
-        state.debouncedSearchTerm = "";
-        dom.searchInput.value = "";
-        updateSearchClearButton();
-        localStorage.removeItem(`dislikes-data-${state.mode}`);
-        localStorage.removeItem(`dislikes-data-${state.mode}-timestamp`);
-        try {
-          localStorage.setItem(
-            "yt_dislikes_custom_upload",
-            JSON.stringify({ mode: state.mode, videos: normalized }),
-          );
-        } catch {
-          /* ignore quota limits on oversized files */
-        }
-
-        filterVideos();
+        resetLibraryView();
+        if (!state.isAuthenticated) state.authExpired = false;
+        state.localLibrary = { source: "upload", mode: state.mode, videos: normalized };
+        applyLocalLibrary();
+        storeSet("yt_dislikes_custom_upload", { mode: state.mode, videos: normalized });
         render();
         showToast(`Loaded ${normalized.length.toLocaleString()} videos`);
       } else {
@@ -2645,6 +2997,7 @@ function setLoading(isLoading, isLoadMore = false) {
 
 function setError(err) {
   state.error = err;
+  state.noticeKind = "error";
   render();
 }
 
@@ -2787,6 +3140,7 @@ function teardownCardImage(card) {
   img.onerror = null;
   delete img.dataset.pendingSrc;
   img.removeAttribute("src");
+  card._boundVideoId = null;
 }
 
 function releaseVideoCard(card) {
@@ -2830,10 +3184,32 @@ function hydrateCardThumbnail(card, video) {
   }
 
   img.onerror = () => {
+    img.onerror = null;
+    if (card._boundVideoId && card._boundVideoId !== video.video_id) return; // card was reused
+
+    // Offline: a failed thumbnail says nothing about the video. Leave it pending and retry
+    // when the connection comes back instead of marking the track Unavailable.
+    if (navigator.onLine === false) {
+      img.removeAttribute("src");
+      img.dataset.pendingSrc = thumbnail;
+      return;
+    }
+    // Online but flaky: retry once before concluding the video is gone
+    if (img.dataset.retriedFor !== video.video_id) {
+      img.dataset.retriedFor = video.video_id;
+      img.removeAttribute("src");
+      img.dataset.pendingSrc = thumbnail;
+      setTimeout(() => {
+        if (card._boundVideoId === video.video_id && img.dataset.pendingSrc) {
+          hydrateCardThumbnail(card, video);
+        }
+      }, 1500);
+      return;
+    }
+
     video._is404 = true;
     overlay.classList.remove("hidden");
     overlay.classList.add("flex");
-    img.onerror = null;
     img.src = BLANK_PIXEL;
   };
   img.src = thumbnail;
@@ -2865,6 +3241,10 @@ function scheduleThumbnailHydration(delayMs = 140) {
 }
 
 function acquireVideoCard(video, index, deferThumbnail = false) {
+  return bindVideoCard(createVideoCard(), video, index, deferThumbnail);
+}
+
+function createVideoCard() {
   let card = virtualGrid.cardPool.pop();
   if (!card) {
     const clone = dom.videoTemplate.content.cloneNode(true);
@@ -2879,7 +3259,12 @@ function acquireVideoCard(video, index, deferThumbnail = false) {
       metadataEl: card.querySelector(".dynamic-metadata"),
     };
   }
+  return card;
+}
 
+// Fill a card for `video`. Cards are re-bound in place when the list changes (filter, sort,
+// search, new pages), so an unchanged thumbnail is left alone instead of being reloaded.
+function bindVideoCard(card, video, index, deferThumbnail = false) {
   const { playBtn, img, overlay, links, titleEl, channelEl, metadataEl } = card._refs;
   const title = video.title || "Unavailable";
   const isDeleted = checkIfDeleted(video);
@@ -2896,13 +3281,21 @@ function acquireVideoCard(video, index, deferThumbnail = false) {
   playBtn.disabled = Boolean(isDeleted);
   playBtn.classList.toggle("cursor-not-allowed", Boolean(isDeleted));
 
-  if (deferThumbnail || scrubberState.isDragging) {
+  const keepImage =
+    !isDeleted &&
+    card._boundVideoId === video.video_id &&
+    !img.dataset.pendingSrc &&
+    img.getAttribute("src") === thumbnail;
+  if (keepImage) {
+    // Same video already showing: leave the loaded thumbnail as is
+  } else if (deferThumbnail || scrubberState.isDragging) {
     img.onerror = null;
     img.removeAttribute("src");
     img.dataset.pendingSrc = thumbnail;
   } else {
     hydrateCardThumbnail(card, video);
   }
+  card._boundVideoId = video.video_id;
 
   const watchHref = `${baseUrl}/watch?v=${encodeURIComponent(video.video_id)}`;
   for (let i = 0; i < links.length; i++) {
@@ -2942,9 +3335,21 @@ function renderVirtualGrid(force = false, anchorRow = null, deferThumbnails = fa
   }
 
   if (virtualGrid.renderedVersion !== virtualGrid.listVersion) {
-    resetVirtualGridDOM();
-    dom.videoGrid.innerHTML = "";
+    // The list changed: re-bind the cards already on screen in place rather than tearing the
+    // whole grid down, which flickered every thumbnail on each filter change and Load all page.
     virtualGrid.renderedVersion = virtualGrid.listVersion;
+    if (virtualGrid.renderedCards.size === 0) {
+      dom.videoGrid.innerHTML = "";
+    } else {
+      for (const [idx, card] of virtualGrid.renderedCards.entries()) {
+        if (idx >= totalItems) {
+          releaseVideoCard(card);
+          virtualGrid.renderedCards.delete(idx);
+        } else {
+          bindVideoCard(card, state.filteredVideos[idx], idx, deferThumbnails);
+        }
+      }
+    }
     force = true;
   }
 
@@ -3530,11 +3935,52 @@ function scheduleScrubberLayoutRefresh() {
 
 // --- Rendering ---
 
+const ERROR_BANNER_CLASSES = [
+  "border-red-200",
+  "dark:border-red-900/50",
+  "bg-red-50",
+  "dark:bg-red-950/40",
+  "text-red-600",
+  "dark:text-red-400",
+];
+const NOTICE_BANNER_CLASSES = [
+  "border-gray-200",
+  "dark:border-white/10",
+  "bg-gray-100",
+  "dark:bg-[#1a1a1a]",
+  "text-gray-700",
+  "dark:text-[#e8e8e8]",
+];
+const ERROR_BUTTON_CLASSES = ["bg-red-600", "hover:bg-red-700"];
+const NOTICE_BUTTON_CLASSES = [
+  "bg-gray-950",
+  "dark:bg-white",
+  "dark:text-black",
+  "hover:bg-gray-800",
+  "dark:hover:bg-[#e5e5e5]",
+];
+
+function getEmptyStateMessage() {
+  const lib = state.localLibrary;
+  const wantedNoun = state.mode === "dislike" ? "dislikes" : "likes";
+  if (lib && (state.dataSource === "demo" || state.dataSource === "upload") && lib.mode !== state.mode) {
+    const haveNoun = lib.mode === "dislike" ? "dislikes" : "likes";
+    return lib.source === "demo"
+      ? `The demo only includes ${haveNoun}. Connect your YouTube account to see your ${wantedNoun}.`
+      : `This file contains ${haveNoun}. Upload a ${wantedNoun} file or connect YouTube to see your ${wantedNoun}.`;
+  }
+  if (state.authExpired && !state.isAuthenticated && state.videos.length === 0) {
+    return `Sign in to load your ${wantedNoun}.`;
+  }
+  return "No results found.";
+}
+
 function render() {
   const isReady = state.gisInited;
   const isLoadMore = state.isLoadMore;
   const hasAppData =
     state.isAuthenticated ||
+    state.dataSource === "youtube" ||
     state.dataSource === "demo" ||
     state.dataSource === "upload";
   const trimmedSearch = state.debouncedSearchTerm.trim();
@@ -3593,7 +4039,8 @@ function render() {
       dom.authButton.classList.toggle("sm:inline-flex", !state.isAuthenticated);
       dom.authButton.classList.toggle("items-center", !state.isAuthenticated);
     } else {
-      dom.signoutButton.textContent = state.isAuthenticated ? "Sign out" : "Close file";
+      dom.signoutButton.textContent =
+        state.isAuthenticated || state.dataSource === "youtube" ? "Sign out" : "Close file";
       dom.authButton.classList.add("hidden");
       dom.authButton.classList.toggle("sm:inline-flex", !state.isAuthenticated);
       dom.authButton.classList.toggle("items-center", !state.isAuthenticated);
@@ -3611,6 +4058,15 @@ function render() {
     dom.errorContainer.classList.remove("hidden");
     dom.errorContainer.classList.add("flex");
     dom.errorMessage.textContent = state.error;
+    const isNotice = state.noticeKind === "notice";
+    NOTICE_BANNER_CLASSES.forEach((c) => dom.errorContainer.classList.toggle(c, isNotice));
+    ERROR_BANNER_CLASSES.forEach((c) => dom.errorContainer.classList.toggle(c, !isNotice));
+    if (dom.errorRetryButton) {
+      const wantsSignIn = state.authExpired && !state.isAuthenticated;
+      dom.errorRetryButton.textContent = wantsSignIn ? "Sign in" : "Retry";
+      NOTICE_BUTTON_CLASSES.forEach((c) => dom.errorRetryButton.classList.toggle(c, isNotice));
+      ERROR_BUTTON_CLASSES.forEach((c) => dom.errorRetryButton.classList.toggle(c, !isNotice));
+    }
   } else {
     dom.errorContainer.classList.add("hidden");
     dom.errorContainer.classList.remove("flex");
@@ -3703,6 +4159,8 @@ function render() {
       dom.videoGrid.classList.remove("hidden");
       renderSkeletons();
     } else if (state.filteredVideos.length === 0) {
+      const emptyText = dom.emptyState.querySelector("p");
+      if (emptyText) emptyText.textContent = getEmptyStateMessage();
       dom.emptyState.classList.remove("hidden");
       dom.videoGrid.classList.add("hidden");
       dom.videoGrid.innerHTML = "";
@@ -3738,6 +4196,8 @@ function updateSentinel() {
           <div class="loading-spinner inline-block w-4 h-4 border-2 border-gray-200 dark:border-white/15 border-t-gray-600 dark:border-t-white rounded-full mr-2 align-middle"></div>
           <span>Loading more...</span>
       `;
+    } else if (!state.accessToken) {
+      dom.scrollSentinel.textContent = "Sign in to load more";
     } else {
       dom.scrollSentinel.textContent = "Scroll for more";
     }
@@ -3783,9 +4243,12 @@ function renderSkeletons() {
   }
 }
 
+let lastSidebarHtml = "";
+
 function renderSidebar() {
   if (state.videos.length === 0) {
     dom.sidebarListContainer.innerHTML = "";
+    lastSidebarHtml = "";
     return;
   }
 
@@ -3884,8 +4347,13 @@ function renderSidebar() {
     html = data.topCopyrights.map((cpy) => renderNameCountRow(cpy.name, cpy.count)).join("");
   }
 
-  dom.sidebarListContainer.innerHTML =
+  const nextHtml =
     html || '<div class="text-gray-500 dark:text-[#888888] text-xs px-2.5 py-3">No data available</div>';
+  // Skip identical rebuilds (e.g. Load all pages that don't change the top lists) so album art doesn't flicker
+  if (nextHtml !== lastSidebarHtml) {
+    lastSidebarHtml = nextHtml;
+    dom.sidebarListContainer.innerHTML = nextHtml;
+  }
 }
 
 function calculateAnalytics() {
