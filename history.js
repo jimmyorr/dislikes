@@ -153,6 +153,8 @@ async function whRemove() {
   try {
     const db = await libraryDbReady;
     if (db) await idbRequest(db, "readwrite", (store) => store.delete(WH_KEY));
+    await storeDelete(WH_ALBUMS_KEY);
+    wh.albums = null;
   } catch {
     /* ignore */
   }
@@ -767,6 +769,8 @@ function whRenderInsights() {
   const likes = whLikesHtml(agg, ctx);
   if (decade || likes) sections.push(`<div class="wh-row">${likes}${decade}</div>`);
   root.innerHTML = sections.join("");
+  if (!wh.albums) whLoadAlbumCache().then(() => wh.insightsOpen && whRenderInsights());
+  else if (!wh.albumLookup.running && !wh.albumLookup.error) whLookupAlbums();
 }
 
 function whHeroHtml(type, range, agg, prevAgg, prevLabel, prevFull) {
@@ -888,7 +892,7 @@ function whReleaseSizes(liked) {
 // (matches the sidebar), so singles and one-off likes don't show up as one-track "albums".
 const WH_ALBUM_MIN_TRACKS = 3;
 
-function whAlbumsCard(agg, prevAgg, ctx) {
+function whLikedAlbumsCard(agg, prevAgg, ctx, hint = "") {
   const sizes = whReleaseSizes(ctx.liked);
   const albumsOf = (a) => {
     const map = new Map();
@@ -952,7 +956,159 @@ function whAlbumsCard(agg, prevAgg, ctx) {
     "",
     firstHtml,
     rest,
-    `Albums you've liked ${WH_ALBUM_MIN_TRACKS}+ tracks from, matched by artist and release date.`,
+    `Albums you've liked ${WH_ALBUM_MIN_TRACKS}+ tracks from, matched by artist and release date.${hint ? ` ${hint}` : ""}`,
+  );
+}
+
+// --- Album lookup ---
+// Takeout has no album info, but "- Topic" art tracks name their album in the description. While signed
+// in, look those up for played tracks (most played first, 50 per call) and keep them in IndexedDB.
+const WH_ALBUMS_KEY = "watch_history_albums";
+wh.albums = null; // Map videoId -> [album, releaseDate] or 0 (no album)
+wh.albumLookup = { running: false, done: 0, total: 0, error: "" };
+
+async function whLoadAlbumCache() {
+  if (wh.albums) return;
+  let raw = null;
+  try {
+    raw = await storeGet(WH_ALBUMS_KEY);
+  } catch {
+    /* ignore */
+  }
+  if (!wh.albums) wh.albums = new Map(raw && typeof raw === "object" ? Object.entries(raw) : []);
+}
+
+function whSaveAlbumCache() {
+  if (!wh.albums) return;
+  storeSet(WH_ALBUMS_KEY, Object.fromEntries(wh.albums)).catch(() => {});
+}
+
+function whAlbumPending() {
+  if (!whHasData()) return [];
+  const vids = wh.data.videos;
+  const liked = whLikedMap();
+  const todo = [];
+  for (let i = 0; i < vids.length; i++) {
+    if (!wh.plays[i] || !whIsTopic(vids[i].channel) || (wh.albums && wh.albums.has(vids[i].id))) continue;
+    const lv = liked.get(vids[i].id);
+    if (lv && lv.album) continue;
+    todo.push(i);
+  }
+  return todo.sort((x, y) => wh.plays[y] - wh.plays[x]);
+}
+
+async function whLookupAlbums() {
+  if (wh.albumLookup.running || !state.accessToken || !whHasData()) return;
+  await whLoadAlbumCache();
+  const todo = whAlbumPending();
+  if (!todo.length) return;
+  const vids = wh.data.videos;
+  const run = (wh.albumLookup = { running: true, done: 0, total: todo.length, error: "" });
+  const rerender = () => {
+    if (wh.insightsOpen) whRenderInsights();
+  };
+  rerender();
+  try {
+    for (let s = 0; s < todo.length; s += 50) {
+      if (!state.accessToken || !whHasData() || wh.data.videos !== vids) break;
+      const ids = todo.slice(s, s + 50).map((i) => vids[i].id);
+      const res = await youtubeApiGet("videos", { part: "snippet", id: ids.join(","), maxResults: 50, fields: "items(id,snippet/description)" });
+      const seen = new Set();
+      for (const item of res.items || []) {
+        const info = parseArtTrackDescription(item.snippet?.description || "");
+        wh.albums.set(item.id, info.album ? [info.album, info.date || ""] : 0);
+        seen.add(item.id);
+      }
+      for (const id of ids) if (!seen.has(id)) wh.albums.set(id, 0); // removed videos
+      run.done += ids.length;
+      const batch = s / 50;
+      if (batch % 10 === 9) whSaveAlbumCache();
+      if (batch < 4 || batch % 8 === 7) rerender();
+    }
+  } catch (e) {
+    console.warn("Album lookup stopped:", e);
+    run.error = e && e.status === 401 ? "Sign in again to finish looking up albums." : "Album lookup stopped early. It picks up again next time.";
+  } finally {
+    run.running = false;
+    whSaveAlbumCache();
+    rerender();
+  }
+}
+
+function whAlbumOf(v, ctx) {
+  const id = wh.data.videos[v].id;
+  const lv = ctx.liked.get(id);
+  if (lv && lv.album) return { name: lv.album, date: lv.published_at ? lv.published_at.slice(0, 10) : "" };
+  const c = wh.albums ? wh.albums.get(id) : null;
+  return c ? { name: c[0], date: c[1] } : null;
+}
+
+const whNorm = (x) => String(x || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+
+function whAlbumsCard(agg, prevAgg, ctx) {
+  wh.likedCache = ctx.liked;
+  const lookedUp = wh.albums && wh.albums.size > 0;
+  const hasLikedAlbums = Array.from(ctx.liked.values()).some((lv) => lv.album);
+  const L = wh.albumLookup;
+  if (!lookedUp && !hasLikedAlbums && !L.running) {
+    // Nothing looked up yet: fall back to albums inferred from likes
+    return whLikedAlbumsCard(agg, prevAgg, ctx, state.accessToken ? "" : "Sign in to look up album names for everything you play.");
+  }
+  const albumsOf = (a) => {
+    const map = new Map();
+    for (const [v, c] of a.trackCounts) {
+      const al = whAlbumOf(v, ctx);
+      if (!al) continue;
+      // A single's "album" is just the song again; leave those out
+      if (whNorm(al.name) === whNorm(whTrackTitle(v))) continue;
+      const key = `${wh.artistOf[v]}|${whNorm(al.name)}`;
+      let cur = map.get(key);
+      if (!cur) {
+        cur = { name: al.name, artist: whTrackArtist(v), year: al.date ? al.date.slice(0, 4) : "", plays: 0, tracks: 0, v, best: 0 };
+        map.set(key, cur);
+      }
+      cur.plays += c;
+      cur.tracks++;
+      if (c > cur.best) {
+        cur.best = c;
+        cur.v = v;
+      }
+    }
+    return map;
+  };
+  const albums = albumsOf(agg);
+  const progress = L.running ? `Looking up albums: ${formatCount(L.done)} of ${formatCount(L.total)} tracks.` : L.error;
+  if (!albums.size) {
+    return `<section class="wh-card wh-card-albums"><header class="wh-card-head"><span class="wh-card-title">Albums</span></header><div class="wh-card-body"><p class="wh-muted">${escapeHtml(
+      progress || "No album tracks played in this period. Singles are left out.",
+    )}</p></div></section>`;
+  }
+  const prevAlbums = prevAgg ? albumsOf(prevAgg) : null;
+  const top = Array.from(albums.values())
+    .sort((a, b) => b.plays - a.plays || b.tracks - a.tracks)
+    .slice(0, 5);
+  const meta = (a) => [a.artist, a.year].filter(Boolean).join(" · ");
+  const thumb = (a) => whThumb(wh.data.videos[a.v].id);
+  const f = top[0];
+  const firstHtml = `<button type="button" class="wh-top" data-wh-artist="${escapeHtml(f.artist)}" title="Show ${escapeHtml(f.artist)} in library">
+      <img src="${thumb(f)}" alt="" loading="lazy" />
+      <span><span class="wh-top-rank">#1</span><span class="wh-top-name">${escapeHtml(f.name)}</span><span class="wh-top-sub">${escapeHtml(meta(f))}</span><span class="wh-top-sub">${whPlural(f.plays, "play")} across ${whPlural(f.tracks, "track")}</span></span>
+    </button>`;
+  const rest = whTopList(
+    top.slice(1),
+    (a, i) =>
+      `<li><button type="button" class="wh-list-item" data-wh-artist="${escapeHtml(a.artist)}" title="${escapeHtml(`${whPlural(a.plays, "play")} across ${whPlural(a.tracks, "track")}`)}"><span class="wh-rank">${i + 2}</span><img src="${thumb(a)}" alt="" loading="lazy" /><span class="wh-name"><span class="wh-name-main">${escapeHtml(a.name)}</span><span class="wh-name-sub">${escapeHtml(meta(a))}</span></span><span class="wh-num">${formatCount(a.plays)}</span></button></li>`,
+  );
+  return whCardShell(
+    "wh-card-albums wh-card-art",
+    "Albums",
+    albums.size,
+    prevAlbums && !L.running ? prevAlbums.size : null,
+    null,
+    "",
+    firstHtml,
+    rest,
+    progress || "Album names from YouTube. Singles are left out.",
   );
 }
 

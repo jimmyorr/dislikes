@@ -1,4 +1,4 @@
-const SW_VERSION = "2.2.3";
+const SW_VERSION = "2.3.0";
 const CACHE_NAME = `dislikes-v${SW_VERSION}`;
 const ASSETS = [
   "./",
