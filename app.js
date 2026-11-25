@@ -40,6 +40,8 @@ const state = {
   dataSource: null, // 'youtube' | 'demo' | 'upload' | null
   // True while showing a saved YouTube library without a valid token (expired sign-in).
   authExpired: false,
+  syncedAt: null, // when the shown YouTube library was last checked against YouTube
+  syncing: false,
   // Demo / uploaded data and the mode it belongs to, so switching Likes/Dislikes doesn't discard it.
   localLibrary: null, // { source: 'demo' | 'upload', mode, videos } | null
   noticeKind: "error", // 'error' | 'notice' — styling for the banner above the library
@@ -136,7 +138,12 @@ const dom = {
   exportJsonButton: document.getElementById("export-json-button"),
   uploadJsonButton: document.getElementById("upload-json-button"),
   uploadJsonInput: document.getElementById("upload-json-input"),
-  clearCacheButton: document.getElementById("clear-cache-button"),
+  syncStatus: document.getElementById("sync-status"),
+  syncButton: document.getElementById("sync-button"),
+  syncLabel: document.getElementById("sync-label"),
+  settingsAccount: document.getElementById("settings-account"),
+  settingsSignoutButton: document.getElementById("settings-signout-button"),
+  settingsRedownloadButton: document.getElementById("settings-redownload-button"),
   loadAllButton: document.getElementById("load-all-button"),
   sidebarFilterDropdown: document.getElementById("sidebar-filter-dropdown"),
   sidebarFilterTrigger: document.getElementById("sidebar-filter-trigger"),
@@ -586,7 +593,6 @@ function updateHeroCountDisplay(targetCount, animateSignature = null) {
   }
 }
 
-const SESSION_EXPIRED_NOTICE = "Your YouTube sign-in expired. Showing your saved library — sign in to refresh it.";
 
 function resetLibraryView() {
   state.videos = [];
@@ -594,6 +600,7 @@ function resetLibraryView() {
   state.sidebarBaseVideos = [];
   state.nextPageToken = null;
   state.totalResults = null;
+  state.syncedAt = null;
   state.error = null;
   state.noticeKind = "error";
   state.searchTerm = "";
@@ -654,12 +661,14 @@ async function showCachedYoutubeLibrary(mode) {
     state.videos = [];
     state.nextPageToken = null;
     state.totalResults = null;
+    state.syncedAt = null;
     filterVideos();
     return false;
   }
   state.videos = cached.videos;
   state.nextPageToken = cached.nextPageToken;
   state.totalResults = cached.totalResults;
+  state.syncedAt = cached.timestamp || null;
   filterVideos();
   return true;
 }
@@ -680,9 +689,9 @@ async function tryRestoreExpiredYoutubeSession() {
   state.videos = cached.videos;
   state.nextPageToken = cached.nextPageToken;
   state.totalResults = cached.totalResults;
+  state.syncedAt = cached.timestamp || null;
   state.dataSource = "youtube";
   state.authExpired = true;
-  showNotice(SESSION_EXPIRED_NOTICE);
   filterVideos();
   return true;
 }
@@ -698,7 +707,7 @@ function handleAuthExpired() {
   state.isFetchAll = false;
   state.authExpired = true;
   state.dataSource = "youtube";
-  showNotice(SESSION_EXPIRED_NOTICE);
+  // Keep showing the saved library; the "Updated … ago" control offers a refresh (sign-in).
   render();
 }
 
@@ -773,6 +782,16 @@ function initGis() {
           }
           saveToken(resp);
           storeDelete("yt_dislikes_custom_upload");
+          if (state.authExpired && state.dataSource === "youtube" && state.videos.length) {
+            // Signing back in over a saved library: keep it on screen and just check for changes
+            state.accessToken = resp.access_token;
+            state.isAuthenticated = true;
+            state.authExpired = false;
+            state.error = null;
+            render();
+            syncLibrary(true);
+            return;
+          }
           invalidateActiveFetch();
           resetLibraryView();
           state.accessToken = resp.access_token;
@@ -1144,6 +1163,21 @@ function setupEventListeners() {
     dom.heroUploadButton.addEventListener("click", () => dom.uploadJsonInput?.click());
   }
   dom.signoutButton.addEventListener("click", handleSignout);
+  if (dom.settingsSignoutButton) {
+    dom.settingsSignoutButton.addEventListener("click", () => {
+      closeAllPopovers();
+      handleSignout();
+    });
+  }
+  if (dom.settingsRedownloadButton) {
+    dom.settingsRedownloadButton.addEventListener("click", () => {
+      closeAllPopovers();
+      handleClearCache();
+    });
+  }
+  if (dom.syncButton) dom.syncButton.addEventListener("click", handleSyncClick);
+  // Keep "Updated … ago" current while the page stays open
+  setInterval(updateSyncStatus, 60_000);
 
   if (dom.errorRetryButton) {
     dom.errorRetryButton.addEventListener("click", () => {
@@ -1388,7 +1422,6 @@ function setupEventListeners() {
   dom.exportJsonButton.addEventListener("click", handleExportJson);
   dom.uploadJsonButton.addEventListener("click", () => dom.uploadJsonInput.click());
   dom.uploadJsonInput.addEventListener("change", handleUploadJson);
-  dom.clearCacheButton.addEventListener("click", handleClearCache);
   dom.loadAllButton.addEventListener("click", handleLoadAll);
 
   // Drag-and-drop JSON upload anywhere in the window
@@ -1761,11 +1794,9 @@ function setupEventListeners() {
       // Expired sign-in: show whatever is saved for this mode and offer to sign in for the rest
       const hasCache = await showCachedYoutubeLibrary(nextMode);
       if (state.mode !== nextMode || !state.authExpired) return;
-      showNotice(
-        hasCache
-          ? SESSION_EXPIRED_NOTICE
-          : `Sign in to load your ${nextMode === "dislike" ? "disliked" : "liked"} videos.`,
-      );
+      if (!hasCache) {
+        showNotice(`Sign in to load your ${nextMode === "dislike" ? "disliked" : "liked"} videos.`);
+      }
     } else if (state.localLibrary) {
       // Demo / uploaded file: keep it around; the other mode just shows an explanatory empty state
       applyLocalLibrary();
@@ -2456,30 +2487,34 @@ function mergeFreshFirstPage(savedVideos, freshVideos) {
   return { videos: [...freshVideos, ...tail], added, removed };
 }
 
-// After showing the saved library, quietly fetch page 1 so new likes/dislikes show up
-// without a manual refresh.
-async function revalidateFirstPage(mode) {
-  if (!state.accessToken) return;
+// Check page 1 against YouTube and merge any new likes/dislikes into the saved list, so the
+// library stays current without re-downloading it. Runs quietly after loading the saved copy,
+// and from the "Updated … ago" button (`manual`), which also reports the outcome.
+async function syncLibrary(manual = false) {
+  if (!state.accessToken || state.syncing) return;
+  const mode = state.mode;
   const epoch = libraryEpoch;
   const stillCurrent = () =>
     epoch === libraryEpoch && state.mode === mode && state.dataSource === "youtube" && state.isAuthenticated;
+  state.syncing = true;
+  updateSyncStatus();
   try {
     const fresh = await fetchYoutubePage(mode, null);
     if (!stillCurrent()) return;
 
     const merged = mergeFreshFirstPage(state.videos, fresh.videos);
     let added;
+    let changed = true;
     if (merged) {
       added = merged.added;
       if (merged.added === 0 && merged.removed === 0) {
         // Nothing new; still refresh counts/stats for the first page
-        const changed = fresh.videos.some((v, i) => {
+        changed = fresh.videos.some((v, i) => {
           const old = state.videos[i];
           return !old || old.video_id !== v.video_id || old.views !== v.views || old.title !== v.title;
         });
-        if (!changed) return;
       }
-      state.videos = withOrigIdx(merged.videos);
+      if (changed) state.videos = withOrigIdx(merged.videos);
     } else {
       // Too many changes to stitch together: start over from the fresh first page
       added = fresh.videos.length;
@@ -2487,22 +2522,75 @@ async function revalidateFirstPage(mode) {
       state.nextPageToken = fresh.nextToken;
     }
     state.totalResults = fresh.total || state.totalResults;
+    state.syncedAt = Date.now();
+    // Saving also stamps the time of this check, so "Updated … ago" survives a reload
     saveToCache(mode, state.videos, state.nextPageToken, state.totalResults);
-    filterVideos();
-    render();
+    if (changed) {
+      filterVideos();
+      render();
+    }
+    const noun = mode === "dislike" ? "dislike" : "like";
     if (added > 0) {
-      const noun = mode === "dislike" ? "dislike" : "like";
       showToast(`${added.toLocaleString()} new ${noun}${added === 1 ? "" : "s"}`);
+    } else if (manual) {
+      showToast("Up to date");
     }
   } catch (err) {
     if (!stillCurrent()) return;
     const status = err?.status || err?.result?.error?.code;
     if (status === 401) {
       handleAuthExpired();
+      if (manual) showToast("Your sign-in ran out. Tap again to sign in and refresh.");
     } else {
       console.warn("Background refresh failed:", err);
+      if (manual) showToast("Couldn't reach YouTube. Try again in a moment.", "error");
     }
+  } finally {
+    state.syncing = false;
+    updateSyncStatus();
   }
+}
+
+function handleSyncClick() {
+  if (state.syncing) return;
+  if (!state.isAuthenticated) {
+    // The browser-only sign-in lasts an hour; renewing it is a quick popup that closes on its
+    // own while you're still signed in to Google. The token callback then runs syncLibrary.
+    handleAuthClick();
+    return;
+  }
+  syncLibrary(true);
+}
+
+function formatAgo(ts) {
+  const mins = Math.floor((Date.now() - ts) / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return `on ${new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+}
+
+function updateSyncStatus() {
+  if (!dom.syncStatus) return;
+  const show =
+    state.dataSource === "youtube" &&
+    state.videos.length > 0 &&
+    !(state.loading && !state.isLoadMore) &&
+    (state.syncedAt || state.syncing);
+  dom.syncStatus.classList.toggle("hidden", !show);
+  dom.syncStatus.classList.toggle("flex", Boolean(show));
+  if (!show) return;
+  dom.syncButton.classList.toggle("is-syncing", state.syncing);
+  dom.syncButton.setAttribute("aria-busy", state.syncing ? "true" : "false");
+  dom.syncLabel.textContent = state.syncing
+    ? "Checking for new likes…"
+    : `Updated ${formatAgo(state.syncedAt)}`;
+  const hint = state.isAuthenticated ? "Check YouTube for new likes" : "Sign in to check YouTube for new likes";
+  dom.syncButton.title = hint;
+  dom.syncButton.setAttribute("aria-label", state.syncing ? "Checking YouTube for new likes" : `${dom.syncLabel.textContent}. ${hint}`);
 }
 
 async function fetchVideos(pageToken = null) {
@@ -2525,9 +2613,10 @@ async function fetchVideos(pageToken = null) {
         state.videos = cached.videos;
         state.nextPageToken = cached.nextPageToken;
         state.totalResults = cached.totalResults;
+        state.syncedAt = cached.timestamp || null;
         filterVideos();
         setLoading(false, false);
-        revalidateFirstPage(fetchMode);
+        syncLibrary(false);
         return;
       }
     }
@@ -2554,6 +2643,7 @@ async function fetchVideos(pageToken = null) {
 
       state.nextPageToken = page.nextToken;
       state.totalResults = page.total;
+      if (!isLoadMore) state.syncedAt = Date.now();
       // During "Load all", re-serializing the whole (growing) library on every 50-item page
       // is quadratic and blocks the main thread; save every few seconds and on the last page.
       const now = Date.now();
@@ -4090,10 +4180,16 @@ function render() {
     dom.authIndicator.classList.add("flex");
 
     const canRefreshYoutube = Boolean(state.isAuthenticated && state.dataSource === "youtube");
-    dom.clearCacheButton.classList.toggle("hidden", !canRefreshYoutube);
-    dom.clearCacheButton.classList.toggle("inline-flex", canRefreshYoutube);
+    const isExpiredYoutube = Boolean(!state.isAuthenticated && state.dataSource === "youtube");
+    // One account control at a time: Sign out while signed in; after the hour-long sign-in
+    // lapses, the header stays quiet (refresh lives by the count, Sign out in settings).
+    dom.authIndicator.classList.toggle("hidden", isExpiredYoutube);
+    dom.authIndicator.classList.toggle("flex", !isExpiredYoutube);
 
-    if (canRefreshYoutube) {
+    if (isExpiredYoutube) {
+      dom.authButton.classList.add("hidden");
+      dom.authButton.classList.remove("sm:inline-flex", "items-center");
+    } else if (canRefreshYoutube) {
       dom.signoutButton.textContent = "Sign out";
       dom.authButton.classList.add("hidden");
       dom.authButton.classList.remove("sm:inline-flex");
@@ -4116,6 +4212,15 @@ function render() {
     dom.authIndicator.classList.remove("flex");
     dom.authButton.classList.remove("hidden", "sm:inline-flex", "items-center");
   }
+
+  if (dom.settingsAccount) {
+    dom.settingsAccount.classList.toggle("hidden", state.dataSource !== "youtube");
+    dom.settingsRedownloadButton?.classList.toggle(
+      "hidden",
+      !(state.isAuthenticated && state.dataSource === "youtube"),
+    );
+  }
+  updateSyncStatus();
 
   // Error
   if (state.error) {

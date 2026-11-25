@@ -88,7 +88,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=2.2.0" />
+    <link rel="stylesheet" href="styles.css?v=2.2.1" />
     <script>
       (function () {
         try {
@@ -171,6 +171,11 @@
         color: #fde68a;
       }
 
+      #sync-status { margin-top: -4px; }
+      .sync-button { font-size: 12.5px; line-height: 1.4; padding: 2px 4px; margin-left: -4px; }
+      .sync-button.is-syncing svg { animation: sync-spin 0.9s linear infinite; }
+      @media (prefers-reduced-motion: reduce) { .sync-button.is-syncing svg { animation: none; } }
+      @keyframes sync-spin { to { transform: rotate(360deg); } }
       @keyframes rotate {
         from {
           transform: rotate(0deg);
@@ -1619,13 +1624,30 @@
                 class="block text-[11px] font-semibold text-gray-400 dark:text-[#999999] uppercase tracking-[0.1em] mb-1.5"
                 >Watch history</span
               >
-              <p id="wh-settings-status" class="text-[12px] text-gray-500 dark:text-[#aaaaaa] mb-2">Not imported</p>
+              <p id="wh-settings-status" class="text-xs text-gray-500 dark:text-[#aaaaaa] mb-2">Not imported</p>
               <div class="flex flex-wrap gap-x-3 gap-y-1 text-[13px]">
                 <button type="button" data-wh-import class="font-medium text-gray-900 dark:text-white hover:underline">
                   <span data-requires-no-history>Import from Takeout</span><span data-requires-history class="hidden">Replace</span>
                 </button>
                 <button type="button" data-wh-insights data-requires-history class="hidden font-medium text-gray-900 dark:text-white hover:underline">Insights</button>
                 <button type="button" id="wh-settings-remove" data-requires-history class="hidden text-red-600 dark:text-red-400 hover:underline">Remove</button>
+              </div>
+            </div>
+
+            <div id="settings-account" class="hidden">
+              <hr class="my-1 border-gray-100 dark:border-white/10" />
+              <div class="px-4 py-3">
+                <span
+                  class="block text-[11px] font-semibold text-gray-400 dark:text-[#999999] uppercase tracking-[0.1em] mb-1.5"
+                  >YouTube account</span
+                >
+                <p class="text-xs text-gray-500 dark:text-[#aaaaaa] mb-2">
+                  Sign-ins last an hour. Your library stays saved on this device in between.
+                </p>
+                <div class="flex flex-wrap gap-x-3 gap-y-1 text-[13px]">
+                  <button type="button" id="settings-redownload-button" class="hidden font-medium text-gray-900 dark:text-white hover:underline">Re-download library</button>
+                  <button type="button" id="settings-signout-button" class="font-medium text-gray-900 dark:text-white hover:underline">Sign out</button>
+                </div>
               </div>
             </div>
 
@@ -1906,30 +1928,6 @@
                       </svg>
                     </button>
 
-                    <button
-                      id="clear-cache-button"
-                      type="button"
-                      title="Refresh from YouTube"
-                      aria-label="Refresh from YouTube"
-                      class="hidden p-1.5 rounded-md text-gray-400 dark:text-[#9a9a9a] hover:text-black dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="15"
-                        height="15"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <path
-                          d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"
-                        ></path>
-                        <path d="M21 3v5h-5"></path>
-                      </svg>
-                    </button>
                   </div>
 
                   <button
@@ -1970,6 +1968,19 @@
                     >0 videos</span
                   >
                 </div>
+              </div>
+
+              <!-- Last sync time + refresh (YouTube library only) -->
+              <div id="sync-status" class="hidden items-center">
+                <button
+                  id="sync-button"
+                  type="button"
+                  class="sync-button inline-flex items-center gap-1.5 rounded-md text-gray-500 dark:text-[#9a9a9a] hover:text-black dark:hover:text-white transition-colors tabular-nums"
+                  title="Check YouTube for new likes"
+                >
+                  <svg id="sync-icon" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path></svg>
+                  <span id="sync-label">Updated just now</span>
+                </button>
               </div>
 
               <!-- Play / Shuffle Current Results -->
@@ -2991,9 +3002,9 @@
         },
       );
     </script>
-    <script src="version.js?v=2.2.0"></script>
-    <script src="app.js?v=2.2.0"></script>
-    <script src="history.js?v=2.2.0"></script>
+    <script src="version.js?v=2.2.1"></script>
+    <script src="app.js?v=2.2.1"></script>
+    <script src="history.js?v=2.2.1"></script>
     <script>
       if ("serviceWorker" in navigator) {
         // Reload at most once when a genuinely newer SW_VERSION activates over an older running page
