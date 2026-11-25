@@ -324,9 +324,11 @@
         border-radius: 999px;
         color: var(--wh-muted);
       }
-      .wh-dialog-x:hover {
-        background: var(--wh-soft);
-        color: var(--wh-fg);
+      @media (hover: hover) and (pointer: fine) {
+        .wh-dialog-x:hover {
+          background: var(--wh-soft);
+          color: var(--wh-fg);
+        }
       }
       .wh-dialog-title {
         font-size: 19px;
@@ -370,17 +372,21 @@
         color: var(--wh-fg);
         background: transparent;
       }
-      .wh-btn:hover {
-        background: var(--wh-soft);
+      @media (hover: hover) and (pointer: fine) {
+        .wh-btn:hover {
+          background: var(--wh-soft);
+        }
       }
       .wh-btn-primary {
         background: var(--wh-fg);
         color: var(--wh-panel);
         border-color: var(--wh-fg);
       }
-      .wh-btn-primary:hover {
-        background: var(--wh-fg);
-        opacity: 0.88;
+      @media (hover: hover) and (pointer: fine) {
+        .wh-btn-primary:hover {
+          background: var(--wh-fg);
+          opacity: 0.88;
+        }
       }
       .wh-steps {
         margin-top: 16px;
@@ -485,9 +491,11 @@
         font-weight: 500;
         color: var(--wh-muted);
       }
-      .wh-back:hover {
-        background: var(--wh-soft);
-        color: var(--wh-fg);
+      @media (hover: hover) and (pointer: fine) {
+        .wh-back:hover {
+          background: var(--wh-soft);
+          color: var(--wh-fg);
+        }
       }
       .wh-title {
         font-size: 22px;
@@ -549,8 +557,10 @@
         border-radius: 999px;
         color: var(--wh-fg);
       }
-      .wh-stepper button:hover:not(:disabled) {
-        background: var(--wh-soft);
+      @media (hover: hover) and (pointer: fine) {
+        .wh-stepper button:hover:not(:disabled) {
+          background: var(--wh-soft);
+        }
       }
       .wh-stepper button:disabled {
         opacity: 0.3;
@@ -792,9 +802,11 @@
         text-overflow: ellipsis;
         white-space: nowrap;
       }
-      .wh-top:hover .wh-top-name,
-      .wh-list-item:hover .wh-name {
-        text-decoration: underline;
+      @media (hover: hover) and (pointer: fine) {
+        .wh-top:hover .wh-top-name,
+        .wh-list-item:hover .wh-name {
+          text-decoration: underline;
+        }
       }
       .wh-list {
         display: grid;
