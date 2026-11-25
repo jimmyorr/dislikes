@@ -71,6 +71,7 @@ const state = {
   lastNavDirection: 1,
   restrictedVideoIds: new Set(),
   progressInterval: null,
+  isSeeking: false,
   shuffleMode: false,
   shuffleHistory: [],
   shuffleHistoryPos: -1,
@@ -1111,7 +1112,17 @@ function setupEventListeners() {
     }
   });
 
+  // While dragging, only preview the time; seek once on release. Seeking on every input event
+  // fired dozens of network seeks per drag, and the 500ms progress tick snapped the thumb back.
   dom.fsPlayerProgress.addEventListener("input", (e) => {
+    state.isSeeking = true;
+    if (state.ytPlayer && state.ytPlayer.getDuration) {
+      const duration = state.ytPlayer.getDuration();
+      dom.fsPlayerTimeCurrent.innerText = formatTime((e.target.value / 100) * duration);
+    }
+  });
+  dom.fsPlayerProgress.addEventListener("change", (e) => {
+    state.isSeeking = false;
     if (state.ytPlayer && state.ytPlayer.getDuration) {
       const duration = state.ytPlayer.getDuration();
       const seekTo = (e.target.value / 100) * duration;
@@ -4512,12 +4523,12 @@ function startProgressInterval() {
       const duration = state.ytPlayer.getDuration();
       if (duration > 0) {
         const percent = (current / duration) * 100;
-        dom.fsPlayerProgress.value = percent;
+        if (!state.isSeeking) dom.fsPlayerProgress.value = percent;
         dom.bottomPlayerProgressBar.style.width = `${percent}%`;
         
         const currentFormatted = formatTime(current);
         const totalFormatted = formatTime(duration);
-        dom.fsPlayerTimeCurrent.innerText = currentFormatted;
+        if (!state.isSeeking) dom.fsPlayerTimeCurrent.innerText = currentFormatted;
         dom.fsPlayerTimeTotal.innerText = totalFormatted;
         dom.playerTimeCurrent.innerText = currentFormatted;
         dom.playerTimeTotal.innerText = totalFormatted;
