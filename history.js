@@ -1158,10 +1158,16 @@ function whLikesHtml(agg, ctx) {
     .filter(([v]) => !ctx.talk[v] && !ctx.liked.has(wh.data.videos[v].id))
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5);
+  // Likes go back much further than the history, so only tracks released after the history starts
+  // could really have been played; older likes with no plays say nothing.
+  const historyStart = wh.data.meta.first * 1000;
   let neverPlayed = 0;
   for (const v of state.videos) {
-    if (!checkIfDeleted(v) && (!wh.musicOnly || v.is_music) && whPlaysFor(v.video_id) === 0) neverPlayed++;
+    if (checkIfDeleted(v) || (wh.musicOnly && !v.is_music) || !v.published_at) continue;
+    if (Date.parse(v.published_at) >= historyStart && whPlaysFor(v.video_id) === 0) neverPlayed++;
   }
+  let likedTracksPlayed = 0;
+  for (const v of agg.trackCounts.keys()) if (ctx.liked.has(wh.data.videos[v].id)) likedTracksPlayed++;
   const list = notLiked
     .map(([v, c]) => {
       const hv = wh.data.videos[v];
@@ -1172,10 +1178,13 @@ function whLikesHtml(agg, ctx) {
     <header class="wh-panel-head"><span class="wh-card-title">Likes vs plays</span></header>
     <div class="wh-likes-stats">
       <div><span class="wh-fact-value">${Math.round(likedShare * 100)}%</span><span class="wh-fact-label">of plays were liked tracks</span></div>
-      <div><span class="wh-fact-value">${formatCount(neverPlayed)}</span><span class="wh-fact-label">liked tracks never played</span>${
-        neverPlayed ? `<button type="button" class="wh-link" data-wh-never>Show them</button>` : ""
-      }</div>
+      <div><span class="wh-fact-value">${formatCount(likedTracksPlayed)}</span><span class="wh-fact-label">liked tracks played</span></div>
     </div>
+    ${
+      neverPlayed
+        ? `<p class="wh-muted wh-small">${whPlural(neverPlayed, "liked track")} released since ${escapeHtml(WH_MONTH_FMT.format(new Date(historyStart)))}, when your history starts, ${neverPlayed === 1 ? "has" : "have"} no plays. <button type="button" class="wh-link" data-wh-never>Show all unplayed</button></p>`
+        : ""
+    }
     ${list ? `<p class="wh-subhead">Played most, not liked</p><ol class="wh-list wh-list-thumbs">${list}</ol>` : ""}
   </section>`;
 }
