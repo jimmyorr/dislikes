@@ -1890,6 +1890,13 @@ function normalizeStoredVideo(v, assumeAllMusic = false, index = 0) {
   };
 }
 
+function isLibraryUploadVideo(v) {
+  if (!v || typeof v !== "object") return false;
+  const artist = String(v.artist || v.snippet?.channelTitle || "").trim();
+  const title = String(v.title || v.snippet?.title || "");
+  return artist === "Music Library Uploads" || title.includes("TrackUniquenessId");
+}
+
 function normalizeImportedDataset(rawArray) {
   if (!Array.isArray(rawArray)) return [];
   const valid = rawArray.filter(
@@ -1897,7 +1904,7 @@ function normalizeImportedDataset(rawArray) {
       item &&
       typeof item === "object" &&
       item.video_id &&
-      (!item.title || !String(item.title).includes("TrackUniquenessId")),
+      !isLibraryUploadVideo(item),
   );
   const hasExplicitMusicFlag = valid.some((item) => typeof item.is_music === "boolean");
   return valid.map((item, idx) => normalizeStoredVideo(item, !hasExplicitMusicFlag, idx));
@@ -1909,7 +1916,9 @@ function loadFromCache(mode = state.mode) {
     if (data) {
       const parsed = JSON.parse(data);
       if (parsed && Array.isArray(parsed.videos)) {
-        parsed.videos = parsed.videos.map((v, idx) => normalizeStoredVideo(v, false, idx));
+        parsed.videos = parsed.videos
+          .filter((v) => !isLibraryUploadVideo(v))
+          .map((v, idx) => normalizeStoredVideo(v, false, idx));
       }
       return parsed;
     }
@@ -2129,14 +2138,15 @@ async function fetchVideos(pageToken = null) {
         total = result.pageInfo?.totalResults || 0;
       }
 
+      const slimmedItems = items.map(slimVideo).filter((v) => !isLibraryUploadVideo(v));
       if (isLoadMore) {
         const baseIdx = state.videos.length;
         state.videos = [
           ...state.videos,
-          ...items.map((it, idx) => ({ ...slimVideo(it), _origIdx: baseIdx + idx })),
+          ...slimmedItems.map((v, idx) => ({ ...v, _origIdx: baseIdx + idx })),
         ];
       } else {
-        state.videos = items.map((it, idx) => ({ ...slimVideo(it), _origIdx: idx }));
+        state.videos = slimmedItems.map((v, idx) => ({ ...v, _origIdx: idx }));
       }
 
       state.nextPageToken = nextToken;
@@ -2441,13 +2451,15 @@ function matchesVideoSearch(v, lowerQuery) {
 }
 
 function filterVideos() {
-  let results = [...state.videos];
+  let results = state.videos.filter((v) => !isLibraryUploadVideo(v));
 
   if (state.unavailableOnly) {
     results = results.filter((v) => checkIfDeleted(v));
-  }
-
-  if (state.musicOnly) {
+    if (state.musicOnly) {
+      // YouTube strips snippet.categoryId on deleted/private videos, so preserve is_deleted items here
+      results = results.filter((v) => v.is_music || v.is_deleted);
+    }
+  } else if (state.musicOnly) {
     results = results.filter((v) => v.is_music);
   }
 
@@ -2484,12 +2496,6 @@ function filterVideos() {
         return b.comments - a.comments;
       case "views-high":
         return b.views - a.views;
-      case "views-low": {
-        const aDel = checkIfDeleted(a);
-        const bDel = checkIfDeleted(b);
-        if (aDel !== bDel) return aDel ? 1 : -1;
-        return (a.views || 0) - (b.views || 0);
-      }
       case "channel-az": {
         const artistCompare = cleanArtistName(a.artist).localeCompare(
           cleanArtistName(b.artist),
@@ -3065,8 +3071,7 @@ function buildScrubberCheckpoints(videos = state.filteredVideos, sortBy = state.
         label = !isNaN(yr) ? String(yr) : "—";
         break;
       }
-      case "views-high":
-      case "views-low": {
+      case "views-high": {
         label = pickTier(v.views, VIEW_TIERS);
         break;
       }
@@ -3128,7 +3133,6 @@ function formatScrubberTooltip(checkpoint, video, index, total) {
       return { primary: String(yr), sub };
     }
     case "views-high":
-    case "views-low":
       return {
         primary: `${compact(video.views)} views`,
         sub: video.title || "",
@@ -3894,7 +3898,6 @@ function getDynamicMetadata(video) {
 
   switch (state.sortBy) {
     case "views-high":
-    case "views-low":
       return `${compact(video.views)} views`;
     case "duration-long":
       return formatDuration(video.duration);
