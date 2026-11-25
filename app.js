@@ -607,6 +607,8 @@ function init() {
   console.log(`Dislikes v${APP_VERSION}`);
   const verEl = document.getElementById("app-version");
   if (verEl) verEl.textContent = `v${APP_VERSION}`;
+  const settingsVerEl = document.getElementById("settings-app-version");
+  if (settingsVerEl) settingsVerEl.textContent = `Dislikes v${APP_VERSION}`;
 
   const params = new URLSearchParams(window.location.search || "");
   const modeParam = (params.get("mode") || "").toLowerCase();
