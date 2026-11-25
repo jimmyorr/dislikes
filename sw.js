@@ -1,4 +1,5 @@
-const SW_VERSION = "2.3.1";
+// "dev" is stamped with the real version by .github/workflows/deploy.yml at deploy. Never edit it in a PR.
+const SW_VERSION = "dev";
 const CACHE_NAME = `dislikes-v${SW_VERSION}`;
 const ASSETS = [
   "./",
