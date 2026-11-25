@@ -4217,7 +4217,10 @@ function initYTPlayer() {
           showPlayIconsReady();
 
           const isEmbedRestricted = event.data === 101 || event.data === 150;
-          if (isEmbedRestricted && state.currentVideoId) {
+          // 100 = removed or private. Like embed restrictions, it will never play here, so skip it
+          // during Play/Shuffle instead of stopping the queue.
+          const isUnplayable = isEmbedRestricted || event.data === 100;
+          if (isUnplayable && state.currentVideoId) {
             state.restrictedVideoIds.add(state.currentVideoId);
             updatePrevNextButtons();
             const hasPlayableNow = state.filteredVideos.some((v) => isVideoPlayable(v));
@@ -4235,9 +4238,16 @@ function initYTPlayer() {
 
             if (canAdvance && state.consecutiveAutoSkips < 15) {
               state.consecutiveAutoSkips++;
-              dom.playerArtist.innerHTML = `<span class="text-red-600 dark:text-red-400">Restricted on external sites — skipping...</span>`;
-              dom.fsPlayerArtist.innerHTML = `<span class="text-red-600 dark:text-red-400">Restricted on external sites — skipping...</span>`;
-              showToast("Playback restricted on external sites — skipping track");
+              const skipMsg = isEmbedRestricted
+                ? "Restricted on external sites — skipping..."
+                : "Video unavailable — skipping...";
+              dom.playerArtist.innerHTML = `<span class="text-red-600 dark:text-red-400">${skipMsg}</span>`;
+              dom.fsPlayerArtist.innerHTML = `<span class="text-red-600 dark:text-red-400">${skipMsg}</span>`;
+              showToast(
+                isEmbedRestricted
+                  ? "Playback restricted on external sites — skipping track"
+                  : "Video unavailable — skipping track",
+              );
               state.autoSkipTimeout = setTimeout(() => {
                 state.autoSkipTimeout = null;
                 if (state.lastNavDirection === -1 && !state.shuffleMode) {
