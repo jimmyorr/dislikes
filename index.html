@@ -468,6 +468,22 @@
               </select>
 
               <button
+                id="shuffle-play-button"
+                type="button"
+                title="Shuffle play"
+                aria-label="Shuffle play"
+                class="shrink-0 p-2 border border-gray-200 dark:border-gray-800 rounded text-gray-600 dark:text-gray-400 hover:text-black hover:border-black dark:hover:text-white dark:hover:border-white transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="16 3 21 3 21 8"></polyline>
+                  <line x1="4" y1="20" x2="21" y2="3"></line>
+                  <polyline points="21 16 21 21 16 21"></polyline>
+                  <line x1="15" y1="15" x2="21" y2="21"></line>
+                  <line x1="4" y1="4" x2="9" y2="9"></line>
+                </svg>
+              </button>
+
+              <button
                 id="copy-ids-button"
                 title="Copy video IDs as list"
                 class="hidden md:flex shrink-0 p-2 border border-gray-200 dark:border-gray-800 rounded text-gray-600 dark:text-gray-400 hover:text-black hover:border-black dark:hover:text-white dark:hover:border-white transition-colors"
@@ -538,13 +554,12 @@
               <button
                 id="clear-cache-button"
                 title="Refresh from YouTube"
+                aria-label="Refresh from YouTube"
                 class="shrink-0 p-2 border border-gray-200 dark:border-gray-800 rounded text-gray-600 dark:text-gray-400 hover:text-black hover:border-black dark:hover:text-white dark:hover:border-white transition-colors"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="17 1 21 5 17 9"></polyline>
-                  <path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
-                  <polyline points="7 23 3 19 7 15"></polyline>
-                  <path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
+                  <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"></path>
+                  <path d="M21 3v5h-5"></path>
                 </svg>
               </button>
             </div>
@@ -651,7 +666,16 @@
           </div>
 
           <!-- Right: Actions -->
-          <div class="flex items-center gap-4 shrink-0 w-1/3 justify-end">
+          <div class="flex items-center gap-1 sm:gap-2 shrink-0 w-1/3 justify-end">
+            <button id="player-shuffle" type="button" title="Toggle shuffle" aria-label="Toggle shuffle" aria-pressed="false" class="p-2 rounded-full text-gray-400 dark:text-gray-500 hover:text-black dark:hover:text-white transition-colors">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="16 3 21 3 21 8"></polyline>
+                <line x1="4" y1="20" x2="21" y2="3"></line>
+                <polyline points="21 16 21 21 16 21"></polyline>
+                <line x1="15" y1="15" x2="21" y2="21"></line>
+                <line x1="4" y1="4" x2="9" y2="9"></line>
+              </svg>
+            </button>
             <button id="player-close" type="button" title="Close player" aria-label="Close player" class="p-2 text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
             </button>
@@ -672,7 +696,15 @@
             <button id="fs-player-close" type="button" title="Minimize player" aria-label="Minimize player" class="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-black dark:hover:text-white transition-colors">
               <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
             </button>
-            <div class="w-12"></div><!-- Spacer -->
+            <button id="fs-player-shuffle" type="button" title="Toggle shuffle" aria-label="Toggle shuffle" aria-pressed="false" class="p-2.5 -mr-2 rounded-full text-gray-400 dark:text-gray-500 hover:text-black dark:hover:text-white transition-colors">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="16 3 21 3 21 8"></polyline>
+                <line x1="4" y1="20" x2="21" y2="3"></line>
+                <polyline points="21 16 21 21 16 21"></polyline>
+                <line x1="15" y1="15" x2="21" y2="21"></line>
+                <line x1="4" y1="4" x2="9" y2="9"></line>
+              </svg>
+            </button>
           </div>
 
           <!-- Art -->
@@ -780,6 +812,14 @@
       </button>
     </div>
 
+    <!-- Toast Notification -->
+    <div
+      id="toast"
+      role="status"
+      aria-live="polite"
+      class="fixed bottom-6 left-1/2 -translate-x-1/2 translate-y-2 opacity-0 pointer-events-none z-[70] px-4 py-2 rounded-full shadow-lg text-xs font-medium bg-black text-white dark:bg-white dark:text-black transition-all duration-200 max-w-[90vw] truncate"
+    ></div>
+
     <!-- Templates -->
     <template id="video-card-template">
       <div class="video-card group flex flex-col gap-3">
@@ -857,7 +897,9 @@
             "?r=" +
             Date.now();
         } catch (err) {
-          alert("Reset failed: " + err.message);
+          if (window.showToast) {
+            window.showToast("Reset failed: " + err.message, "error");
+          }
           if (btn) {
             btn.textContent = originalText;
             btn.disabled = false;
