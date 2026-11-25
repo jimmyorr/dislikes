@@ -770,7 +770,7 @@ function whRenderInsights() {
   if (decade || likes) sections.push(`<div class="wh-row">${likes}${decade}</div>`);
   root.innerHTML = sections.join("");
   if (!wh.albums) whLoadAlbumCache().then(() => wh.insightsOpen && whRenderInsights());
-  else if (!wh.albumLookup.running && !wh.albumLookup.error) whLookupAlbums();
+  else if (!wh.albumLookup.running && !wh.albumLookup.error) whLookupAlbums(agg.trackCounts);
 }
 
 function whHeroHtml(type, range, agg, prevAgg, prevLabel, prevFull) {
@@ -983,24 +983,34 @@ function whSaveAlbumCache() {
   storeSet(WH_ALBUMS_KEY, Object.fromEntries(wh.albums)).catch(() => {});
 }
 
-function whAlbumPending() {
-  if (!whHasData()) return [];
+// Quota: videos.list costs 1 unit per call of up to 50 IDs, from a daily quota shared by every user of
+// the app. So only the period on screen is looked up, most played first, capped per period and per session.
+const WH_ALBUM_PERIOD_CAP = 1000; // tracks per period (20 calls)
+const WH_ALBUM_SESSION_CAP = 2500; // tracks per page load (50 calls)
+let whAlbumSessionLookups = 0;
+
+function whAlbumPending(trackCounts) {
+  if (!whHasData() || !trackCounts) return [];
   const vids = wh.data.videos;
   const liked = whLikedMap();
   const todo = [];
-  for (let i = 0; i < vids.length; i++) {
-    if (!wh.plays[i] || !whIsTopic(vids[i].channel) || (wh.albums && wh.albums.has(vids[i].id))) continue;
+  for (const [i, c] of trackCounts) {
+    if (!whIsTopic(vids[i].channel) || (wh.albums && wh.albums.has(vids[i].id))) continue;
     const lv = liked.get(vids[i].id);
     if (lv && lv.album) continue;
-    todo.push(i);
+    todo.push([i, c]);
   }
-  return todo.sort((x, y) => wh.plays[y] - wh.plays[x]);
+  const room = Math.min(WH_ALBUM_PERIOD_CAP, WH_ALBUM_SESSION_CAP - whAlbumSessionLookups);
+  return todo
+    .sort((x, y) => y[1] - x[1])
+    .slice(0, Math.max(0, room))
+    .map(([i]) => i);
 }
 
-async function whLookupAlbums() {
+async function whLookupAlbums(trackCounts) {
   if (wh.albumLookup.running || !state.accessToken || !whHasData()) return;
   await whLoadAlbumCache();
-  const todo = whAlbumPending();
+  const todo = whAlbumPending(trackCounts);
   if (!todo.length) return;
   const vids = wh.data.videos;
   const run = (wh.albumLookup = { running: true, done: 0, total: todo.length, error: "" });
@@ -1021,6 +1031,7 @@ async function whLookupAlbums() {
       }
       for (const id of ids) if (!seen.has(id)) wh.albums.set(id, 0); // removed videos
       run.done += ids.length;
+      whAlbumSessionLookups += ids.length;
       const batch = s / 50;
       if (batch % 10 === 9) whSaveAlbumCache();
       if (batch < 4 || batch % 8 === 7) rerender();
@@ -1041,6 +1052,15 @@ function whAlbumOf(v, ctx) {
   if (lv && lv.album) return { name: lv.album, date: lv.published_at ? lv.published_at.slice(0, 10) : "" };
   const c = wh.albums ? wh.albums.get(id) : null;
   return c ? { name: c[0], date: c[1] } : null;
+}
+
+// Only compare with the last period once its tracks have been looked up too (lookups are lazy)
+function whAlbumsCovered(trackCounts, ctx) {
+  const vids = wh.data.videos;
+  for (const v of trackCounts.keys()) {
+    if (whIsTopic(vids[v].channel) && !whAlbumOf(v, ctx) && !(wh.albums && wh.albums.has(vids[v].id))) return false;
+  }
+  return true;
 }
 
 const whNorm = (x) => String(x || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
@@ -1103,12 +1123,12 @@ function whAlbumsCard(agg, prevAgg, ctx) {
     "wh-card-albums wh-card-art",
     "Albums",
     albums.size,
-    prevAlbums && !L.running ? prevAlbums.size : null,
+    prevAlbums && !L.running && whAlbumsCovered(prevAgg.trackCounts, ctx) ? prevAlbums.size : null,
     null,
     "",
     firstHtml,
     rest,
-    progress || "Album names from YouTube. Singles are left out.",
+    progress || "Album names from YouTube, looked up for the period you view. Singles are left out.",
   );
 }
 
