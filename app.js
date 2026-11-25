@@ -1114,6 +1114,8 @@ function closePlayer() {
   state.currentVideoIndex = -1;
   state.currentVideoId = null;
   state.pendingVideoId = null;
+  syncNowPlayingCards();
+  setAudioPlaying(false);
   dom.bottomPlayer.classList.add("translate-y-full", "invisible");
   closeFsPlayer(false);
   document.body.style.paddingBottom = "0px";
@@ -3300,6 +3302,8 @@ function bindVideoCard(card, video, index, deferThumbnail = false) {
   const baseUrl = video.is_music ? "https://music.youtube.com" : "https://www.youtube.com";
 
   card.dataset.videoIndex = String(index);
+  card.dataset.videoId = video.video_id;
+  card.classList.toggle("is-current", video.video_id === state.currentVideoId);
   img.alt = title;
   playBtn.setAttribute("aria-label", isDeleted ? `${title} (unavailable)` : `Play ${title}`);
 
@@ -4819,7 +4823,23 @@ function initYTPlayer() {
   };
 }
 
+// Mark the current track's card (equalizer badge) and drop the mark from the rest.
+function syncNowPlayingCards() {
+  const id = state.currentVideoId;
+  for (const card of document.querySelectorAll(".video-card[data-video-id]")) {
+    card.classList.toggle("is-current", !!id && card.dataset.videoId === id);
+  }
+}
+
+// Drives whether the now-playing bars animate or sit still.
+function setAudioPlaying(isPlaying) {
+  document.body.classList.toggle("audio-playing", isPlaying);
+}
+
 function onPlayerStateChange(event) {
+  if (event.data === 1 || event.data === 2 || event.data === 0) {
+    setAudioPlaying(event.data === 1);
+  }
   if (event.data === 1) { // Playing
     state.autoplayRequested = false;
     state.consecutiveAutoSkips = 0;
@@ -4908,6 +4928,8 @@ function playVideo(
   state.currentVideoId = videoId;
   state.currentVideoIndex = index;
   updatePrevNextButtons();
+  syncNowPlayingCards();
+  setAudioPlaying(false);
 
   dom.bottomPlayer.classList.remove("translate-y-full", "invisible");
   document.body.style.paddingBottom = "72px"; // Height of bottom player
