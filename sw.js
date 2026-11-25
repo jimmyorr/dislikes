@@ -1,5 +1,5 @@
-importScripts("version.js?v=2.0.5");
-const CACHE_NAME = `dislikes-v${APP_VERSION}`;
+const SW_VERSION = "2.0.6";
+const CACHE_NAME = `dislikes-v${SW_VERSION}`;
 const ASSETS = [
   "./",
   "./index.html",
@@ -12,28 +12,36 @@ const ASSETS = [
 ];
 
 self.addEventListener("install", (event) => {
-  // Force this SW to activate immediately
-  self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)),
+    (async () => {
+      const cache = await caches.open(CACHE_NAME);
+      await Promise.all(
+        ASSETS.map((url) =>
+          fetch(new Request(url, { cache: "reload" })).then((res) => {
+            if (res.ok) return cache.put(url, res);
+          }),
+        ),
+      );
+      await self.skipWaiting();
+    })(),
   );
 });
 
 self.addEventListener("activate", (event) => {
-  // Take control of all open clients immediately
-  event.waitUntil(clients.claim());
-
-  // Delete old caches
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME && cacheName.startsWith("dislikes-v")) {
-            return caches.delete(cacheName);
-          }
-        }),
+    (async () => {
+      const cacheNames = await caches.keys();
+      await Promise.all(
+        cacheNames
+          .filter((name) => name !== CACHE_NAME && name.startsWith("dislikes-v"))
+          .map((name) => caches.delete(name)),
       );
-    }),
+      await self.clients.claim();
+      const allClients = await self.clients.matchAll({ type: "window" });
+      for (const client of allClients) {
+        client.postMessage({ type: "SW_ACTIVATED", version: SW_VERSION });
+      }
+    })(),
   );
 });
 

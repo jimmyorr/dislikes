@@ -82,7 +82,7 @@
       gtag("config", "G-6RNVL7JZVJ");
     </script>
 
-    <link rel="stylesheet" href="styles.css?v=2.0.5" />
+    <link rel="stylesheet" href="styles.css?v=2.0.6" />
     <script>
       (function () {
         try {
@@ -998,35 +998,51 @@
       );
 
     </script>
-    <script src="version.js?v=2.0.5"></script>
-    <script src="app.js?v=2.0.5"></script>
+    <script src="version.js?v=2.0.6"></script>
+    <script src="app.js?v=2.0.6"></script>
     <script>
       if ("serviceWorker" in navigator) {
-        let refreshing = false;
-
-        // Detect when the SW has taken control (i.e. updated) and reload
-        navigator.serviceWorker.addEventListener("controllerchange", () => {
-          if (refreshing) return;
-          refreshing = true;
+        // Reload at most once when a genuinely newer SW_VERSION activates over an older running page
+        navigator.serviceWorker.addEventListener("message", (event) => {
+          const nextVersion =
+            event.data && event.data.type === "SW_ACTIVATED" && event.data.version;
+          if (!nextVersion || typeof APP_VERSION === "undefined" || nextVersion === APP_VERSION) {
+            return;
+          }
+          try {
+            if (sessionStorage.getItem("dislikes-sw-reloaded") === nextVersion) {
+              return;
+            }
+            sessionStorage.setItem("dislikes-sw-reloaded", nextVersion);
+          } catch {
+            return;
+          }
           window.location.reload();
         });
 
         window.addEventListener("load", () => {
-          navigator.serviceWorker
-            .register("sw.js", { updateViaCache: "none" })
-            .then((reg) => {
-              // Check for updates periodically
-              setInterval(
-                () => {
-                  reg.update();
-                },
-                60 * 60 * 1000,
-              ); // Check every hour
+          let lastCheck = Date.now();
+          const maybeUpdate = (reg) => {
+            const now = Date.now();
+            if (now - lastCheck < 60 * 1000) return;
+            lastCheck = now;
+            reg.update().catch(() => {});
+          };
 
-              // Check for updates when the user returns to the tab/app
+          navigator.serviceWorker
+            .register("sw.js")
+            .then((reg) => {
+              setInterval(() => reg.update().catch(() => {}), 60 * 60 * 1000);
+
               document.addEventListener("visibilitychange", () => {
                 if (document.visibilityState === "visible") {
-                  reg.update();
+                  maybeUpdate(reg);
+                }
+              });
+
+              window.addEventListener("pageshow", (e) => {
+                if (e.persisted) {
+                  maybeUpdate(reg);
                 }
               });
             })
