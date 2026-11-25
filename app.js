@@ -937,6 +937,31 @@ function setupEventListeners() {
 
   observer.observe(dom.scrollSentinel);
 
+  // Delegated card playback handler (zero per-card listener closures)
+  dom.videoGrid.addEventListener("click", (e) => {
+    const playBtn = e.target.closest?.(".video-play-btn");
+    if (!playBtn || playBtn.disabled) return;
+    const card = playBtn.closest?.(".video-card");
+    if (!card) return;
+    const idx = parseInt(card.dataset.videoIndex, 10);
+    if (isNaN(idx) || idx < 0 || idx >= state.filteredVideos.length) return;
+    const video = state.filteredVideos[idx];
+    if (!video || checkIfDeleted(video)) return;
+    const baseUrl = video.is_music ? "https://music.youtube.com" : "https://www.youtube.com";
+    const channelUrl = video.channel_id
+      ? `${baseUrl}/channel/${encodeURIComponent(video.channel_id)}`
+      : null;
+    const thumbnail = `https://i.ytimg.com/vi/${video.video_id}/mqdefault.jpg`;
+    playVideo(
+      video.video_id,
+      video.title || "Unavailable",
+      video.artist || "Unknown channel",
+      thumbnail,
+      channelUrl,
+      idx,
+    );
+  });
+
   // Fast Scrubber & Virtualized Grid Scroll / Resize Logic
   const setScrubberThumbActive = (active) => {
     if (!dom.scrubberThumb) return;
@@ -946,7 +971,7 @@ function setupEventListeners() {
     dom.scrubberThumb.classList.toggle("dark:bg-white/15", !active);
   };
 
-  const jumpToCheckpoint = (cpIdx, edgeOverride = null) => {
+  const jumpToCheckpoint = (cpIdx, edgeOverride = null, deferThumbs = false) => {
     const checkpoints = scrubberState.checkpoints;
     if (!checkpoints.length || state.filteredVideos.length === 0) return;
     const clampedIdx = Math.max(0, Math.min(checkpoints.length - 1, cpIdx));
@@ -959,20 +984,20 @@ function setupEventListeners() {
         : edge === "bottom"
           ? 1
           : (clampedIdx + 0.5) / checkpoints.length;
-    scrollToVideoIndex(targetItem, edge);
+    scrollToVideoIndex(targetItem, edge, deferThumbs);
     updateScrubberPositionUI(fraction, clampedIdx, targetItem, true);
   };
 
   if (dom.scrubberTopBtn) {
     dom.scrubberTopBtn.addEventListener("click", () => {
-      jumpToCheckpoint(0, "top");
+      jumpToCheckpoint(0, "top", false);
       scheduleHideScrubberTooltip(650);
     });
   }
 
   if (dom.scrubberBottomBtn) {
     dom.scrubberBottomBtn.addEventListener("click", () => {
-      jumpToCheckpoint(scrubberState.checkpoints.length - 1, "bottom");
+      jumpToCheckpoint(scrubberState.checkpoints.length - 1, "bottom", false);
       scheduleHideScrubberTooltip(650);
     });
   }
@@ -980,26 +1005,53 @@ function setupEventListeners() {
   if (dom.scrubberTrack) {
     let activePointerId = null;
     let startClientY = 0;
+    let latestClientY = 0;
     let hasDragged = false;
     let handledByPointer = false;
+    let scrubMoveRaf = null;
+    let scrubPauseTimer = null;
+    let pendingTarget = null;
+    let committedItemIndex = -1;
 
-    const scrubAtClientY = (clientY) => {
+    const clearScrubTimers = () => {
+      if (scrubMoveRaf) {
+        cancelAnimationFrame(scrubMoveRaf);
+        scrubMoveRaf = null;
+      }
+      if (scrubPauseTimer) {
+        clearTimeout(scrubPauseTimer);
+        scrubPauseTimer = null;
+      }
+    };
+
+    const previewTargetAtClientY = (clientY) => {
       const rect = dom.scrubberTrack.getBoundingClientRect();
       const height = Math.max(1, rect.height);
       const fraction = Math.max(0, Math.min(1, (clientY - rect.top) / height));
       const { cpIdx, itemIndex, edge } = fractionToScrubberTarget(fraction);
-      scrollToVideoIndex(itemIndex, edge);
+      pendingTarget = { fraction, cpIdx, itemIndex, edge };
       updateScrubberPositionUI(fraction, cpIdx, itemIndex, true);
+    };
+
+    const commitPendingTarget = (deferThumbs) => {
+      if (!pendingTarget) return;
+      if (!deferThumbs || pendingTarget.itemIndex !== committedItemIndex) {
+        committedItemIndex = pendingTarget.itemIndex;
+        scrollToVideoIndex(pendingTarget.itemIndex, pendingTarget.edge, deferThumbs);
+      }
     };
 
     dom.scrubberTrack.addEventListener("pointerdown", (e) => {
       if (e.button && e.button !== 0) return;
       if (!scrubberState.checkpoints.length) return;
       e.preventDefault();
+      clearScrubTimers();
       handledByPointer = true;
       activePointerId = e.pointerId;
       startClientY = e.clientY;
+      latestClientY = e.clientY;
       hasDragged = false;
+      committedItemIndex = -1;
       scrubberState.isDragging = true;
       setScrubberThumbActive(true);
       try {
@@ -1012,24 +1064,58 @@ function setupEventListeners() {
       if (cpEl) {
         const k = parseInt(cpEl.dataset.checkpointIdx, 10);
         if (!isNaN(k)) {
-          jumpToCheckpoint(k);
+          const checkpoints = scrubberState.checkpoints;
+          const clampedIdx = Math.max(0, Math.min(checkpoints.length - 1, k));
+          const cp = checkpoints[clampedIdx];
+          const edge = clampedIdx === 0 ? "top" : null;
+          const fraction = edge === "top" ? 0 : (clampedIdx + 0.5) / checkpoints.length;
+          pendingTarget = { fraction, cpIdx: clampedIdx, itemIndex: cp.startIndex, edge };
+          updateScrubberPositionUI(fraction, clampedIdx, cp.startIndex, true);
+          scrubPauseTimer = setTimeout(() => {
+            scrubPauseTimer = null;
+            commitPendingTarget(true);
+          }, 110);
           return;
         }
       }
-      scrubAtClientY(e.clientY);
+
+      previewTargetAtClientY(e.clientY);
+      scrubPauseTimer = setTimeout(() => {
+        scrubPauseTimer = null;
+        commitPendingTarget(true);
+      }, 110);
     });
 
     dom.scrubberTrack.addEventListener("pointermove", (e) => {
       if (!scrubberState.isDragging || e.pointerId !== activePointerId) return;
       if (!hasDragged && Math.abs(e.clientY - startClientY) < 4) return;
       hasDragged = true;
-      scrubAtClientY(e.clientY);
+      latestClientY = e.clientY;
+
+      if (scrubPauseTimer) {
+        clearTimeout(scrubPauseTimer);
+      }
+      // Only commit a discrete scroll jump when finger pauses briefly (prevents iOS WebKit TileController OOM)
+      scrubPauseTimer = setTimeout(() => {
+        scrubPauseTimer = null;
+        commitPendingTarget(true);
+      }, 110);
+
+      if (!scrubMoveRaf) {
+        scrubMoveRaf = requestAnimationFrame(() => {
+          scrubMoveRaf = null;
+          if (scrubberState.isDragging) {
+            previewTargetAtClientY(latestClientY);
+          }
+        });
+      }
     });
 
     const finishPointerScrub = (e) => {
       if (!scrubberState.isDragging || (activePointerId !== null && e.pointerId !== activePointerId)) {
         return;
       }
+      clearScrubTimers();
       try {
         dom.scrubberTrack.releasePointerCapture?.(e.pointerId);
       } catch {
@@ -1038,6 +1124,13 @@ function setupEventListeners() {
       activePointerId = null;
       scrubberState.isDragging = false;
       setScrubberThumbActive(false);
+
+      if (e.type !== "pointercancel" && pendingTarget) {
+        commitPendingTarget(false);
+      } else {
+        hydrateVisibleThumbnails();
+      }
+      pendingTarget = null;
       scheduleHideScrubberTooltip(500);
       setTimeout(() => {
         handledByPointer = false;
@@ -1053,7 +1146,7 @@ function setupEventListeners() {
       if (cpEl) {
         const k = parseInt(cpEl.dataset.checkpointIdx, 10);
         if (!isNaN(k)) {
-          jumpToCheckpoint(k);
+          jumpToCheckpoint(k, null, false);
           scheduleHideScrubberTooltip(650);
         }
       }
@@ -1100,7 +1193,14 @@ function setupEventListeners() {
       scrollRafPending = true;
       requestAnimationFrame(() => {
         scrollRafPending = false;
-        renderVirtualGrid();
+        const currentY = window.scrollY || 0;
+        const delta = Math.abs(currentY - virtualGrid.lastScrollY);
+        virtualGrid.lastScrollY = currentY;
+        const fastFlick = delta > 260;
+        renderVirtualGrid(false, null, fastFlick);
+        if (fastFlick) {
+          scheduleThumbnailHydration(140);
+        }
         syncScrubberFromScroll();
       });
     },
@@ -2008,7 +2108,8 @@ function applyCompactMode(isCompact) {
 
 // --- Virtualized Grid & Fast Scrubber ---
 
-const GRID_OVERSCAN_ROWS = 6;
+const BLANK_PIXEL =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
 
 const virtualGrid = {
   startRow: -1,
@@ -2017,8 +2118,11 @@ const virtualGrid = {
   rowHeight: 0,
   rowGap: 0,
   renderedCards: new Map(),
+  cardPool: [],
   listVersion: 0,
   renderedVersion: -1,
+  lastScrollY: 0,
+  hydrateTimer: null,
 };
 
 const scrubberState = {
@@ -2029,6 +2133,10 @@ const scrubberState = {
   layoutRaf: null,
   renderedSignature: "",
 };
+
+function getOverscanRows() {
+  return (window.innerWidth || 1280) < 768 ? 2 : 4;
+}
 
 function getGridColumns() {
   if (dom.videoGrid && window.getComputedStyle && !dom.videoGrid.classList.contains("hidden")) {
@@ -2057,7 +2165,32 @@ function getRowStride() {
   return state.compactMode ? 240 : 320;
 }
 
+function teardownCardImage(card) {
+  const img = card?._refs?.img;
+  if (!img) return;
+  img.onerror = null;
+  delete img.dataset.pendingSrc;
+  img.removeAttribute("src");
+}
+
+function releaseVideoCard(card) {
+  if (!card) return;
+  teardownCardImage(card);
+  if (card.remove) card.remove();
+  else if (card.parentNode) card.parentNode.removeChild(card);
+  if (virtualGrid.cardPool.length < 48) {
+    virtualGrid.cardPool.push(card);
+  }
+}
+
 function resetVirtualGridDOM() {
+  if (virtualGrid.hydrateTimer) {
+    clearTimeout(virtualGrid.hydrateTimer);
+    virtualGrid.hydrateTimer = null;
+  }
+  for (const card of virtualGrid.renderedCards.values()) {
+    releaseVideoCard(card);
+  }
   virtualGrid.renderedCards.clear();
   virtualGrid.startRow = -1;
   virtualGrid.endRow = -1;
@@ -2068,92 +2201,130 @@ function resetVirtualGridDOM() {
   }
 }
 
-function createVideoCardElement(video) {
-  const clone = dom.videoTemplate.content.cloneNode(true);
-
-  const title = video.title || "Unavailable";
-  const isDeleted = checkIfDeleted(video);
+function hydrateCardThumbnail(card, video) {
+  const refs = card?._refs;
+  if (!refs?.img || !video) return;
+  const img = refs.img;
+  const overlay = refs.overlay;
   const thumbnail = `https://i.ytimg.com/vi/${video.video_id}/mqdefault.jpg`;
+  delete img.dataset.pendingSrc;
 
-  const img = clone.querySelector(".video-thumbnail");
-  const overlay = clone.querySelector(".deleted-overlay");
-
-  img.src = thumbnail;
-  img.alt = title;
-
-  if (isDeleted) {
-    overlay.classList.remove("hidden");
-    overlay.classList.add("flex");
+  if (checkIfDeleted(video)) {
+    img.onerror = null;
+    img.src = BLANK_PIXEL;
+    return;
   }
 
   img.onerror = () => {
-    if (!video._is404) {
-      video._is404 = true;
-    }
+    video._is404 = true;
     overlay.classList.remove("hidden");
     overlay.classList.add("flex");
-    img.src =
-      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+    img.onerror = null;
+    img.src = BLANK_PIXEL;
   };
+  img.src = thumbnail;
+}
 
-  const baseUrl = video.is_music ? "https://music.youtube.com" : "https://www.youtube.com";
+function hydrateVisibleThumbnails() {
+  if (virtualGrid.hydrateTimer) {
+    clearTimeout(virtualGrid.hydrateTimer);
+    virtualGrid.hydrateTimer = null;
+  }
+  for (const [idx, card] of virtualGrid.renderedCards.entries()) {
+    if (card?._refs?.img?.dataset?.pendingSrc) {
+      const video = state.filteredVideos[idx];
+      if (video) hydrateCardThumbnail(card, video);
+    }
+  }
+}
 
-  const playBtn = clone.querySelector(".video-play-btn");
-  if (!isDeleted) {
-    playBtn.addEventListener("click", () => {
-      const index = state.filteredVideos.findIndex((v) => v.video_id === video.video_id);
-      const channelUrl = video.channel_id ? `${baseUrl}/channel/${encodeURIComponent(video.channel_id)}` : null;
-      playVideo(video.video_id, title, video.artist || "Unknown channel", thumbnail, channelUrl, index);
-    });
-  } else {
-    playBtn.classList.add("cursor-not-allowed");
-    playBtn.disabled = true;
+function scheduleThumbnailHydration(delayMs = 120) {
+  if (virtualGrid.hydrateTimer) {
+    clearTimeout(virtualGrid.hydrateTimer);
+  }
+  virtualGrid.hydrateTimer = setTimeout(() => {
+    virtualGrid.hydrateTimer = null;
+    hydrateVisibleThumbnails();
+  }, delayMs);
+}
+
+function acquireVideoCard(video, index, deferThumbnail = false) {
+  let card = virtualGrid.cardPool.pop();
+  if (!card) {
+    const clone = dom.videoTemplate.content.cloneNode(true);
+    card = clone.firstElementChild || clone;
+    card._refs = {
+      playBtn: card.querySelector(".video-play-btn"),
+      img: card.querySelector(".video-thumbnail"),
+      overlay: card.querySelector(".deleted-overlay"),
+      links: Array.from(card.querySelectorAll(".video-link")),
+      titleEl: card.querySelector(".video-title"),
+      channelEl: card.querySelector(".channel-title"),
+      metadataEl: card.querySelector(".dynamic-metadata"),
+    };
   }
 
-  const links = clone.querySelectorAll(".video-link");
-  links.forEach((l) => {
-    l.href = `${baseUrl}/watch?v=${encodeURIComponent(video.video_id)}`;
-  });
+  const { playBtn, img, overlay, links, titleEl, channelEl, metadataEl } = card._refs;
+  const title = video.title || "Unavailable";
+  const isDeleted = checkIfDeleted(video);
+  const thumbnail = `https://i.ytimg.com/vi/${video.video_id}/mqdefault.jpg`;
+  const baseUrl = video.is_music ? "https://music.youtube.com" : "https://www.youtube.com";
 
-  const titleEl = clone.querySelector(".video-title");
+  card.dataset.videoIndex = String(index);
+  img.alt = title;
+
+  overlay.classList.toggle("hidden", !isDeleted);
+  overlay.classList.toggle("flex", isDeleted);
+
+  playBtn.disabled = Boolean(isDeleted);
+  playBtn.classList.toggle("cursor-not-allowed", Boolean(isDeleted));
+
+  if (deferThumbnail) {
+    img.onerror = null;
+    img.removeAttribute("src");
+    img.dataset.pendingSrc = thumbnail;
+  } else {
+    hydrateCardThumbnail(card, video);
+  }
+
+  const watchHref = `${baseUrl}/watch?v=${encodeURIComponent(video.video_id)}`;
+  for (let i = 0; i < links.length; i++) {
+    links[i].href = watchHref;
+  }
+
   titleEl.innerHTML = highlightMatch(title, state.debouncedSearchTerm);
 
-  const channelEl = clone.querySelector(".channel-title");
   const chName = cleanArtistName(video.artist || "Unknown channel");
   const chId = video.channel_id;
-
   if (chId && !isDeleted) {
     channelEl.innerHTML = `<a href="${baseUrl}/channel/${encodeURIComponent(chId)}" target="_blank" rel="noopener noreferrer" class="hover:text-black dark:hover:text-white hover:underline">${highlightMatch(chName, state.debouncedSearchTerm)}</a>`;
   } else {
     channelEl.innerHTML = highlightMatch(chName, state.debouncedSearchTerm);
   }
 
-  const metadataEl = clone.querySelector(".dynamic-metadata");
   metadataEl.textContent = isDeleted ? "No stats" : getDynamicMetadata(video);
 
-  return clone.firstElementChild || clone;
+  return card;
 }
 
-function renderVirtualGrid(force = false, anchorRow = null) {
+function renderVirtualGrid(force = false, anchorRow = null, deferThumbnails = false) {
   if (!dom.videoGrid || dom.videoGrid.classList.contains("hidden")) return;
 
   const totalItems = state.filteredVideos.length;
   if (totalItems === 0) {
-    dom.videoGrid.innerHTML = "";
     resetVirtualGridDOM();
+    dom.videoGrid.innerHTML = "";
     return;
   }
 
   if (virtualGrid.renderedVersion !== virtualGrid.listVersion) {
-    virtualGrid.renderedCards.clear();
+    resetVirtualGridDOM();
     dom.videoGrid.innerHTML = "";
-    virtualGrid.startRow = -1;
-    virtualGrid.endRow = -1;
     virtualGrid.renderedVersion = virtualGrid.listVersion;
     force = true;
   }
 
-  const cols = getGridColumns();
+  const cols = virtualGrid.cols || getGridColumns();
   if (cols !== virtualGrid.cols) {
     virtualGrid.cols = cols;
     virtualGrid.rowHeight = 0;
@@ -2163,6 +2334,7 @@ function renderVirtualGrid(force = false, anchorRow = null) {
   const totalRows = Math.ceil(totalItems / cols);
   const stride = getRowStride();
   const viewportH = window.innerHeight || 800;
+  const overscan = getOverscanRows();
 
   let visStartRow = 0;
   let visEndRow = Math.min(totalRows, Math.ceil(viewportH / stride) + 1);
@@ -2171,22 +2343,24 @@ function renderVirtualGrid(force = false, anchorRow = null) {
     visStartRow = Math.min(totalRows - 1, Math.max(0, anchorRow));
     visEndRow = Math.min(totalRows, visStartRow + Math.ceil(viewportH / stride) + 1);
   } else if (dom.videoGrid.getBoundingClientRect) {
-    const gridTopDocY = dom.videoGrid.getBoundingClientRect().top + (window.scrollY || 0);
-    const relTop = Math.max(0, (window.scrollY || 0) - gridTopDocY);
-    const relBottom = Math.max(0, (window.scrollY || 0) + viewportH - gridTopDocY);
+    const scrollY = window.scrollY || 0;
+    const gridTopDocY = dom.videoGrid.getBoundingClientRect().top + scrollY;
+    const relTop = Math.max(0, scrollY - gridTopDocY);
+    const relBottom = Math.max(0, scrollY + viewportH - gridTopDocY);
     visStartRow = Math.min(totalRows - 1, Math.max(0, Math.floor(relTop / stride)));
     visEndRow = Math.min(totalRows, Math.max(visStartRow + 1, Math.ceil(relBottom / stride)));
   }
 
-  const nextStartRow = Math.max(0, visStartRow - GRID_OVERSCAN_ROWS);
-  const nextEndRow = Math.min(totalRows, visEndRow + GRID_OVERSCAN_ROWS);
+  const nextStartRow = Math.max(0, visStartRow - overscan);
+  const nextEndRow = Math.min(totalRows, visEndRow + overscan);
 
   if (!force && virtualGrid.startRow >= 0) {
     const topCovered =
-      virtualGrid.startRow === 0 ? nextStartRow === 0 : visStartRow >= virtualGrid.startRow + 2;
+      virtualGrid.startRow === 0 ? nextStartRow === 0 : visStartRow >= virtualGrid.startRow + 1;
     const bottomCovered =
-      virtualGrid.endRow === totalRows ? nextEndRow === totalRows : visEndRow <= virtualGrid.endRow - 2;
+      virtualGrid.endRow === totalRows ? nextEndRow === totalRows : visEndRow <= virtualGrid.endRow - 1;
     if (topCovered && bottomCovered) {
+      if (!deferThumbnails) hydrateVisibleThumbnails();
       return;
     }
   }
@@ -2199,8 +2373,7 @@ function renderVirtualGrid(force = false, anchorRow = null) {
 
   for (const [idx, el] of virtualGrid.renderedCards.entries()) {
     if (idx < startIndex || idx >= endIndex) {
-      if (el.remove) el.remove();
-      else if (el.parentNode) el.parentNode.removeChild(el);
+      releaseVideoCard(el);
       virtualGrid.renderedCards.delete(idx);
     } else {
       if (idx < overlapStart) overlapStart = idx;
@@ -2212,7 +2385,7 @@ function renderVirtualGrid(force = false, anchorRow = null) {
     dom.videoGrid.innerHTML = "";
     const frag = document.createDocumentFragment();
     for (let i = startIndex; i < endIndex; i++) {
-      const cardEl = createVideoCardElement(state.filteredVideos[i]);
+      const cardEl = acquireVideoCard(state.filteredVideos[i], i, deferThumbnails);
       virtualGrid.renderedCards.set(i, cardEl);
       frag.appendChild(cardEl);
     }
@@ -2222,7 +2395,7 @@ function renderVirtualGrid(force = false, anchorRow = null) {
       const firstExisting = dom.videoGrid.firstElementChild;
       const topFrag = document.createDocumentFragment();
       for (let i = startIndex; i < overlapStart; i++) {
-        const cardEl = createVideoCardElement(state.filteredVideos[i]);
+        const cardEl = acquireVideoCard(state.filteredVideos[i], i, deferThumbnails);
         virtualGrid.renderedCards.set(i, cardEl);
         topFrag.appendChild(cardEl);
       }
@@ -2235,7 +2408,7 @@ function renderVirtualGrid(force = false, anchorRow = null) {
     if (endIndex > overlapEnd) {
       const bottomFrag = document.createDocumentFragment();
       for (let i = overlapEnd; i < endIndex; i++) {
-        const cardEl = createVideoCardElement(state.filteredVideos[i]);
+        const cardEl = acquireVideoCard(state.filteredVideos[i], i, deferThumbnails);
         virtualGrid.renderedCards.set(i, cardEl);
         bottomFrag.appendChild(cardEl);
       }
@@ -2260,6 +2433,12 @@ function renderVirtualGrid(force = false, anchorRow = null) {
   dom.videoGrid.style.paddingBottom = `${Math.max(0, totalRows - nextEndRow) * finalStride}px`;
   virtualGrid.startRow = nextStartRow;
   virtualGrid.endRow = nextEndRow;
+
+  if (deferThumbnails) {
+    scheduleThumbnailHydration(150);
+  } else {
+    hydrateVisibleThumbnails();
+  }
 }
 
 function getAlphaBucket(rawStr, seenLatin) {
@@ -2659,21 +2838,22 @@ function syncScrubberFromScroll() {
   updateScrubberPositionUI(fraction, cpIdx, itemIndex, false);
 }
 
-function scrollToVideoIndex(targetIndex, edge = null) {
+function scrollToVideoIndex(targetIndex, edge = null, deferThumbnails = false) {
   const total = state.filteredVideos.length;
   if (total === 0 || !dom.videoGrid) return;
 
   const clampedIndex = Math.max(0, Math.min(total - 1, targetIndex));
-  const cols = getGridColumns();
+  const cols = virtualGrid.cols || getGridColumns();
   const targetRow = Math.floor(clampedIndex / cols);
 
   if (edge === "top") {
-    renderVirtualGrid(true, 0);
+    renderVirtualGrid(false, 0, deferThumbnails);
     window.scrollTo({ top: 0, behavior: "auto" });
+    virtualGrid.lastScrollY = 0;
     return;
   }
 
-  renderVirtualGrid(true, targetRow);
+  renderVirtualGrid(false, targetRow, deferThumbnails);
   const stride = getRowStride();
   const gridTopDocY = dom.videoGrid.getBoundingClientRect
     ? dom.videoGrid.getBoundingClientRect().top + (window.scrollY || 0)
@@ -2684,11 +2864,13 @@ function scrollToVideoIndex(targetIndex, edge = null) {
     const gridBottomDocY = gridTopDocY + totalRows * stride;
     const targetY = Math.max(0, gridBottomDocY - (window.innerHeight || 800) + 96);
     window.scrollTo({ top: targetY, behavior: "auto" });
+    virtualGrid.lastScrollY = targetY;
     return;
   }
 
   const rowTopDocY = Math.max(0, gridTopDocY + targetRow * stride - 16);
   window.scrollTo({ top: rowTopDocY, behavior: "auto" });
+  virtualGrid.lastScrollY = rowTopDocY;
 }
 
 function updateScrubberVisibility(hasAppData) {
