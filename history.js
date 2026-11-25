@@ -18,6 +18,7 @@ const wh = {
   insightsOpen: false,
   period: { type: "week", anchor: null },
   musicOnly: true,
+  showPodcasts: true,
 };
 
 function whHasData() {
@@ -452,13 +453,63 @@ function whLikedMap() {
   return map;
 }
 
-function whMusicMask(liked) {
+// Podcasts and other talk shows reach the history as "YouTube Music" plays too, so they are split out
+// by a heuristic: show-like channel names, episode-style titles ("Ep 12", "#379", "| Show Name"), and
+// any channel where a good share of the videos look like episodes. "- Topic" channels and liked tracks
+// marked as music are never talk.
+const WH_TALK_TITLE = /\bpod(cast)?\b|\b(ep|eps|episode)\.?\s*#?\d+|[-|:]\s*#\d{2,}\s*$|\bpart (one|two|three|four|five|\d+):|'the daily'/i;
+const WH_TALK_CHANNEL = /podcast|\bpod\b|\bradio(?!head)|\bnpr\b(?!\s*music)|\bthe .* show\b|freakonomics|\bcomedy\b/i;
+const WH_TALK_HOST = /\swith\s[A-Z][a-z]+\s[A-Z]/; // "Offline with Jon Favreau"
+const WH_MUSICY_TITLE = /sounds? like|lo-?fi|\bcover\b|instrumental|remix|\bost\b|slowed|reverb|playlist|\bmix\b|full album|tiny desk|concert/i;
+
+function whIsTopic(channel) {
+  return /\s-\sTopic$/.test(channel || "");
+}
+
+function whTitleEndsWithChannel(title, channel) {
+  // "Bill Hader | SmartLess" on the SmartLess channel
+  const c = (channel || "").trim().toLowerCase();
+  const t = (title || "").trim().toLowerCase();
+  return c.length > 2 && t.endsWith(c) && t.lastIndexOf("|") !== -1 && t.lastIndexOf("|") < t.length - c.length;
+}
+
+function whTalkFlags(liked) {
+  const vids = wh.data.videos;
+  const looksTalk = new Uint8Array(vids.length);
+  const perChannel = new Map();
+  for (let i = 0; i < vids.length; i++) {
+    const { title, channel, channelId } = vids[i];
+    if (whIsTopic(channel)) continue;
+    const hit =
+      WH_TALK_CHANNEL.test(channel || "") ||
+      WH_TALK_HOST.test(channel || "") ||
+      (!WH_MUSICY_TITLE.test(title || "") && (WH_TALK_TITLE.test(title || "") || whTitleEndsWithChannel(title, channel)));
+    if (hit) looksTalk[i] = 1;
+    if (channelId) {
+      const c = perChannel.get(channelId) || { n: 0, hits: 0 };
+      c.n++;
+      c.hits += hit ? 1 : 0;
+      perChannel.set(channelId, c);
+    }
+  }
+  const talk = new Uint8Array(vids.length);
+  for (let i = 0; i < vids.length; i++) {
+    const v = vids[i];
+    if (whIsTopic(v.channel)) continue;
+    const lv = liked.get(v.id);
+    if (lv && lv.is_music) continue;
+    const c = v.channelId ? perChannel.get(v.channelId) : null;
+    if (looksTalk[i] || (c && c.hits >= 2 && c.hits / c.n >= 0.25)) talk[i] = 1;
+  }
+  return talk;
+}
+
+function whMusicMask(liked, talk) {
   const vids = wh.data.videos;
   const mask = new Uint8Array(vids.length);
   for (let i = 0; i < vids.length; i++) {
     const lv = liked.get(vids[i].id);
-    mask[i] =
-      wh.data.music[i] || /\s-\sTopic$/.test(vids[i].channel || "") || (lv && lv.is_music) ? 1 : 0;
+    mask[i] = !talk[i] && (wh.data.music[i] || whIsTopic(vids[i].channel) || (lv && lv.is_music)) ? 1 : 0;
   }
   return mask;
 }
@@ -476,11 +527,17 @@ function whAggregate(startSec, endSec, ctx, light = false) {
   let newTrackPlays = 0;
   let oldTrackPlays = 0;
   let likedPlays = 0;
-  let knownSeconds = 0;
-  let knownPlays = 0;
+
+  const talkCounts = new Map();
+  let talkPlays = 0;
 
   for (let k = lo; k < hi; k++) {
     const v = vi[k];
+    if (ctx.talk[v] && !ctx.showTalk) continue;
+    if (!light && ctx.talk[v]) {
+      talkPlays++;
+      talkCounts.set(v, (talkCounts.get(v) || 0) + 1);
+    }
     if (ctx.musicOnly && !ctx.mask[v]) continue;
     plays++;
     trackCounts.set(v, (trackCounts.get(v) || 0) + 1);
@@ -494,15 +551,7 @@ function whAggregate(startSec, endSec, ctx, light = false) {
     if (light) continue;
     hours[d.getHours()]++;
     dayCounts.set(dayKey, (dayCounts.get(dayKey) || 0) + 1);
-    const lv = ctx.liked.get(wh.data.videos[v].id);
-    if (lv) {
-      likedPlays++;
-      const secs = lv.duration ? parseDuration(lv.duration) : 0;
-      if (secs > 0 && secs < 4 * 3600) {
-        knownSeconds += secs;
-        knownPlays++;
-      }
-    }
+    if (ctx.liked.has(wh.data.videos[v].id)) likedPlays++;
   }
 
   let newArtists = 0;
@@ -533,6 +582,8 @@ function whAggregate(startSec, endSec, ctx, light = false) {
     plays,
     trackCounts,
     artistCounts,
+    talkCounts,
+    talkPlays,
     activeDays: activeDays.size,
     spanDays,
     hours,
@@ -540,8 +591,6 @@ function whAggregate(startSec, endSec, ctx, light = false) {
     newArtists,
     newTrackPlays,
     likedPlays,
-    knownSeconds,
-    knownPlays,
     fingerprint,
   };
 }
@@ -671,7 +720,8 @@ function whRenderInsights() {
   const endSec = Math.floor(range.end.getTime() / 1000);
 
   const liked = whLikedMap();
-  const ctx = { liked, mask: whMusicMask(liked), musicOnly: wh.musicOnly };
+  const talk = whTalkFlags(liked);
+  const ctx = { liked, talk, mask: whMusicMask(liked, talk), musicOnly: wh.musicOnly, showTalk: wh.showPodcasts };
   const agg = whAggregate(startSec, endSec, ctx);
 
   let prevAgg = null;
@@ -698,6 +748,8 @@ function whRenderInsights() {
   if (nextBtn) nextBtn.disabled = type === "all" || range.end.getTime() > m.last * 1000;
   const musicToggle = document.getElementById("insights-music-toggle");
   if (musicToggle) musicToggle.checked = wh.musicOnly;
+  const podcastToggle = document.getElementById("insights-podcast-toggle");
+  if (podcastToggle) podcastToggle.checked = wh.showPodcasts;
   const likesNote = document.getElementById("insights-likes-note");
   if (likesNote) likesNote.hidden = liked.size > 0;
 
@@ -708,7 +760,7 @@ function whRenderInsights() {
 
   const sections = [];
   sections.push(whHeroHtml(type, range, agg, prevAgg, prevLabel, prevFull));
-  sections.push(`<div class="wh-cards">${whArtistsCard(agg, prevAgg, ctx)}${whAlbumsCard(agg, prevAgg, ctx)}${whTracksCard(agg, prevAgg, ctx)}</div>`);
+  sections.push(`<div class="wh-cards">${whArtistsCard(agg, prevAgg, ctx)}${whAlbumsCard(agg, prevAgg, ctx)}${whTracksCard(agg, prevAgg, ctx)}${whPodcastsCard(agg, prevAgg)}</div>`);
   sections.push(`<div class="wh-row">${whClockHtml(agg)}${whFingerprintHtml(agg, typical, type)}</div>`);
   sections.push(whFactsHtml(type, range, agg, prevAgg, ctx));
   const decade = whDecadeHtml(agg, ctx);
@@ -812,43 +864,117 @@ function whArtistsCard(agg, prevAgg) {
   );
 }
 
+// Liked tracks per release (same artist + same release day), which is how the library sidebar infers albums
+function whReleaseKey(lv) {
+  if (!lv || !lv.published_at || !lv.artist || checkIfDeleted(lv)) return null;
+  const artist = cleanArtistName(lv.artist);
+  if (artist === "Music Library Uploads") return null;
+  return `${artist}|${lv.published_at.split("T")[0]}`;
+}
+
+function whReleaseSizes(liked) {
+  if (wh.releaseSizes && wh.releaseSizesFor === liked.size) return wh.releaseSizes;
+  const sizes = new Map();
+  for (const lv of liked.values()) {
+    const key = whReleaseKey(lv);
+    if (key) sizes.set(key, (sizes.get(key) || 0) + 1);
+  }
+  wh.releaseSizes = sizes;
+  wh.releaseSizesFor = liked.size;
+  return sizes;
+}
+
+// A release only counts as an album when the library has at least this many liked tracks from it
+// (matches the sidebar), so singles and one-off likes don't show up as one-track "albums".
+const WH_ALBUM_MIN_TRACKS = 3;
+
 function whAlbumsCard(agg, prevAgg, ctx) {
-  // Albums are inferred like the library sidebar does: same artist + same release day, liked tracks only
+  const sizes = whReleaseSizes(ctx.liked);
   const albumsOf = (a) => {
     const map = new Map();
     for (const [v, c] of a.trackCounts) {
       const lv = ctx.liked.get(wh.data.videos[v].id);
-      if (!lv || !lv.published_at) continue;
-      const artist = cleanArtistName(lv.artist);
-      const key = `${artist}|${lv.published_at.split("T")[0]}`;
-      const cur = map.get(key) || { artist, year: getVideoYear(lv.published_at), plays: 0, tracks: 0, v };
+      const key = whReleaseKey(lv);
+      if (!key || (sizes.get(key) || 0) < WH_ALBUM_MIN_TRACKS) continue;
+      let cur = map.get(key);
+      if (!cur) {
+        cur = { artist: cleanArtistName(lv.artist), date: key.split("|")[1], year: getVideoYear(lv.published_at), plays: 0, tracks: 0, size: sizes.get(key), v, best: 0 };
+        map.set(key, cur);
+      }
       cur.plays += c;
       cur.tracks++;
-      map.set(key, cur);
+      // Art comes from the album's most played track
+      if (c > cur.best) {
+        cur.best = c;
+        cur.v = v;
+      }
     }
     return map;
   };
   const albums = albumsOf(agg);
   if (!ctx.liked.size || !albums.size) {
-    return `<section class="wh-card wh-card-albums"><header class="wh-card-head"><span class="wh-card-title">Albums</span></header><div class="wh-card-body"><p class="wh-muted">Albums come from your liked tracks' release info. ${
-      ctx.liked.size ? "None of this period's plays were liked tracks with a release date." : "Load your likes to see them."
+    return `<section class="wh-card wh-card-albums"><header class="wh-card-head"><span class="wh-card-title">Albums</span></header><div class="wh-card-body"><p class="wh-muted">Albums come from your liked tracks: ${WH_ALBUM_MIN_TRACKS}+ liked tracks by one artist released the same day. ${
+      ctx.liked.size ? "None were played in this period." : "Load your likes to see them."
     }</p></div></section>`;
   }
   const prevAlbums = prevAgg ? albumsOf(prevAgg) : null;
-  const top = Array.from(albums.values()).sort((a, b) => b.plays - a.plays).slice(0, 5);
-  const label = (a) => `${a.artist}${a.year ? ` (${a.year})` : ""}`;
-  const firstHtml = `<button type="button" class="wh-top" data-wh-artist="${escapeHtml(top[0].artist)}">
-      <img src="${whThumb(wh.data.videos[top[0].v].id)}" alt="" loading="lazy" />
-      <span><span class="wh-top-rank">#1</span><span class="wh-top-name">${escapeHtml(label(top[0]))}</span><span class="wh-top-sub">${whPlural(top[0].plays, "play")}, ${whPlural(top[0].tracks, "track")}</span></span>
+  const top = Array.from(albums.values())
+    .sort((a, b) => b.plays - a.plays || b.tracks - a.tracks)
+    .slice(0, 5);
+  // Same artist twice in one year: show the full date so the rows can be told apart
+  const yearClash = new Set();
+  const seen = new Set();
+  for (const a of albums.values()) {
+    const k = `${a.artist}|${a.year}`;
+    if (seen.has(k)) yearClash.add(k);
+    seen.add(k);
+  }
+  const when = (a) => (yearClash.has(`${a.artist}|${a.year}`) ? a.date : a.year ? String(a.year) : "");
+  const query = (a) => `${a.artist} ${when(a)}`.trim();
+  const sub = (a) => `${whPlural(a.plays, "play")}, ${a.tracks} of ${whPlural(a.size, "liked track")}`;
+  const thumb = (a) => whThumb(wh.data.videos[a.v].id);
+  const f = top[0];
+  const firstHtml = `<button type="button" class="wh-top" data-wh-artist="${escapeHtml(query(f))}" title="Show in library">
+      <img src="${thumb(f)}" alt="" loading="lazy" />
+      <span><span class="wh-top-rank">#1</span><span class="wh-top-name">${escapeHtml(f.artist)}</span><span class="wh-top-sub">${escapeHtml(when(f))}${when(f) ? " · " : ""}${sub(f)}</span></span>
     </button>`;
-  const rest = whTopList(top.slice(1), (a, i) => `<li><button type="button" class="wh-list-item" data-wh-artist="${escapeHtml(a.artist)}"><span class="wh-rank">${i + 2}</span><span class="wh-name">${escapeHtml(label(a))}</span><span class="wh-num">${formatCount(a.plays)}</span></button></li>`);
-  return whCardShell("wh-card-albums", "Albums", albums.size, prevAlbums ? prevAlbums.size : null, null, "", firstHtml, rest, "Liked tracks only, grouped by release.");
+  const rest = whTopList(
+    top.slice(1),
+    (a, i) =>
+      `<li><button type="button" class="wh-list-item" data-wh-artist="${escapeHtml(query(a))}" title="${escapeHtml(sub(a))}"><span class="wh-rank">${i + 2}</span><img src="${thumb(a)}" alt="" loading="lazy" /><span class="wh-name"><span class="wh-name-main">${escapeHtml(a.artist)}</span><span class="wh-name-sub">${escapeHtml(when(a))}${when(a) ? " · " : ""}${a.tracks} of ${a.size} tracks</span></span><span class="wh-num">${formatCount(a.plays)}</span></button></li>`,
+  );
+  return whCardShell(
+    "wh-card-albums wh-card-art",
+    "Albums",
+    albums.size,
+    prevAlbums ? prevAlbums.size : null,
+    null,
+    "",
+    firstHtml,
+    rest,
+    `Albums you've liked ${WH_ALBUM_MIN_TRACKS}+ tracks from, matched by artist and release date.`,
+  );
 }
 
 function whTrackTitle(v) {
   const hv = wh.data.videos[v];
   const lv = whLikedLookup(hv.id);
   return (lv && lv.title) || hv.title || "Removed video";
+}
+
+function whTrackArtist(v) {
+  const hv = wh.data.videos[v];
+  const lv = whLikedLookup(hv.id);
+  const raw = (lv && lv.artist) || hv.channel || "";
+  return cleanArtistName(raw).replace(/VEVO$/i, "").trim();
+}
+
+// "Artist - Song Title", unless the title already names the artist (typical of non-Topic uploads)
+function whTrackLabel(v) {
+  const title = whTrackTitle(v);
+  const artist = whTrackArtist(v);
+  if (!artist || / [-–—] /.test(title) || title.toLowerCase().includes(artist.toLowerCase())) return title;
+  return `${artist} - ${title}`;
 }
 
 function whLikedLookup(id) {
@@ -860,11 +986,12 @@ function whTracksCard(agg, prevAgg, ctx) {
   const top = Array.from(agg.trackCounts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5);
   const [v0, c0] = top[0];
   const hv0 = wh.data.videos[v0];
+  const artist0 = whTrackArtist(v0);
   const firstHtml = `<button type="button" class="wh-top" data-wh-play="${escapeHtml(hv0.id)}">
       <img src="${whThumb(hv0.id)}" alt="" loading="lazy" />
-      <span><span class="wh-top-rank">#1</span><span class="wh-top-name">${escapeHtml(whTrackTitle(v0))}</span><span class="wh-top-sub">${escapeHtml(cleanArtistName(hv0.channel || ""))}${hv0.channel ? ", " : ""}${whPlural(c0, "play")}</span></span>
+      <span><span class="wh-top-rank">#1</span><span class="wh-top-name">${escapeHtml(whTrackTitle(v0))}</span><span class="wh-top-sub">${escapeHtml(artist0)}${artist0 ? ", " : ""}${whPlural(c0, "play")}</span></span>
     </button>`;
-  const rest = whTopList(top.slice(1), ([v, c], i) => `<li><button type="button" class="wh-list-item" data-wh-play="${escapeHtml(wh.data.videos[v].id)}"><span class="wh-rank">${i + 2}</span><span class="wh-name">${escapeHtml(whTrackTitle(v))}</span><span class="wh-num">${formatCount(c)}</span></button></li>`);
+  const rest = whTopList(top.slice(1), ([v, c], i) => `<li><button type="button" class="wh-list-item" data-wh-play="${escapeHtml(wh.data.videos[v].id)}"><span class="wh-rank">${i + 2}</span><span class="wh-name">${escapeHtml(whTrackLabel(v))}</span><span class="wh-num">${formatCount(c)}</span></button></li>`);
   return whCardShell(
     "wh-card-tracks",
     "Tracks",
@@ -875,6 +1002,44 @@ function whTracksCard(agg, prevAgg, ctx) {
     firstHtml,
     rest,
   );
+}
+
+// Podcasts and talk shows, grouped by show (channel). Always kept out of the music cards when "Music only" is on.
+function whPodcastsCard(agg, prevAgg) {
+  if (!agg.talkPlays) return "";
+  const showsOf = (a) => {
+    const map = new Map();
+    for (const [v, c] of a.talkCounts) {
+      const key = wh.artistOf[v];
+      let cur = map.get(key);
+      if (!cur) {
+        cur = { name: cleanArtistName(wh.data.videos[v].channel || "Unknown show"), plays: 0, episodes: 0, v, best: 0 };
+        map.set(key, cur);
+      }
+      cur.plays += c;
+      cur.episodes++;
+      if (c > cur.best) {
+        cur.best = c;
+        cur.v = v;
+      }
+    }
+    return map;
+  };
+  const shows = showsOf(agg);
+  const prevShows = prevAgg && prevAgg.talkCounts ? showsOf(prevAgg) : null;
+  const top = Array.from(shows.values()).sort((a, b) => b.plays - a.plays).slice(0, 5);
+  const f = top[0];
+  const fid = wh.data.videos[f.v].id;
+  const firstHtml = `<button type="button" class="wh-top" data-wh-play="${escapeHtml(fid)}" title="${escapeHtml(whTrackTitle(f.v))}">
+      <img src="${whThumb(fid)}" alt="" loading="lazy" />
+      <span><span class="wh-top-rank">#1</span><span class="wh-top-name">${escapeHtml(f.name)}</span><span class="wh-top-sub">${whPlural(f.plays, "play")}, ${whPlural(f.episodes, "episode")}</span></span>
+    </button>`;
+  const rest = whTopList(top.slice(1), (s, i) => {
+    const id = wh.data.videos[s.v].id;
+    return `<li><button type="button" class="wh-list-item" data-wh-play="${escapeHtml(id)}" title="${escapeHtml(whTrackTitle(s.v))}"><span class="wh-rank">${i + 2}</span><img src="${whThumb(id)}" alt="" loading="lazy" /><span class="wh-name">${escapeHtml(s.name)}</span><span class="wh-num">${formatCount(s.plays)}</span></button></li>`;
+  });
+  const note = wh.musicOnly ? `${whPlural(agg.talkPlays, "play")}, kept out of the music stats.` : `${whPlural(agg.talkPlays, "play")}, also counted above.`;
+  return whCardShell("wh-card-podcasts wh-card-art", "Podcasts", shows.size, prevShows ? prevShows.size : null, null, "", firstHtml, rest, note);
 }
 
 function whClockHtml(agg) {
@@ -919,6 +1084,20 @@ function whFingerprintHtml(agg, typical, type) {
   </section>`;
 }
 
+function whTypicalTrackSeconds(liked) {
+  if (wh.typicalSecsFor === liked.size) return wh.typicalSecs;
+  const secs = [];
+  for (const lv of liked.values()) {
+    if (!lv.is_music || !lv.duration) continue;
+    const d = parseDuration(lv.duration);
+    if (d > 30 && d < 20 * 60) secs.push(d);
+  }
+  secs.sort((a, b) => a - b);
+  wh.typicalSecs = secs.length >= 20 ? secs[secs.length >> 1] : 0;
+  wh.typicalSecsFor = liked.size;
+  return wh.typicalSecs;
+}
+
 function whFactsHtml(type, range, agg, prevAgg, ctx) {
   const facts = [];
   const lastData = wh.data.meta.last * 1000;
@@ -951,12 +1130,16 @@ function whFactsHtml(type, range, agg, prevAgg, ctx) {
     sub: prevAgg ? `vs ${formatCount(prevAgg.activeDays)} ${prevLabelFor(type)}` : "",
   });
 
-  if (ctx.liked.size && agg.knownPlays) {
-    const hours = agg.knownSeconds / 3600;
+  // Lengths are only known for liked tracks, so estimate from a typical liked track's length
+  const typical = whTypicalTrackSeconds(ctx.liked);
+  const musicPlays = agg.plays - (ctx.musicOnly ? 0 : agg.talkPlays);
+  if (typical && musicPlays > 0) {
+    const hours = (musicPlays * typical) / 3600;
+    const mins = Math.round(typical / 60);
     facts.push({
-      value: `${hours >= 10 ? Math.round(hours) : hours.toFixed(1)} h+`,
-      label: "listening time",
-      sub: `from the ${Math.round((agg.knownPlays / agg.plays) * 100)}% of plays with a known length`,
+      value: `~${hours >= 10 ? formatCount(Math.round(hours)) : hours.toFixed(1)} h`,
+      label: "of music, roughly",
+      sub: `${whPlural(musicPlays, "play")} × ${mins} min, your typical liked track`,
     });
   }
 
@@ -973,27 +1156,36 @@ function whLikesHtml(agg, ctx) {
   if (!ctx.liked.size) return "";
   const likedShare = agg.plays ? agg.likedPlays / agg.plays : 0;
   const notLiked = Array.from(agg.trackCounts.entries())
-    .filter(([v]) => !ctx.liked.has(wh.data.videos[v].id))
+    .filter(([v]) => !ctx.talk[v] && !ctx.liked.has(wh.data.videos[v].id))
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5);
+  // Likes go back much further than the history, so only tracks released after the history starts
+  // could really have been played; older likes with no plays say nothing.
+  const historyStart = wh.data.meta.first * 1000;
   let neverPlayed = 0;
   for (const v of state.videos) {
-    if (!checkIfDeleted(v) && (!wh.musicOnly || v.is_music) && whPlaysFor(v.video_id) === 0) neverPlayed++;
+    if (checkIfDeleted(v) || (wh.musicOnly && !v.is_music) || !v.published_at) continue;
+    if (Date.parse(v.published_at) >= historyStart && whPlaysFor(v.video_id) === 0) neverPlayed++;
   }
+  let likedTracksPlayed = 0;
+  for (const v of agg.trackCounts.keys()) if (ctx.liked.has(wh.data.videos[v].id)) likedTracksPlayed++;
   const list = notLiked
     .map(([v, c]) => {
       const hv = wh.data.videos[v];
-      return `<li><a class="wh-list-item" href="https://music.youtube.com/watch?v=${encodeURIComponent(hv.id)}" target="_blank" rel="noopener noreferrer"><img src="${whThumb(hv.id)}" alt="" loading="lazy" /><span class="wh-name">${escapeHtml(hv.title || "Removed video")}<span class="wh-muted"> · ${escapeHtml(cleanArtistName(hv.channel || ""))}</span></span><span class="wh-num">${formatCount(c)}</span></a></li>`;
+      return `<li><a class="wh-list-item" href="https://music.youtube.com/watch?v=${encodeURIComponent(hv.id)}" target="_blank" rel="noopener noreferrer"><img src="${whThumb(hv.id)}" alt="" loading="lazy" /><span class="wh-name">${escapeHtml(whTrackLabel(v))}</span><span class="wh-num">${formatCount(c)}</span></a></li>`;
     })
     .join("");
   return `<section class="wh-panel wh-likes">
     <header class="wh-panel-head"><span class="wh-card-title">Likes vs plays</span></header>
     <div class="wh-likes-stats">
       <div><span class="wh-fact-value">${Math.round(likedShare * 100)}%</span><span class="wh-fact-label">of plays were liked tracks</span></div>
-      <div><span class="wh-fact-value">${formatCount(neverPlayed)}</span><span class="wh-fact-label">liked tracks never played</span>${
-        neverPlayed ? `<button type="button" class="wh-link" data-wh-never>Show them</button>` : ""
-      }</div>
+      <div><span class="wh-fact-value">${formatCount(likedTracksPlayed)}</span><span class="wh-fact-label">liked tracks played</span></div>
     </div>
+    ${
+      neverPlayed
+        ? `<p class="wh-muted wh-small">${whPlural(neverPlayed, "liked track")} released since ${escapeHtml(WH_MONTH_FMT.format(new Date(historyStart)))}, when your history starts, ${neverPlayed === 1 ? "has" : "have"} no plays. <button type="button" class="wh-link" data-wh-never>Show all unplayed</button></p>`
+        : ""
+    }
     ${list ? `<p class="wh-subhead">Played most, not liked</p><ol class="wh-list wh-list-thumbs">${list}</ol>` : ""}
   </section>`;
 }
@@ -1176,6 +1368,10 @@ function whSetupEvents() {
   on("insights-next", "click", () => step(1));
   on("insights-music-toggle", "change", (e) => {
     wh.musicOnly = e.target.checked;
+    whRenderInsights();
+  });
+  on("insights-podcast-toggle", "change", (e) => {
+    wh.showPodcasts = e.target.checked;
     whRenderInsights();
   });
   on("insights-close", "click", () => {
