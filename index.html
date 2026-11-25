@@ -88,7 +88,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=2.2.4" />
+    <link rel="stylesheet" href="styles.css?v=2.2.5" />
     <script>
       (function () {
         try {
@@ -230,7 +230,7 @@
         --wh-panel: #ffffff;
         --wh-accent: #e11d48;
         --wh-accent-soft: rgba(225, 29, 72, 0.12);
-        --wh-prev: #d4d4d8;
+        --wh-prev: rgba(10, 10, 10, 0.55);
         --wh-up: #15803d;
         --wh-down: #b91c1c;
         --wh-artists: #ede9fe;
@@ -246,7 +246,7 @@
         --wh-panel: #111111;
         --wh-accent: #fb7185;
         --wh-accent-soft: rgba(251, 113, 133, 0.16);
-        --wh-prev: #3f3f46;
+        --wh-prev: rgba(255, 255, 255, 0.6);
         --wh-up: #4ade80;
         --wh-down: #f87171;
         --wh-artists: #2e1065;
@@ -504,22 +504,48 @@
         font-weight: 700;
         letter-spacing: -0.03em;
       }
+      /* Phone: period tabs full width, then the date stepper with the filter beside it.
+         Wider: one row, tabs left, date centred, filter right. */
       .wh-controls {
-        display: flex;
-        flex-wrap: wrap;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas: "tabs tabs" "stepper filter";
         align-items: center;
-        gap: 10px 16px;
+        gap: 10px 12px;
         margin-bottom: 16px;
       }
+      .wh-controls .wh-tabs {
+        grid-area: tabs;
+      }
+      .wh-controls .wh-stepper {
+        grid-area: stepper;
+        justify-self: start;
+        margin-left: -6px;
+      }
+      .wh-controls .wh-filter {
+        grid-area: filter;
+      }
+      @media (min-width: 640px) {
+        .wh-controls {
+          grid-template-columns: auto minmax(0, 1fr) auto;
+          grid-template-areas: "tabs stepper filter";
+        }
+        .wh-controls .wh-stepper {
+          justify-self: center;
+          margin-left: 0;
+        }
+      }
       .wh-tabs {
-        display: inline-flex;
+        display: flex;
         padding: 3px;
         border-radius: 999px;
         background: var(--wh-soft);
       }
       .wh-tabs button {
+        flex: 1;
         height: 30px;
         padding: 0 13px;
+        white-space: nowrap;
         border-radius: 999px;
         font-size: 13px;
         font-weight: 500;
@@ -531,24 +557,46 @@
         font-weight: 600;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
       }
-      .wh-check {
+      .wh-filter {
+        position: relative;
         display: inline-flex;
         align-items: center;
-        gap: 6px;
+        color: var(--wh-fg);
+      }
+      .wh-filter select {
+        appearance: none;
+        -webkit-appearance: none;
+        height: 36px;
+        padding: 0 30px 0 14px;
+        border-radius: 999px;
+        border: 1px solid var(--wh-line);
+        background: var(--wh-soft);
+        color: inherit;
+        font: inherit;
         font-size: 13px;
-        color: var(--wh-muted);
+        font-weight: 600;
         cursor: pointer;
       }
-      .wh-check input {
-        accent-color: var(--wh-accent);
-        width: 15px;
-        height: 15px;
+      .wh-filter select:focus-visible {
+        outline: 2px solid var(--wh-accent);
+        outline-offset: 2px;
+      }
+      .wh-filter svg {
+        position: absolute;
+        right: 11px;
+        pointer-events: none;
+        color: var(--wh-muted);
+      }
+      @media (hover: hover) and (pointer: fine) {
+        .wh-filter select:hover {
+          border-color: var(--wh-muted);
+        }
       }
       .wh-stepper {
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        margin-left: auto;
+        min-width: 0;
       }
       .wh-stepper button {
         width: 30px;
@@ -563,6 +611,9 @@
         .wh-stepper button:hover:not(:disabled) {
           background: var(--wh-soft);
         }
+      }
+      .wh-stepper button[hidden] {
+        display: none;
       }
       .wh-stepper button:disabled {
         opacity: 0.3;
@@ -663,9 +714,12 @@
         background: var(--wh-accent);
       }
       .wh-key-prev {
+        height: 2px;
+        border-radius: 1px;
         background: var(--wh-prev);
       }
       .wh-bars {
+        position: relative;
         display: flex;
         align-items: stretch;
         gap: 6px;
@@ -680,13 +734,51 @@
         flex-direction: column;
         min-width: 0;
       }
-      .wh-bar-pair {
+      .wh-bar-slot {
+        position: relative;
         flex: 1;
         display: flex;
         align-items: flex-end;
         justify-content: center;
-        gap: 2px;
         border-bottom: 1px solid var(--wh-line);
+      }
+      .wh-bar-slot .wh-bar {
+        flex: none;
+        width: min(72%, 36px);
+        max-width: none;
+        border-radius: 4px 4px 0 0;
+      }
+      .wh-bars-many .wh-bar-slot .wh-bar {
+        width: 78%;
+        border-radius: 2px 2px 0 0;
+      }
+      /* Last period: a thin marker at its height, drawn over this period's bar */
+      .wh-bar-ghost {
+        position: absolute;
+        left: 50%;
+        width: calc(min(72%, 36px) + 6px);
+        height: 2px;
+        margin-bottom: -1px;
+        transform: translateX(-50%);
+        border-radius: 1px;
+        background: var(--wh-prev);
+        pointer-events: none;
+      }
+      /* Month view: last month's daily average as one dashed line (18px = the label row) */
+      .wh-avg-line {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: calc(18px + (100% - 18px) * var(--at) / 100);
+        height: 0;
+        border-top: 2px dashed var(--wh-prev);
+        pointer-events: none;
+      }
+      .wh-key-dash {
+        width: 12px;
+        height: 0;
+        border-top: 2px dashed var(--wh-prev);
+        background: none;
       }
       .wh-bar {
         display: block;
@@ -695,9 +787,6 @@
         min-height: 1px;
         border-radius: 3px 3px 0 0;
         background: var(--wh-accent);
-      }
-      .wh-bar-prev {
-        background: var(--wh-prev);
       }
       .wh-bar-label {
         height: 18px;
@@ -880,6 +969,9 @@
       @media (min-width: 900px) {
         .wh-row {
           grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+        }
+        .wh-row.wh-row-single {
+          grid-template-columns: minmax(0, 1fr);
         }
       }
       .wh-panel {
@@ -1877,13 +1969,14 @@
               <button type="button" data-period="year" aria-pressed="false">Year</button>
               <button type="button" data-period="all" aria-pressed="false">All time</button>
             </div>
-            <label class="wh-check">
-              <input type="checkbox" id="insights-music-toggle" checked />
-              <span>Music only</span>
-            </label>
-            <label class="wh-check" title="Podcasts and talk shows, shown as their own card">
-              <input type="checkbox" id="insights-podcast-toggle" checked />
-              <span>Podcasts</span>
+            <label class="wh-filter" title="What to count">
+              <span class="sr-only">Show</span>
+              <select id="insights-filter">
+                <option value="music">Music</option>
+                <option value="podcasts">Podcasts</option>
+                <option value="all">Everything</option>
+              </select>
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
             </label>
             <div class="wh-stepper">
               <button type="button" id="insights-prev" aria-label="Previous period">
@@ -3091,9 +3184,9 @@
         },
       );
     </script>
-    <script src="version.js?v=2.2.4"></script>
-    <script src="app.js?v=2.2.4"></script>
-    <script src="history.js?v=2.2.4"></script>
+    <script src="version.js?v=2.2.5"></script>
+    <script src="app.js?v=2.2.5"></script>
+    <script src="history.js?v=2.2.5"></script>
     <script>
       if ("serviceWorker" in navigator) {
         // Reload at most once when a genuinely newer SW_VERSION activates over an older running page

@@ -17,9 +17,17 @@ const wh = {
   demo: false, // showing the bundled demo history (not saved, real history untouched)
   insightsOpen: false,
   period: { type: "week", anchor: null },
-  musicOnly: true,
-  showPodcasts: true,
+  // What the page counts: "music" (default), "podcasts" (talk shows only) or "all" (every play)
+  filter: whLoadFilter(),
 };
+
+function whLoadFilter() {
+  try {
+    const f = localStorage.getItem("dislikes-insights-filter");
+    if (f === "music" || f === "podcasts" || f === "all") return f;
+  } catch {}
+  return "music";
+}
 
 function whHasData() {
   return Boolean(wh.data && wh.data.t && wh.data.t.length);
@@ -423,9 +431,15 @@ function whPeriodRange(type, anchorMs) {
 }
 
 function whPeriodLabel(type, range) {
-  if (type === "all") return "All time";
+  if (type === "all") {
+    // The tab already says "All time"; the stepper shows what that covers instead
+    const m = wh.data.meta;
+    return `${WH_MONTH_FMT.format(new Date(m.first * 1000))} to ${WH_MONTH_FMT.format(new Date(m.last * 1000))}`;
+  }
   if (type === "week") {
     const last = new Date(range.end.getTime() - 1);
+    // "Nov 16 – 22, 2026" fits next to the filter on a phone; "Nov 16 to Nov 22, 2026" doesn't
+    if (typeof WH_LONG_DAY_FMT.formatRange === "function") return WH_LONG_DAY_FMT.formatRange(range.start, last);
     return `${WH_SHORT_DAY_FMT.format(range.start)} to ${WH_LONG_DAY_FMT.format(last)}`;
   }
   if (type === "month") return WH_MONTH_LONG_FMT.format(range.start);
@@ -539,6 +553,7 @@ function whAggregate(startSec, endSec, ctx, light = false) {
       talkCounts.set(v, (talkCounts.get(v) || 0) + 1);
     }
     if (ctx.musicOnly && !ctx.mask[v]) continue;
+    if (ctx.talkOnly && !ctx.talk[v]) continue;
     plays++;
     trackCounts.set(v, (trackCounts.get(v) || 0) + 1);
     const a = wh.artistOf[v];
@@ -721,7 +736,18 @@ function whRenderInsights() {
 
   const liked = whLikedMap();
   const talk = whTalkFlags(liked);
-  const ctx = { liked, talk, mask: whMusicMask(liked, talk), musicOnly: wh.musicOnly, showTalk: wh.showPodcasts };
+  const hasTalk = talk.includes(1);
+  if (!hasTalk && wh.filter === "podcasts") wh.filter = "music";
+  const filter = wh.filter;
+  const ctx = {
+    liked,
+    talk,
+    mask: whMusicMask(liked, talk),
+    filter,
+    musicOnly: filter === "music",
+    showTalk: filter !== "music",
+    talkOnly: filter === "podcasts",
+  };
   const agg = whAggregate(startSec, endSec, ctx);
 
   let prevAgg = null;
@@ -746,21 +772,34 @@ function whRenderInsights() {
   const nextBtn = document.getElementById("insights-next");
   if (prevBtn) prevBtn.disabled = type === "all" || range.start.getTime() <= m.first * 1000;
   if (nextBtn) nextBtn.disabled = type === "all" || range.end.getTime() > m.last * 1000;
-  const musicToggle = document.getElementById("insights-music-toggle");
-  if (musicToggle) musicToggle.checked = wh.musicOnly;
-  const podcastToggle = document.getElementById("insights-podcast-toggle");
-  if (podcastToggle) podcastToggle.checked = wh.showPodcasts;
+  if (prevBtn) prevBtn.hidden = type === "all";
+  if (nextBtn) nextBtn.hidden = type === "all";
+  const filterSelect = document.getElementById("insights-filter");
+  if (filterSelect) {
+    const podcastOption = filterSelect.querySelector('option[value="podcasts"]');
+    if (podcastOption) podcastOption.hidden = podcastOption.disabled = !hasTalk;
+    filterSelect.value = filter;
+  }
   const likesNote = document.getElementById("insights-likes-note");
   if (likesNote) likesNote.hidden = liked.size > 0;
 
   if (!agg.plays) {
-    root.innerHTML = `<div class="wh-empty">No ${wh.musicOnly ? "music " : ""}plays in this period. Try another ${type === "all" ? "filter" : type}.</div>`;
+    const noun = filter === "music" ? "music plays" : filter === "podcasts" ? "podcast plays" : "plays";
+    root.innerHTML = `<div class="wh-empty">No ${noun} in this period. Try another ${type === "all" ? "filter" : type}.</div>`;
     return;
   }
 
   const sections = [];
   sections.push(whHeroHtml(type, range, agg, prevAgg, prevLabel, prevFull));
-  sections.push(`<div class="wh-cards">${whArtistsCard(agg, prevAgg, ctx)}${whAlbumsCard(agg, prevAgg, ctx)}${whTracksCard(agg, prevAgg, ctx)}${whPodcastsCard(agg, prevAgg)}</div>`);
+  if (filter === "podcasts") {
+    // Shows and episodes only; the music cards (albums, decades, likes, fingerprint) don't apply to talk
+    sections.push(`<div class="wh-cards">${whPodcastsCard(agg, prevAgg, ctx)}${whTracksCard(agg, prevAgg, ctx, "Episodes")}</div>`);
+    sections.push(`<div class="wh-row wh-row-single">${whClockHtml(agg)}</div>`);
+    sections.push(whFactsHtml(type, range, agg, prevAgg, ctx));
+    root.innerHTML = sections.join("");
+    return;
+  }
+  sections.push(`<div class="wh-cards">${whArtistsCard(agg, prevAgg, ctx)}${whAlbumsCard(agg, prevAgg, ctx)}${whTracksCard(agg, prevAgg, ctx)}${whPodcastsCard(agg, prevAgg, ctx)}</div>`);
   sections.push(`<div class="wh-row">${whClockHtml(agg)}${whFingerprintHtml(agg, typical, type)}</div>`);
   sections.push(whFactsHtml(type, range, agg, prevAgg, ctx));
   const decade = whDecadeHtml(agg, ctx);
@@ -776,20 +815,29 @@ function whHeroHtml(type, range, agg, prevAgg, prevLabel, prevFull) {
     const prevRange = { start: whShift(type, range.start, -1), end: range.start };
     prev = whBuckets(type, prevRange, prevFull);
   }
-  const max = Math.max(1, ...cur.map((b) => b.value), ...(prev ? prev.map((b) => b.value) : []));
   const many = cur.length > 14;
+  // This period is drawn as bars. The previous one is only a reference: a thin marker per bar when there
+  // are few bars (week, year), or one dashed line at last period's daily average for a month, where 30
+  // separate markers would be noise.
+  const prevAvg = prev && many ? prev.reduce((s, b) => s + b.value, 0) / prev.length : null;
+  const max = Math.max(1, ...cur.map((b) => b.value), ...(prev && !many ? prev.map((b) => b.value) : []), prevAvg || 0);
+  const unit = type === "year" ? "month" : "day";
   const bars = cur
     .map((b, i) => {
-      const p = prev && prev[i] ? prev[i].value : null;
+      const p = prev && !many && prev[i] ? prev[i].value : null;
       const h = (b.value / max) * 100;
-      const ph = p !== null ? (p / max) * 100 : 0;
       const showLabel = !many || i === 0 || (i + 1) % 5 === 0;
-      const title = `${b.label}: ${whPlural(b.value, "play")}${p !== null ? ` (vs ${formatCount(p)})` : ""}`;
-      return `<div class="wh-bar-group" title="${escapeHtml(title)}"><div class="wh-bar-pair">${
-        prev ? `<span class="wh-bar wh-bar-prev" style="height:${ph}%"></span>` : ""
-      }<span class="wh-bar" style="height:${h}%"></span></div><span class="wh-bar-label">${showLabel ? escapeHtml(b.label) : ""}</span></div>`;
+      const title = `${b.label}: ${whPlural(b.value, "play")}${p !== null ? ` (last ${type}: ${formatCount(p)})` : ""}`;
+      return `<div class="wh-bar-group" title="${escapeHtml(title)}"><div class="wh-bar-slot">${
+        b.value ? `<span class="wh-bar" style="height:${h}%"></span>` : ""
+      }${p ? `<span class="wh-bar-ghost" style="bottom:${(p / max) * 100}%"></span>` : ""}</div><span class="wh-bar-label">${showLabel ? escapeHtml(b.label) : ""}</span></div>`;
     })
     .join("");
+  const avgLine =
+    prevAvg !== null && prevAvg > 0
+      ? `<span class="wh-avg-line" style="--at:${(prevAvg / max) * 100}" title="${escapeHtml(`Last ${type}: ${formatCount(Math.round(prevAvg))} plays a ${unit} on average`)}"></span>`
+      : "";
+  const prevKey = many ? `Last ${type}, average a ${unit}` : `Last ${type}`;
   const d = prevAgg ? whDelta(agg.plays, prevAgg.plays) : { text: "", cls: "" };
   return `<section class="wh-hero">
     <div class="wh-hero-total">
@@ -798,8 +846,8 @@ function whHeroHtml(type, range, agg, prevAgg, prevLabel, prevFull) {
       <span class="wh-hero-unit">${agg.plays === 1 ? "play" : "plays"}</span>
     </div>
     <div class="wh-hero-chart">
-      ${prev ? `<div class="wh-legend"><span><i class="wh-key"></i>This ${type}</span><span><i class="wh-key wh-key-prev"></i>Last ${type}</span></div>` : ""}
-      <div class="wh-bars ${many ? "wh-bars-many" : ""}">${bars}</div>
+      ${prev ? `<div class="wh-legend"><span><i class="wh-key"></i>This ${type}</span><span><i class="wh-key wh-key-prev ${many ? "wh-key-dash" : ""}"></i>${escapeHtml(prevKey)}</span></div>` : ""}
+      <div class="wh-bars ${many ? "wh-bars-many" : ""}">${bars}${avgLine}</div>
     </div>
   </section>`;
 }
@@ -812,7 +860,7 @@ function whCardShell(cls, title, count, prevCount, newShare, newWord, firstHtml,
   const d = prevCount !== null ? whDelta(count, prevCount) : null;
   return `<section class="wh-card ${cls}">
     <header class="wh-card-head"><span class="wh-card-title">${escapeHtml(title)}</span><span class="wh-card-count">${formatCount(count)}${
-      d && d.text ? ` <span class="${d.cls}">${escapeHtml(d.text.replace("Up ", "+").replace("Down ", "−"))}</span>` : ""
+      d && d.cls ? ` <span class="${d.cls}">${escapeHtml(d.text.replace("Up ", "+").replace("Down ", "−"))}</span>` : ""
     }</span></header>
     <div class="wh-card-body">
       ${firstHtml}
@@ -981,7 +1029,7 @@ function whLikedLookup(id) {
   return state.mode === "like" && wh.likedCache ? wh.likedCache.get(id) : null;
 }
 
-function whTracksCard(agg, prevAgg, ctx) {
+function whTracksCard(agg, prevAgg, ctx, title = "Tracks") {
   wh.likedCache = ctx.liked;
   const top = Array.from(agg.trackCounts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5);
   const [v0, c0] = top[0];
@@ -994,7 +1042,7 @@ function whTracksCard(agg, prevAgg, ctx) {
   const rest = whTopList(top.slice(1), ([v, c], i) => `<li><button type="button" class="wh-list-item" data-wh-play="${escapeHtml(wh.data.videos[v].id)}"><span class="wh-rank">${i + 2}</span><span class="wh-name">${escapeHtml(whTrackLabel(v))}</span><span class="wh-num">${formatCount(c)}</span></button></li>`);
   return whCardShell(
     "wh-card-tracks",
-    "Tracks",
+    title,
     agg.trackCounts.size,
     prevAgg ? prevAgg.trackCounts.size : null,
     agg.plays ? agg.newTrackPlays / agg.plays : null,
@@ -1004,8 +1052,8 @@ function whTracksCard(agg, prevAgg, ctx) {
   );
 }
 
-// Podcasts and talk shows, grouped by show (channel). Always kept out of the music cards when "Music only" is on.
-function whPodcastsCard(agg, prevAgg) {
+// Podcasts and talk shows, grouped by show (channel). Hidden in the Music view, the main card in the Podcasts view.
+function whPodcastsCard(agg, prevAgg, ctx) {
   if (!agg.talkPlays) return "";
   const showsOf = (a) => {
     const map = new Map();
@@ -1038,8 +1086,8 @@ function whPodcastsCard(agg, prevAgg) {
     const id = wh.data.videos[s.v].id;
     return `<li><button type="button" class="wh-list-item" data-wh-play="${escapeHtml(id)}" title="${escapeHtml(whTrackTitle(s.v))}"><span class="wh-rank">${i + 2}</span><img src="${whThumb(id)}" alt="" loading="lazy" /><span class="wh-name">${escapeHtml(s.name)}</span><span class="wh-num">${formatCount(s.plays)}</span></button></li>`;
   });
-  const note = wh.musicOnly ? `${whPlural(agg.talkPlays, "play")}, kept out of the music stats.` : `${whPlural(agg.talkPlays, "play")}, also counted above.`;
-  return whCardShell("wh-card-podcasts wh-card-art", "Podcasts", shows.size, prevShows ? prevShows.size : null, null, "", firstHtml, rest, note);
+  const note = ctx.filter === "all" ? `${whPlural(agg.talkPlays, "play")}, also counted above.` : "";
+  return whCardShell("wh-card-podcasts wh-card-art", ctx.filter === "podcasts" ? "Shows" : "Podcasts", shows.size, prevShows ? prevShows.size : null, null, "", firstHtml, rest, note);
 }
 
 function whClockHtml(agg) {
@@ -1132,7 +1180,7 @@ function whFactsHtml(type, range, agg, prevAgg, ctx) {
 
   // Lengths are only known for liked tracks, so estimate from a typical liked track's length
   const typical = whTypicalTrackSeconds(ctx.liked);
-  const musicPlays = agg.plays - (ctx.musicOnly ? 0 : agg.talkPlays);
+  const musicPlays = ctx.talkOnly ? 0 : agg.plays - (ctx.musicOnly ? 0 : agg.talkPlays);
   if (typical && musicPlays > 0) {
     const hours = (musicPlays * typical) / 3600;
     const mins = Math.round(typical / 60);
@@ -1164,7 +1212,7 @@ function whLikesHtml(agg, ctx) {
   const historyStart = wh.data.meta.first * 1000;
   let neverPlayed = 0;
   for (const v of state.videos) {
-    if (checkIfDeleted(v) || (wh.musicOnly && !v.is_music) || !v.published_at) continue;
+    if (checkIfDeleted(v) || (wh.filter === "music" && !v.is_music) || !v.published_at) continue;
     if (Date.parse(v.published_at) >= historyStart && whPlaysFor(v.video_id) === 0) neverPlayed++;
   }
   let likedTracksPlayed = 0;
@@ -1366,12 +1414,11 @@ function whSetupEvents() {
   };
   on("insights-prev", "click", () => step(-1));
   on("insights-next", "click", () => step(1));
-  on("insights-music-toggle", "change", (e) => {
-    wh.musicOnly = e.target.checked;
-    whRenderInsights();
-  });
-  on("insights-podcast-toggle", "change", (e) => {
-    wh.showPodcasts = e.target.checked;
+  on("insights-filter", "change", (e) => {
+    wh.filter = e.target.value;
+    try {
+      localStorage.setItem("dislikes-insights-filter", wh.filter);
+    } catch {}
     whRenderInsights();
   });
   on("insights-close", "click", () => {
