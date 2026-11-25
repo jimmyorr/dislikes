@@ -963,6 +963,38 @@
         color: var(--wh-muted);
         margin-top: 12px;
       }
+
+      /* Card play overlay: only on devices with a real hover pointer (or
+         keyboard focus), so touch scrolling doesn't flash it on whatever
+         card the thumb lands on. */
+      .card-play-scrim {
+        background-color: rgb(0 0 0 / 0);
+        transition: background-color 150ms;
+      }
+      .card-play-icon {
+        opacity: 0;
+        transform: scale(0.9);
+        transition: opacity 200ms, transform 200ms;
+      }
+      .video-play-btn:focus-visible .card-play-scrim {
+        background-color: rgb(0 0 0 / 0.4);
+      }
+      .video-play-btn:focus-visible .card-play-icon {
+        opacity: 1;
+        transform: scale(1);
+      }
+      @media (hover: hover) and (pointer: fine) {
+        .video-play-btn:hover .video-thumbnail {
+          transform: scale(1.05);
+        }
+        .video-play-btn:hover .card-play-scrim {
+          background-color: rgb(0 0 0 / 0.4);
+        }
+        .video-play-btn:hover .card-play-icon {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
     </style>
   </head>
 
@@ -2780,13 +2812,13 @@
           class="video-play-btn block relative w-full aspect-video [.compact-mode_&]:aspect-square group/btn overflow-hidden rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-black dark:focus-visible:ring-white bg-gray-100 dark:bg-[#1e1e1e]"
         >
           <img
-            class="video-thumbnail w-full h-full object-cover transition-transform duration-300 group-hover/btn:scale-105"
+            class="video-thumbnail w-full h-full object-cover transition-transform duration-300"
             loading="lazy"
             decoding="async"
             alt=""
           />
           <div
-            class="absolute inset-0 bg-black/0 group-hover/btn:bg-black/40 transition-colors flex items-center justify-center"
+            class="card-play-scrim absolute inset-0 flex items-center justify-center"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -2798,7 +2830,7 @@
               stroke-width="1.5"
               stroke-linecap="round"
               stroke-linejoin="round"
-              class="text-white opacity-0 group-hover/btn:opacity-100 transition-all scale-90 group-hover/btn:scale-100 duration-200 drop-shadow-lg"
+              class="card-play-icon text-white drop-shadow-lg"
             >
               <polygon points="6 4 20 12 6 20 6 4"></polygon>
             </svg>
