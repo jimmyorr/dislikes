@@ -1291,19 +1291,7 @@ function setupEventListeners() {
     if (!video || checkIfDeleted(video)) return;
     state.consecutiveAutoSkips = 0;
     state.lastNavDirection = 1;
-    const baseUrl = video.is_music ? "https://music.youtube.com" : "https://www.youtube.com";
-    const channelUrl = video.channel_id
-      ? `${baseUrl}/channel/${encodeURIComponent(video.channel_id)}`
-      : null;
-    const thumbnail = `https://i.ytimg.com/vi/${video.video_id}/mqdefault.jpg`;
-    playVideo(
-      video.video_id,
-      video.title || "Unavailable",
-      video.artist || "Unknown channel",
-      thumbnail,
-      channelUrl,
-      idx,
-    );
+    playTrackByIndex(idx);
   });
 
   // Fast Scrubber & Virtualized Grid Scroll / Resize Logic
@@ -2887,6 +2875,7 @@ function acquireVideoCard(video, index, deferThumbnail = false) {
 
   card.dataset.videoIndex = String(index);
   img.alt = title;
+  playBtn.setAttribute("aria-label", isDeleted ? `${title} (unavailable)` : `Play ${title}`);
 
   overlay.classList.toggle("hidden", !isDeleted);
   overlay.classList.toggle("flex", isDeleted);
