@@ -65,7 +65,7 @@ self.addEventListener("fetch", (event) => {
           cache: "no-cache",
         });
         clearTimeout(timeoutId);
-        if (response.ok && !url.pathname.endsWith("/likes.json")) {
+        if (response.ok && !url.pathname.endsWith("/likes.json") && !url.pathname.endsWith("/demo-history.json")) {
           const copy = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy)).catch(() => {});
         }

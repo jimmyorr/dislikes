@@ -14,6 +14,7 @@ const wh = {
   artistOf: null, // string key per history video
   artistFirst: new Map(), // artist key -> first play (s)
   importing: false,
+  demo: false, // showing the bundled demo history (not saved, real history untouched)
   insightsOpen: false,
   period: { type: "week", anchor: null },
   musicOnly: true,
@@ -109,7 +110,7 @@ function whSyncUi() {
   const status = document.getElementById("wh-settings-status");
   if (status) {
     status.textContent = has
-      ? `${formatCount(wh.data.meta.plays)} plays, ${whFormatMonth(wh.data.meta.first)} to ${whFormatMonth(wh.data.meta.last)}`
+      ? `${wh.demo ? "Demo: " : ""}${formatCount(wh.data.meta.plays)} plays, ${whFormatMonth(wh.data.meta.first)} to ${whFormatMonth(wh.data.meta.last)}`
       : "Not imported";
   }
   if (typeof updateFiltersUI === "function") updateFiltersUI();
@@ -122,6 +123,7 @@ async function whLoadStored() {
     const db = await libraryDbReady;
     if (!db) return;
     const data = await idbRequest(db, "readonly", (store) => store.get(WH_KEY));
+    if (wh.demo) return; // the demo's history is showing; the stored one comes back on exit
     if (data && data.version === 1 && data.t && data.vi) whSetData(data);
     else whSyncUi();
   } catch (e) {
@@ -143,6 +145,10 @@ async function whSave(data) {
 }
 
 async function whRemove() {
+  if (wh.demo) {
+    whExitDemo();
+    return;
+  }
   try {
     const db = await libraryDbReady;
     if (db) await idbRequest(db, "readwrite", (store) => store.delete(WH_KEY));
@@ -152,6 +158,45 @@ async function whRemove() {
   whSetData(null);
   if (wh.insightsOpen) whCloseInsights();
   showToast("Watch history removed");
+}
+
+// --- Demo (?demo=1): a bundled copy of a real history (demo-history.json), kept in memory only ---
+
+async function whLoadDemoHistory() {
+  try {
+    const res = await fetch("demo-history.json");
+    if (!res.ok) return;
+    const raw = await res.json();
+    if (!raw || raw.version !== 1 || !Array.isArray(raw.videos)) return;
+    const n = raw.t.length;
+    const t = new Uint32Array(n);
+    let acc = 0;
+    for (let k = 0; k < n; k++) {
+      acc += raw.t[k];
+      t[k] = acc;
+    }
+    const data = {
+      version: 1,
+      videos: raw.videos.map(([id, title, channel, channelId]) => ({ id, title, channel, channelId })),
+      music: Uint8Array.from(raw.videos, (v) => (v[4] === undefined ? 1 : v[4] ? 1 : 0)),
+      t,
+      vi: Uint32Array.from(raw.vi),
+      meta: { importedAt: Date.now(), entries: n, plays: n, distinct: raw.videos.length, musicPlays: n, skippedAds: 0, skippedOther: 0, collapsed: 0, first: n ? t[0] : null, last: n ? t[n - 1] : null },
+    };
+    if (state.dataSource !== "demo") return; // demo was exited while loading
+    wh.demo = true;
+    whSetData(data);
+  } catch (e) {
+    console.warn("Couldn't load demo history:", e);
+  }
+}
+
+// Leaving the demo puts back the user's own imported history, if any
+function whExitDemo() {
+  if (!wh.demo) return;
+  wh.demo = false;
+  whSetData(null);
+  whLoadStored();
 }
 
 // --- Import ---
@@ -202,6 +247,7 @@ function whImportFile(file) {
     }
     whSetProgress("Saving", 1, 1);
     const saved = await whSave(data);
+    wh.demo = false;
     whSetData(data);
     whShowDialogDone(saved);
   };

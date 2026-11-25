@@ -1995,6 +1995,8 @@ function handleSignout() {
   }
   storeDelete("yt_dislikes_custom_upload");
 
+  if (typeof whExitDemo === "function") whExitDemo();
+
   // Reset state
   state.accessToken = null;
   state.isAuthenticated = false;
@@ -2713,6 +2715,7 @@ async function loadDemoData() {
       state.localLibrary = { source: "demo", mode: "like", videos: normalized };
       applyLocalLibrary();
       render();
+      whLoadDemoHistory();
     } else {
       showToast("Invalid JSON format in demo data", "error");
     }
@@ -4031,6 +4034,8 @@ function getEmptyStateMessage() {
 }
 
 function render() {
+  // Demo watch history only belongs to the demo library (history.js)
+  if (typeof wh !== "undefined" && wh.demo && state.dataSource !== "demo") whExitDemo();
   const isReady = state.gisInited;
   const isLoadMore = state.isLoadMore;
   const hasAppData =
