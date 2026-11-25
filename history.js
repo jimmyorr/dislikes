@@ -197,6 +197,8 @@ async function whLoadDemoHistory() {
     if (state.dataSource !== "demo") return; // demo was exited while loading
     wh.demo = true;
     whSetData(data);
+    // ?demo=1#insights: the demo history arrives after page load, so open Insights now
+    if (location.hash === "#insights" && !wh.insightsOpen) whOpenInsightsFromLink();
   } catch (e) {
     console.warn("Couldn't load demo history:", e);
   }
@@ -688,6 +690,13 @@ function whOpenInsights(pushHistory = true) {
   }
   whRenderInsights();
   window.scrollTo(0, 0);
+}
+
+// Opening from a link that already ends in #insights: put a plain library entry underneath,
+// so Back (or closing Insights) lands on the library instead of leaving the site.
+function whOpenInsightsFromLink() {
+  history.replaceState(null, "", location.pathname + location.search);
+  whOpenInsights(true);
 }
 
 function whCloseInsights(fromPop = false) {
@@ -1634,5 +1643,7 @@ function whSetupEvents() {
 
 whSetupEvents();
 whLoadStored().then(() => {
-  if (location.hash === "#insights" && whHasData()) whOpenInsights(false);
+  // With ?demo=1 the demo history opens Insights once it loads (whLoadDemoHistory)
+  const demoLink = /[?&](demo=(1|true)|source=demo)(&|$)/.test(location.search);
+  if (location.hash === "#insights" && whHasData() && !demoLink) whOpenInsightsFromLink();
 });
