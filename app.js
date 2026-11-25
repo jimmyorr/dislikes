@@ -2004,6 +2004,7 @@ function slimVideo(v) {
 
 let activeFetchPromise = null;
 let fetchGeneration = 0;
+let lastCacheSaveTs = 0;
 
 function invalidateActiveFetch() {
   fetchGeneration++;
@@ -2157,7 +2158,13 @@ async function fetchVideos(pageToken = null) {
 
       state.nextPageToken = nextToken;
       state.totalResults = total;
-      saveToCache(fetchMode, state.videos, nextToken, total);
+      // During "Load all", re-serializing the whole (growing) library into localStorage on every
+      // 50-item page is quadratic and blocks the main thread; save every few seconds and on the last page.
+      const now = Date.now();
+      if (!state.isFetchAll || !nextToken || now - lastCacheSaveTs > 3000) {
+        lastCacheSaveTs = now;
+        saveToCache(fetchMode, state.videos, nextToken, total);
+      }
       filterVideos();
 
       // The zero-yield fix for infinite scroll
