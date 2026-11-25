@@ -48,6 +48,7 @@ const state = {
   musicOnly: localStorage.getItem("dislikes-music-only") !== null ? localStorage.getItem("dislikes-music-only") === "true" : true,
   maxViews: loadInitialMaxViews(),
   unavailableOnly: localStorage.getItem("dislikes-unavailable-only") === "true",
+  neverPlayedOnly: false, // watch history filter (history.js)
   videos: [],
   filteredVideos: [],
   loading: false,
@@ -499,7 +500,8 @@ function updateFiltersUI() {
   const activeDiffCount =
     (state.maxViews !== null ? 1 : 0) +
     (!state.musicOnly ? 1 : 0) +
-    (state.unavailableOnly ? 1 : 0);
+    (state.unavailableOnly ? 1 : 0) +
+    (state.neverPlayedOnly ? 1 : 0);
 
   if (dom.filtersResetButton) {
     dom.filtersResetButton.classList.toggle("hidden", activeDiffCount === 0);
@@ -532,6 +534,9 @@ function resetFilters() {
   state.maxViews = null;
   state.musicOnly = true;
   state.unavailableOnly = false;
+  state.neverPlayedOnly = false;
+  const neverToggle = document.getElementById("never-played-toggle");
+  if (neverToggle) neverToggle.checked = false;
   localStorage.setItem("dislikes-max-views", "any");
   localStorage.setItem("dislikes-music-only", "true");
   localStorage.setItem("dislikes-unavailable-only", "false");
@@ -1419,7 +1424,8 @@ function setupEventListeners() {
     setDropOverlayVisible(false);
     const file = e.dataTransfer?.files?.[0];
     if (file) {
-      loadUploadedJsonFile(file);
+      if (whLooksLikeHistoryFile(file)) whImportFile(file);
+      else loadUploadedJsonFile(file);
     }
   });
 
@@ -1988,6 +1994,8 @@ function handleSignout() {
     clearYoutubeCaches();
   }
   storeDelete("yt_dislikes_custom_upload");
+
+  if (typeof whExitDemo === "function") whExitDemo();
 
   // Reset state
   state.accessToken = null;
@@ -2707,6 +2715,7 @@ async function loadDemoData() {
       state.localLibrary = { source: "demo", mode: "like", videos: normalized };
       applyLocalLibrary();
       render();
+      whLoadDemoHistory();
     } else {
       showToast("Invalid JSON format in demo data", "error");
     }
@@ -2735,6 +2744,11 @@ function loadUploadedJsonFile(file) {
   reader.onload = (e) => {
     try {
       const data = JSON.parse(e.target.result);
+      if (whIsTakeoutArray(data)) {
+        // A Google Takeout watch history picked through the likes upload: import it as history
+        whImportFile(file);
+        return;
+      }
       if (Array.isArray(data)) {
         const normalized = normalizeImportedDataset(data);
         if (normalized.length === 0) {
@@ -2939,6 +2953,15 @@ function sortVideos(videos, sortBy) {
       keyOf = (v) => v.title || "";
       compare = (a, b) => compareText(a.k, b.k);
       break;
+    case "plays-most":
+      // Your own play count from imported watch history (history.js); ties go to the more recent play
+      keyOf = (v) => ({ plays: whPlaysFor(v.video_id), last: whLastPlayedFor(v.video_id) });
+      compare = (a, b) => b.k.plays - a.k.plays || b.k.last - a.k.last;
+      break;
+    case "played-recent":
+      keyOf = (v) => whLastPlayedFor(v.video_id);
+      compare = (a, b) => b.k - a.k;
+      break;
     default:
       return videos;
   }
@@ -2964,6 +2987,10 @@ function filterVideos() {
 
   if (state.maxViews !== null && !state.unavailableOnly) {
     results = results.filter((v) => !checkIfDeleted(v) && (Number(v.views) || 0) < state.maxViews);
+  }
+
+  if (state.neverPlayedOnly && typeof whHasData === "function" && whHasData()) {
+    results = results.filter((v) => !checkIfDeleted(v) && whPlaysFor(v.video_id) === 0);
   }
 
   // Keep the left nav browsable across the full collection (cowneck/music style)
@@ -3257,6 +3284,7 @@ function createVideoCard() {
       titleEl: card.querySelector(".video-title"),
       channelEl: card.querySelector(".channel-title"),
       metadataEl: card.querySelector(".dynamic-metadata"),
+      playsBadge: card.querySelector(".plays-badge"),
     };
   }
   return card;
@@ -3320,6 +3348,16 @@ function bindVideoCard(card, video, index, deferThumbnail = false) {
   }
 
   metadataEl.textContent = isDeleted ? "No stats" : getDynamicMetadata(video);
+
+  // Your play count from imported watch history, shown on every card once history is loaded
+  if (card._refs.playsBadge) {
+    const plays = typeof whHasData === "function" && whHasData() ? whPlaysFor(video.video_id) : 0;
+    card._refs.playsBadge.hidden = !plays || isDeleted;
+    if (plays) {
+      card._refs.playsBadge.textContent = formatCount(plays);
+      card._refs.playsBadge.title = `You've played this ${plays === 1 ? "once" : `${formatCount(plays)} times`}`;
+    }
+  }
 
   return card;
 }
@@ -3547,6 +3585,17 @@ function buildScrubberCheckpoints(videos = state.filteredVideos, sortBy = state.
     [0, "0"],
   ];
 
+  const PLAY_TIERS = [
+    [100, "100+"],
+    [50, "50"],
+    [25, "25"],
+    [10, "10"],
+    [5, "5"],
+    [2, "2"],
+    [1, "1"],
+    [0, "0"],
+  ];
+
   const pickTier = (val, tiers) => {
     const n = Number(val) || 0;
     for (let i = 0; i < tiers.length; i++) {
@@ -3588,6 +3637,15 @@ function buildScrubberCheckpoints(videos = state.filteredVideos, sortBy = state.
       }
       case "comments-most": {
         label = pickTier(v.comments, COMMENT_TIERS);
+        break;
+      }
+      case "plays-most": {
+        label = pickTier(whPlaysFor(v.video_id), PLAY_TIERS);
+        break;
+      }
+      case "played-recent": {
+        const last = whLastPlayedFor(v.video_id);
+        label = last ? String(new Date(last * 1000).getFullYear()) : "Never";
         break;
       }
       default: {
@@ -3976,6 +4034,8 @@ function getEmptyStateMessage() {
 }
 
 function render() {
+  // Demo watch history only belongs to the demo library (history.js)
+  if (typeof wh !== "undefined" && wh.demo && state.dataSource !== "demo") whExitDemo();
   const isReady = state.gisInited;
   const isLoadMore = state.isLoadMore;
   const hasAppData =
@@ -4470,6 +4530,9 @@ function getDynamicMetadata(video) {
     }
     case "comments-most":
       return `${compact(video.comments)} comments`;
+    case "plays-most":
+    case "played-recent":
+      return whMetadataFor(video, state.sortBy);
     default:
       return `${compact(video.views)} views`;
   }

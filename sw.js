@@ -1,4 +1,4 @@
-const SW_VERSION = "2.1.4";
+const SW_VERSION = "2.2.0";
 const CACHE_NAME = `dislikes-v${SW_VERSION}`;
 const ASSETS = [
   "./",
@@ -7,6 +7,8 @@ const ASSETS = [
   "./styles.css",
   "./version.js",
   "./app.js",
+  "./history.js",
+  "./history-worker.js",
   "./manifest.json",
   "./icon.png",
 ];
@@ -63,7 +65,7 @@ self.addEventListener("fetch", (event) => {
           cache: "no-cache",
         });
         clearTimeout(timeoutId);
-        if (response.ok && !url.pathname.endsWith("/likes.json")) {
+        if (response.ok && !url.pathname.endsWith("/likes.json") && !url.pathname.endsWith("/demo-history.json")) {
           const copy = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy)).catch(() => {});
         }
