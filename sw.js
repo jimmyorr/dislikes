@@ -1,8 +1,10 @@
-importScripts("version.js");
+importScripts("version.js?v=2.0.5");
 const CACHE_NAME = `dislikes-v${APP_VERSION}`;
 const ASSETS = [
   "./",
   "./index.html",
+  "./privacy.html",
+  "./styles.css",
   "./version.js",
   "./app.js",
   "./manifest.json",
@@ -27,7 +29,6 @@ self.addEventListener("activate", (event) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
           if (cacheName !== CACHE_NAME && cacheName.startsWith("dislikes-v")) {
-            console.log("SW: Deleting old cache:", cacheName);
             return caches.delete(cacheName);
           }
         }),
@@ -51,6 +52,7 @@ self.addEventListener("fetch", (event) => {
       try {
         const response = await fetch(event.request, {
           signal: controller.signal,
+          cache: "no-cache",
         });
         clearTimeout(timeoutId);
         if (response.ok && !url.pathname.endsWith("/likes.json")) {
@@ -60,7 +62,9 @@ self.addEventListener("fetch", (event) => {
         return response;
       } catch (err) {
         clearTimeout(timeoutId);
-        const cached = await caches.match(event.request);
+        const cached =
+          (await caches.match(event.request)) ||
+          (await caches.match(event.request, { ignoreSearch: true }));
         if (cached) return cached;
         throw err;
       }

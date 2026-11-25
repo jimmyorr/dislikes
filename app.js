@@ -2,15 +2,13 @@
 const CLIENT_ID =
   "932685095666-31l2s1psd94msj2a59d2ok7m4dfj3922.apps.googleusercontent.com";
 const SCOPES = "https://www.googleapis.com/auth/youtube.readonly";
-const DISCOVERY_DOC =
-  "https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest";
 // VERSION is now defined in version.js
 
 // --- State ---
 const state = {
-  gapiInited: false,
   gisInited: false,
   tokenClient: null,
+  accessToken: null,
   isAuthenticated: false,
   dataSource: null, // 'youtube' | 'demo' | 'upload' | null
   theme: localStorage.getItem("dislikes-theme") || "system",
@@ -32,7 +30,6 @@ const state = {
   iconCache: {},
   sidebarCategory: "channels",
   activeFilter: null,
-  renderLimit: 50,
   forceRefetch: false,
   sidebarBaseVideos: [],
   ytPlayer: null,
@@ -40,6 +37,8 @@ const state = {
   currentVideoIndex: -1,
   currentVideoId: null,
   pendingVideoId: null,
+  autoplayRequested: false,
+  autoplayFallbackTimeout: null,
   progressInterval: null,
   shuffleMode: false,
   shuffleHistory: [],
@@ -131,9 +130,15 @@ const dom = {
   fsPlayerPrev: document.getElementById("fs-player-prev"),
   fsPlayerNext: document.getElementById("fs-player-next"),
 
-  quickScrollContainer: document.getElementById("quick-scroll-container"),
-  backToTop: document.getElementById("back-to-top"),
-  scrollToBottom: document.getElementById("scroll-to-bottom"),
+  fastScrubber: document.getElementById("fast-scrubber"),
+  scrubberTooltip: document.getElementById("scrubber-tooltip"),
+  scrubberTooltipPrimary: document.getElementById("scrubber-tooltip-primary"),
+  scrubberTooltipSub: document.getElementById("scrubber-tooltip-sub"),
+  scrubberTopBtn: document.getElementById("scrubber-top-btn"),
+  scrubberBottomBtn: document.getElementById("scrubber-bottom-btn"),
+  scrubberTrack: document.getElementById("scrubber-track"),
+  scrubberThumb: document.getElementById("scrubber-thumb"),
+  scrubberCheckpoints: document.getElementById("scrubber-checkpoints"),
   toast: document.getElementById("toast"),
 
   videoTemplate: document.getElementById("video-card-template"),
@@ -267,19 +272,21 @@ function setupCustomDropdown({ container, trigger, menu, chevron, labelEl, getVa
     });
   };
 
-  const openMenu = (focusTarget = "selected") => {
+  const openMenu = (focusTarget = null) => {
     closeAllPopovers(menu);
     syncUI();
     menu.classList.remove("hidden");
     trigger.setAttribute("aria-expanded", "true");
     if (chevron) chevron.classList.add("rotate-180");
 
-    const options = getOptions();
-    if (!options.length) return;
-    let toFocus = options.find((o) => o.dataset.value === getValue()) || options[0];
-    if (focusTarget === "first") toFocus = options[0];
-    else if (focusTarget === "last") toFocus = options[options.length - 1];
-    toFocus?.focus();
+    if (focusTarget) {
+      const options = getOptions();
+      if (!options.length) return;
+      let toFocus = options.find((o) => o.dataset.value === getValue()) || options[0];
+      if (focusTarget === "first") toFocus = options[0];
+      else if (focusTarget === "last") toFocus = options[options.length - 1];
+      toFocus?.focus();
+    }
   };
 
   const closeMenu = (restoreFocus = false) => {
@@ -289,12 +296,14 @@ function setupCustomDropdown({ container, trigger, menu, chevron, labelEl, getVa
     if (restoreFocus) trigger.focus();
   };
 
+  trigger.style.touchAction = "manipulation";
   syncUI();
 
-  trigger.addEventListener("click", () => {
+  trigger.addEventListener("click", (e) => {
+    e.stopPropagation();
     const isHidden = menu.classList.contains("hidden");
     if (isHidden) {
-      openMenu("selected");
+      openMenu(e.detail === 0 ? "selected" : null);
     } else {
       closeMenu(false);
     }
@@ -312,6 +321,7 @@ function setupCustomDropdown({ container, trigger, menu, chevron, labelEl, getVa
   });
 
   menu.addEventListener("click", (e) => {
+    e.stopPropagation();
     const opt = e.target.closest(".dropdown-option");
     if (!opt) return;
     const newValue = opt.dataset.value;
@@ -370,55 +380,30 @@ function setMobileFiltersOpen(isOpen) {
 }
 
 function init() {
-  console.log(`Dislikes v${APP_VERSION} initializing...`);
-  document.getElementById("app-version").textContent = `v${APP_VERSION}`;
+  console.log(`Dislikes v${APP_VERSION}`);
+  const verEl = document.getElementById("app-version");
+  if (verEl) verEl.textContent = `v${APP_VERSION}`;
 
-  initGapi();
-  initGis();
-  initYTPlayer();
-  setupMediaSessionHandlers();
-  
   applyTheme(state.theme);
   updateThemeToggleUI(state.theme);
-  
-  dom.compactToggle.checked = state.compactMode;
+
+  if (dom.compactToggle) {
+    dom.compactToggle.checked = state.compactMode;
+  }
   applyCompactMode(state.compactMode);
 
   setupEventListeners();
+  setupMediaSessionHandlers();
+  initYTPlayer();
+  initGis();
   render();
 
   // If it's taking too long (e.g. 8 seconds), show the troubleshooting link
   setTimeout(() => {
-    if (!state.gapiInited || !state.gisInited) {
+    if (!state.gisInited && dom.initializationTrouble) {
       dom.initializationTrouble.classList.remove("hidden");
     }
   }, 8000);
-}
-
-function initGapi() {
-  let attempts = 0;
-  const maxAttempts = 100; // 10 seconds
-  const checkGapi = setInterval(() => {
-    attempts++;
-    if (window.gapi) {
-      clearInterval(checkGapi);
-      window.gapi.load("client", async () => {
-        try {
-          await window.gapi.client.load("youtube", "v3");
-          state.gapiInited = true;
-          checkReady();
-        } catch (err) {
-          console.error(err);
-          showError("Failed to initialize Google API client.");
-        }
-      });
-    } else if (attempts > maxAttempts) {
-      clearInterval(checkGapi);
-      console.error("GAPI load timeout");
-      // We don't show error yet, checkReady will handle the visual feedback
-      checkReady();
-    }
-  }, 100);
 }
 
 function initGis() {
@@ -426,7 +411,7 @@ function initGis() {
   const maxAttempts = 100; // 10 seconds
   const checkGis = setInterval(() => {
     attempts++;
-    if (window.google) {
+    if (window.google?.accounts?.oauth2) {
       clearInterval(checkGis);
       const client = window.google.accounts.oauth2.initTokenClient({
         client_id: CLIENT_ID,
@@ -437,17 +422,7 @@ function initGis() {
             return;
           }
           saveToken(resp);
-
-          // Explicitly set the token for gapi client
-          if (window.gapi && window.gapi.client) {
-            window.gapi.client.setToken({
-              access_token: resp.access_token,
-              expires_in: resp.expires_in,
-              scope: resp.scope,
-              token_type: resp.token_type,
-            });
-          }
-
+          state.accessToken = resp.access_token;
           state.isAuthenticated = true;
           state.dataSource = "youtube";
           state.videos = [];
@@ -466,14 +441,14 @@ function initGis() {
       checkReady();
     } else if (attempts > maxAttempts) {
       clearInterval(checkGis);
-      console.error("GIS load timeout");
+      console.warn("Google Identity Services load timeout");
       checkReady();
     }
   }, 100);
 }
 
 function saveToken(resp) {
-  const expiresIn = parseInt(resp.expires_in) || 3600;
+  const expiresIn = parseInt(resp.expires_in, 10) || 3600;
   const tokenData = {
     ...resp,
     expires_at: Date.now() + expiresIn * 1000,
@@ -490,10 +465,9 @@ function loadToken() {
 
     // If it's expiring in less than 5 minutes, consider it expired
     const now = Date.now();
-    const expiresAt = parseInt(tokenData.expires_at);
+    const expiresAt = parseInt(tokenData.expires_at, 10);
 
     if (isNaN(expiresAt) || now > expiresAt - 300000) {
-      console.log("Token expired or invalid expiration date");
       localStorage.removeItem("yt_dislikes_token");
       return null;
     }
@@ -505,18 +479,13 @@ function loadToken() {
 }
 
 function checkReady() {
-  if (state.gapiInited && state.gisInited) {
-    dom.initializationTrouble.classList.add("hidden");
+  if (state.gisInited) {
+    if (dom.initializationTrouble) {
+      dom.initializationTrouble.classList.add("hidden");
+    }
     const token = loadToken();
     if (token && !state.isAuthenticated && !state.dataSource) {
-      console.log("Restoring session from token");
-      // Only pass the necessary token properties to gapi
-      window.gapi.client.setToken({
-        access_token: token.access_token,
-        expires_in: token.expires_in,
-        scope: token.scope,
-        token_type: token.token_type,
-      });
+      state.accessToken = token.access_token;
       state.isAuthenticated = true;
       state.dataSource = "youtube";
       // Initialize with loading state to avoid "All 0 loaded" flash
@@ -524,7 +493,6 @@ function checkReady() {
       render();
       fetchVideos();
     } else {
-      console.log("No token found or already authenticated");
       render(); // Update UI to enable buttons
     }
   }
@@ -702,6 +670,8 @@ function closePlayer() {
     /* ignore */
   }
   stopProgressInterval();
+  clearAutoplayFallback();
+  state.autoplayRequested = false;
   state.currentVideoIndex = -1;
   state.currentVideoId = null;
   state.pendingVideoId = null;
@@ -709,8 +679,10 @@ function closePlayer() {
   dom.fsPlayer.classList.add("translate-y-full");
   document.body.style.paddingBottom = "0px";
   document.body.style.overflow = "";
-  if (dom.quickScrollContainer) {
-    dom.quickScrollContainer.classList.remove("-translate-y-[80px]");
+  if (dom.fastScrubber) {
+    dom.fastScrubber.classList.remove("bottom-24");
+    dom.fastScrubber.classList.add("bottom-6");
+    scheduleScrubberLayoutRefresh();
   }
   if ("mediaSession" in navigator) {
     try {
@@ -720,23 +692,6 @@ function closePlayer() {
       /* ignore */
     }
   }
-}
-
-function checkLocalScrollFill() {
-  requestAnimationFrame(() => {
-    if (
-      state.renderLimit < state.filteredVideos.length &&
-      !dom.scrollSentinel.classList.contains("hidden")
-    ) {
-      const rect = dom.scrollSentinel.getBoundingClientRect();
-      if (rect.top < window.innerHeight && rect.bottom > 0) {
-        state.renderLimit += 50;
-        renderVideoList(true);
-        updateSentinel();
-        checkLocalScrollFill();
-      }
-    }
-  });
 }
 
 function setupEventListeners() {
@@ -761,10 +716,14 @@ function setupEventListeners() {
   const togglePlayPause = () => {
     if (!state.isPlayerReady || !state.ytPlayer) return;
     const playerState = state.ytPlayer.getPlayerState();
-    if (playerState === 1) {
+    if (playerState === 1 || playerState === 3) {
+      state.autoplayRequested = false;
+      clearAutoplayFallback();
       state.ytPlayer.pauseVideo();
     } else {
+      state.autoplayRequested = true;
       state.ytPlayer.playVideo();
+      scheduleAutoplayFallbackCheck(1200);
     }
   };
 
@@ -961,23 +920,16 @@ function setupEventListeners() {
   dom.loadAllButton.addEventListener("click", handleLoadAll);
 
 
-  // Infinite Scroll Observer
+  // Infinite Scroll Observer (for loading next YouTube API pages)
   const observer = new IntersectionObserver(
     (entries) => {
-      if (entries[0].isIntersecting) {
-        if (state.renderLimit < state.filteredVideos.length) {
-          // Render more from local memory
-          state.renderLimit += 50;
-          renderVideoList(true);
-          updateSentinel();
-          checkLocalScrollFill();
-        } else if (
-          state.nextPageToken &&
-          !state.loading &&
-          !state.debouncedSearchTerm.trim()
-        ) {
-          handleLoadMore();
-        }
+      if (
+        entries[0].isIntersecting &&
+        state.nextPageToken &&
+        !state.loading &&
+        !state.debouncedSearchTerm.trim()
+      ) {
+        handleLoadMore();
       }
     },
     { threshold: 0.1 },
@@ -985,35 +937,191 @@ function setupEventListeners() {
 
   observer.observe(dom.scrollSentinel);
 
-  // Quick Scroll Logic
-  dom.backToTop.addEventListener("click", () => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  });
+  // Fast Scrubber & Virtualized Grid Scroll / Resize Logic
+  const setScrubberThumbActive = (active) => {
+    if (!dom.scrubberThumb) return;
+    dom.scrubberThumb.classList.toggle("bg-black/25", active);
+    dom.scrubberThumb.classList.toggle("dark:bg-white/35", active);
+    dom.scrubberThumb.classList.toggle("bg-black/10", !active);
+    dom.scrubberThumb.classList.toggle("dark:bg-white/15", !active);
+  };
 
-  dom.scrollToBottom.addEventListener("click", async () => {
-    // Instantly expand the render limit to show everything we have
-    state.renderLimit = state.filteredVideos.length;
-    renderVideoList();
-    updateSentinel();
+  const jumpToCheckpoint = (cpIdx, edgeOverride = null) => {
+    const checkpoints = scrubberState.checkpoints;
+    if (!checkpoints.length || state.filteredVideos.length === 0) return;
+    const clampedIdx = Math.max(0, Math.min(checkpoints.length - 1, cpIdx));
+    const cp = checkpoints[clampedIdx];
+    const edge = edgeOverride || (clampedIdx === 0 ? "top" : null);
+    const targetItem = edge === "bottom" ? state.filteredVideos.length - 1 : cp.startIndex;
+    const fraction =
+      edge === "top"
+        ? 0
+        : edge === "bottom"
+          ? 1
+          : (clampedIdx + 0.5) / checkpoints.length;
+    scrollToVideoIndex(targetItem, edge);
+    updateScrubberPositionUI(fraction, clampedIdx, targetItem, true);
+  };
 
-    if (state.nextPageToken && !state.isFetchAll) {
-      // handleLoadAll will fetch all remaining pages and update renderLimit when done
-      await handleLoadAll();
-    }
-
-    requestAnimationFrame(() => {
-      window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+  if (dom.scrubberTopBtn) {
+    dom.scrubberTopBtn.addEventListener("click", () => {
+      jumpToCheckpoint(0, "top");
+      scheduleHideScrubberTooltip(650);
     });
-  });
+  }
 
-  window.addEventListener("scroll", () => {
-    if (window.scrollY > 500) {
-      dom.quickScrollContainer.classList.remove("opacity-0", "pointer-events-none");
-      dom.quickScrollContainer.classList.add("opacity-100");
-    } else {
-      dom.quickScrollContainer.classList.add("opacity-0", "pointer-events-none");
-      dom.quickScrollContainer.classList.remove("opacity-100");
-    }
+  if (dom.scrubberBottomBtn) {
+    dom.scrubberBottomBtn.addEventListener("click", () => {
+      jumpToCheckpoint(scrubberState.checkpoints.length - 1, "bottom");
+      scheduleHideScrubberTooltip(650);
+    });
+  }
+
+  if (dom.scrubberTrack) {
+    let activePointerId = null;
+    let startClientY = 0;
+    let hasDragged = false;
+    let handledByPointer = false;
+
+    const scrubAtClientY = (clientY) => {
+      const rect = dom.scrubberTrack.getBoundingClientRect();
+      const height = Math.max(1, rect.height);
+      const fraction = Math.max(0, Math.min(1, (clientY - rect.top) / height));
+      const { cpIdx, itemIndex, edge } = fractionToScrubberTarget(fraction);
+      scrollToVideoIndex(itemIndex, edge);
+      updateScrubberPositionUI(fraction, cpIdx, itemIndex, true);
+    };
+
+    dom.scrubberTrack.addEventListener("pointerdown", (e) => {
+      if (e.button && e.button !== 0) return;
+      if (!scrubberState.checkpoints.length) return;
+      e.preventDefault();
+      handledByPointer = true;
+      activePointerId = e.pointerId;
+      startClientY = e.clientY;
+      hasDragged = false;
+      scrubberState.isDragging = true;
+      setScrubberThumbActive(true);
+      try {
+        dom.scrubberTrack.setPointerCapture?.(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+
+      const cpEl = e.target.closest?.("[data-checkpoint-idx]");
+      if (cpEl) {
+        const k = parseInt(cpEl.dataset.checkpointIdx, 10);
+        if (!isNaN(k)) {
+          jumpToCheckpoint(k);
+          return;
+        }
+      }
+      scrubAtClientY(e.clientY);
+    });
+
+    dom.scrubberTrack.addEventListener("pointermove", (e) => {
+      if (!scrubberState.isDragging || e.pointerId !== activePointerId) return;
+      if (!hasDragged && Math.abs(e.clientY - startClientY) < 4) return;
+      hasDragged = true;
+      scrubAtClientY(e.clientY);
+    });
+
+    const finishPointerScrub = (e) => {
+      if (!scrubberState.isDragging || (activePointerId !== null && e.pointerId !== activePointerId)) {
+        return;
+      }
+      try {
+        dom.scrubberTrack.releasePointerCapture?.(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+      activePointerId = null;
+      scrubberState.isDragging = false;
+      setScrubberThumbActive(false);
+      scheduleHideScrubberTooltip(500);
+      setTimeout(() => {
+        handledByPointer = false;
+      }, 0);
+    };
+
+    dom.scrubberTrack.addEventListener("pointerup", finishPointerScrub);
+    dom.scrubberTrack.addEventListener("pointercancel", finishPointerScrub);
+
+    dom.scrubberTrack.addEventListener("click", (e) => {
+      if (handledByPointer || !scrubberState.checkpoints.length) return;
+      const cpEl = e.target.closest?.("[data-checkpoint-idx]");
+      if (cpEl) {
+        const k = parseInt(cpEl.dataset.checkpointIdx, 10);
+        if (!isNaN(k)) {
+          jumpToCheckpoint(k);
+          scheduleHideScrubberTooltip(650);
+        }
+      }
+    });
+
+    dom.scrubberTrack.addEventListener("keydown", (e) => {
+      const K = scrubberState.checkpoints.length;
+      if (!K) return;
+      const cur = Math.max(0, scrubberState.activeCheckpointIdx);
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        const next = Math.min(K - 1, cur + 1);
+        jumpToCheckpoint(next, next === K - 1 && cur === K - 1 ? "bottom" : null);
+        scheduleHideScrubberTooltip(800);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        jumpToCheckpoint(Math.max(0, cur - 1));
+        scheduleHideScrubberTooltip(800);
+      } else if (e.key === "PageDown") {
+        e.preventDefault();
+        jumpToCheckpoint(Math.min(K - 1, cur + 4));
+        scheduleHideScrubberTooltip(800);
+      } else if (e.key === "PageUp") {
+        e.preventDefault();
+        jumpToCheckpoint(Math.max(0, cur - 4));
+        scheduleHideScrubberTooltip(800);
+      } else if (e.key === "Home") {
+        e.preventDefault();
+        jumpToCheckpoint(0, "top");
+        scheduleHideScrubberTooltip(800);
+      } else if (e.key === "End") {
+        e.preventDefault();
+        jumpToCheckpoint(K - 1, "bottom");
+        scheduleHideScrubberTooltip(800);
+      }
+    });
+  }
+
+  let scrollRafPending = false;
+  window.addEventListener(
+    "scroll",
+    () => {
+      if (scrollRafPending) return;
+      scrollRafPending = true;
+      requestAnimationFrame(() => {
+        scrollRafPending = false;
+        renderVirtualGrid();
+        syncScrubberFromScroll();
+      });
+    },
+    { passive: true },
+  );
+
+  let resizeRafPending = false;
+  window.addEventListener("resize", () => {
+    if (resizeRafPending) return;
+    resizeRafPending = true;
+    requestAnimationFrame(() => {
+      resizeRafPending = false;
+      virtualGrid.cols = 0;
+      virtualGrid.rowHeight = 0;
+      scrubberState.renderedSignature = "";
+      if (state.filteredVideos.length > 0 && !dom.viewContent.classList.contains("hidden")) {
+        renderVirtualGrid(true);
+        renderScrubberCheckpoints();
+        syncScrubberFromScroll();
+      }
+    });
   });
 
   dom.modeToggle.addEventListener("click", () => {
@@ -1042,7 +1150,7 @@ function setupEventListeners() {
       state.dataSource = null;
       closePlayer();
     }
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({ top: 0, behavior: "auto" });
     render();
   });
 
@@ -1055,7 +1163,7 @@ function setupEventListeners() {
     dom.settingsButton.setAttribute("aria-expanded", String(willOpen));
   });
 
-  document.addEventListener("click", (e) => {
+  const dismissPopoversOutside = (e) => {
     if (
       dom.settingsMenu &&
       !dom.settingsMenu.classList.contains("hidden") &&
@@ -1083,7 +1191,10 @@ function setupEventListeners() {
       dom.sidebarFilterTrigger.setAttribute("aria-expanded", "false");
       dom.sidebarFilterChevron.classList.remove("rotate-180");
     }
-  });
+  };
+
+  document.addEventListener("pointerdown", dismissPopoversOutside);
+  document.addEventListener("click", dismissPopoversOutside);
 
   // Theme Logic
   const selectTheme = (newTheme) => {
@@ -1181,21 +1292,16 @@ function handleSignout() {
   invalidateActiveFetch();
   closePlayer();
 
-  // Clear Google API token only if an OAuth session is active
+  // Clear Google OAuth token only if an OAuth session is active
   if (state.isAuthenticated) {
-    const token = window.gapi?.client?.getToken?.();
-    if (token?.access_token && window.google?.accounts?.oauth2) {
-      window.google.accounts.oauth2.revoke(token.access_token, () => {
-        console.log("Token revoked");
-      });
-    }
-    if (window.gapi?.client?.setToken) {
-      window.gapi.client.setToken(null);
+    if (state.accessToken && window.google?.accounts?.oauth2) {
+      window.google.accounts.oauth2.revoke(state.accessToken, () => {});
     }
     localStorage.removeItem("yt_dislikes_token");
   }
 
   // Reset state
+  state.accessToken = null;
   state.isAuthenticated = false;
   state.dataSource = null;
   state.videos = [];
@@ -1341,6 +1447,44 @@ function invalidateActiveFetch() {
   state.isLoadMore = false;
 }
 
+async function youtubeApiGet(endpoint, params = {}, timeoutMs = 30000) {
+  if (!state.accessToken) {
+    const authErr = new Error("Not authenticated");
+    authErr.status = 401;
+    throw authErr;
+  }
+  const url = new URL(`https://www.googleapis.com/youtube/v3/${endpoint}`);
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== "") {
+      url.searchParams.set(k, String(v));
+    }
+  });
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${state.accessToken}` },
+      signal: controller.signal,
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new Error(json?.error?.message || `YouTube API error (${res.status})`);
+      err.status = res.status;
+      err.result = json;
+      throw err;
+    }
+    return json;
+  } catch (err) {
+    if (err?.name === "AbortError") {
+      throw new Error("Request timed out");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function fetchVideos(pageToken = null) {
   if (activeFetchPromise) {
     return activeFetchPromise;
@@ -1370,10 +1514,6 @@ async function fetchVideos(pageToken = null) {
     state.forceRefetch = false;
 
     try {
-      if (!window.gapi?.client?.youtube) {
-        throw new Error("YouTube API client not loaded.");
-      }
-
       let items = [];
       let nextToken = null;
       let total = 0;
@@ -1381,7 +1521,7 @@ async function fetchVideos(pageToken = null) {
       if (fetchMode === "like") {
         // Use playlistItems for Likes to bypass the 1000-item limit of videos.list(myRating='like')
         // 'LL' is the magic ID for the Liked Videos playlist
-        const plResponse = await window.gapi.client.youtube.playlistItems.list({
+        const plResult = await youtubeApiGet("playlistItems", {
           playlistId: "LL",
           part: "contentDetails",
           maxResults: 50,
@@ -1390,21 +1530,21 @@ async function fetchVideos(pageToken = null) {
 
         if (gen !== fetchGeneration || state.mode !== fetchMode) return;
 
-        const videoIds = (plResponse.result.items || []).map(
+        const videoIds = (plResult.items || []).map(
           (item) => item.contentDetails.videoId,
         );
-        nextToken = plResponse.result.nextPageToken || null;
-        total = plResponse.result.pageInfo?.totalResults || 0;
+        nextToken = plResult.nextPageToken || null;
+        total = plResult.pageInfo?.totalResults || 0;
 
         if (videoIds.length > 0) {
-          const vResponse = await window.gapi.client.youtube.videos.list({
+          const vResult = await youtubeApiGet("videos", {
             id: videoIds.join(","),
             part: "snippet,contentDetails,statistics,status",
           });
 
           if (gen !== fetchGeneration || state.mode !== fetchMode) return;
 
-          const fetchedItems = vResponse.result.items || [];
+          const fetchedItems = vResult.items || [];
           // Maintain the order returned by the playlist, and preserve deleted/private videos
           const itemsMap = fetchedItems.reduce((acc, item) => {
             acc[item.id] = item;
@@ -1416,7 +1556,7 @@ async function fetchVideos(pageToken = null) {
             return {
               id: id,
               status: { uploadStatus: "deleted" },
-              snippet: null
+              snippet: null,
             };
           });
         }
@@ -1424,23 +1564,18 @@ async function fetchVideos(pageToken = null) {
         // Use videos.list for Dislikes
         // NOTE: This filter is known to be capped at 1000 items by the YouTube API.
         // Since there is no "Disliked Videos" playlist, this is the only way to fetch them.
-        const apiCall = window.gapi.client.youtube.videos.list({
+        const result = await youtubeApiGet("videos", {
           myRating: fetchMode,
           part: "snippet,contentDetails,statistics,status",
           maxResults: 50,
           pageToken: pageToken || "",
         });
 
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("Request timed out")), 30000),
-        );
-
-        const response = await Promise.race([apiCall, timeoutPromise]);
         if (gen !== fetchGeneration || state.mode !== fetchMode) return;
 
-        items = response.result.items || [];
-        nextToken = response.result.nextPageToken || null;
-        total = response.result.pageInfo?.totalResults || 0;
+        items = result.items || [];
+        nextToken = result.nextPageToken || null;
+        total = result.pageInfo?.totalResults || 0;
       }
 
       if (isLoadMore) {
@@ -1469,6 +1604,7 @@ async function fetchVideos(pageToken = null) {
       const status = err?.status || err?.result?.error?.code;
       if (status === 401) {
         localStorage.removeItem("yt_dislikes_token");
+        state.accessToken = null;
         state.isAuthenticated = false;
         state.dataSource = null;
         state.nextPageToken = null;
@@ -1519,8 +1655,6 @@ async function handleLoadAll() {
       }
     } finally {
       state.isFetchAll = false;
-      // Ensure renderLimit covers all newly fetched videos so sentinel hides properly
-      state.renderLimit = state.filteredVideos.length;
       setLoading(false, false);
       if (!state.nextPageToken && !state.error) {
         triggerCelebration();
@@ -1812,7 +1946,9 @@ function filterVideos() {
   });
 
   state.filteredVideos = results;
-  state.renderLimit = 50; // Reset render limit on filter/sort
+  virtualGrid.listVersion++;
+  scrubberState.checkpoints = buildScrubberCheckpoints(results, state.sortBy);
+  scrubberState.renderedSignature = "";
   state.currentVideoIndex = state.currentVideoId
     ? results.findIndex((v) => v.video_id === state.currentVideoId)
     : -1;
@@ -1858,12 +1994,731 @@ function applyCompactMode(isCompact) {
     dom.videoGrid.classList.remove("grid-cols-2", "sm:grid-cols-3", "md:grid-cols-4", "xl:grid-cols-6", "gap-x-4", "gap-y-6");
     dom.videoGrid.classList.add("grid-cols-1", "sm:grid-cols-2", "lg:grid-cols-3", "gap-x-6", "gap-y-10");
   }
+
+  virtualGrid.cols = 0;
+  virtualGrid.rowHeight = 0;
+  virtualGrid.renderedVersion = -1;
+  virtualGrid.listVersion++;
+
+  if (state.filteredVideos.length > 0 && !dom.viewContent.classList.contains("hidden")) {
+    renderVirtualGrid(true);
+    syncScrubberFromScroll();
+  }
+}
+
+// --- Virtualized Grid & Fast Scrubber ---
+
+const GRID_OVERSCAN_ROWS = 6;
+
+const virtualGrid = {
+  startRow: -1,
+  endRow: -1,
+  cols: 0,
+  rowHeight: 0,
+  rowGap: 0,
+  renderedCards: new Map(),
+  listVersion: 0,
+  renderedVersion: -1,
+};
+
+const scrubberState = {
+  checkpoints: [],
+  activeCheckpointIdx: -1,
+  isDragging: false,
+  tooltipHideTimeout: null,
+  layoutRaf: null,
+  renderedSignature: "",
+};
+
+function getGridColumns() {
+  if (dom.videoGrid && window.getComputedStyle && !dom.videoGrid.classList.contains("hidden")) {
+    const template = window.getComputedStyle(dom.videoGrid).gridTemplateColumns || "";
+    if (/\d+px/.test(template)) {
+      const tracks = template.trim().split(/\s+/).filter(Boolean).length;
+      if (tracks >= 1) return tracks;
+    }
+  }
+  const w = window.innerWidth || 1280;
+  if (state.compactMode) {
+    if (w >= 1280) return 6;
+    if (w >= 768) return 4;
+    if (w >= 640) return 3;
+    return 2;
+  }
+  if (w >= 1024) return 3;
+  if (w >= 640) return 2;
+  return 1;
+}
+
+function getRowStride() {
+  if (virtualGrid.rowHeight > 0) {
+    return virtualGrid.rowHeight + virtualGrid.rowGap;
+  }
+  return state.compactMode ? 240 : 320;
+}
+
+function resetVirtualGridDOM() {
+  virtualGrid.renderedCards.clear();
+  virtualGrid.startRow = -1;
+  virtualGrid.endRow = -1;
+  virtualGrid.renderedVersion = -1;
+  if (dom.videoGrid) {
+    dom.videoGrid.style.paddingTop = "0px";
+    dom.videoGrid.style.paddingBottom = "0px";
+  }
+}
+
+function createVideoCardElement(video) {
+  const clone = dom.videoTemplate.content.cloneNode(true);
+
+  const title = video.title || "Unavailable";
+  const isDeleted = checkIfDeleted(video);
+  const thumbnail = `https://i.ytimg.com/vi/${video.video_id}/mqdefault.jpg`;
+
+  const img = clone.querySelector(".video-thumbnail");
+  const overlay = clone.querySelector(".deleted-overlay");
+
+  img.src = thumbnail;
+  img.alt = title;
+
+  if (isDeleted) {
+    overlay.classList.remove("hidden");
+    overlay.classList.add("flex");
+  }
+
+  img.onerror = () => {
+    if (!video._is404) {
+      video._is404 = true;
+    }
+    overlay.classList.remove("hidden");
+    overlay.classList.add("flex");
+    img.src =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+  };
+
+  const baseUrl = video.is_music ? "https://music.youtube.com" : "https://www.youtube.com";
+
+  const playBtn = clone.querySelector(".video-play-btn");
+  if (!isDeleted) {
+    playBtn.addEventListener("click", () => {
+      const index = state.filteredVideos.findIndex((v) => v.video_id === video.video_id);
+      const channelUrl = video.channel_id ? `${baseUrl}/channel/${encodeURIComponent(video.channel_id)}` : null;
+      playVideo(video.video_id, title, video.artist || "Unknown channel", thumbnail, channelUrl, index);
+    });
+  } else {
+    playBtn.classList.add("cursor-not-allowed");
+    playBtn.disabled = true;
+  }
+
+  const links = clone.querySelectorAll(".video-link");
+  links.forEach((l) => {
+    l.href = `${baseUrl}/watch?v=${encodeURIComponent(video.video_id)}`;
+  });
+
+  const titleEl = clone.querySelector(".video-title");
+  titleEl.innerHTML = highlightMatch(title, state.debouncedSearchTerm);
+
+  const channelEl = clone.querySelector(".channel-title");
+  const chName = cleanArtistName(video.artist || "Unknown channel");
+  const chId = video.channel_id;
+
+  if (chId && !isDeleted) {
+    channelEl.innerHTML = `<a href="${baseUrl}/channel/${encodeURIComponent(chId)}" target="_blank" rel="noopener noreferrer" class="hover:text-black dark:hover:text-white hover:underline">${highlightMatch(chName, state.debouncedSearchTerm)}</a>`;
+  } else {
+    channelEl.innerHTML = highlightMatch(chName, state.debouncedSearchTerm);
+  }
+
+  const metadataEl = clone.querySelector(".dynamic-metadata");
+  metadataEl.textContent = isDeleted ? "No stats" : getDynamicMetadata(video);
+
+  return clone.firstElementChild || clone;
+}
+
+function renderVirtualGrid(force = false, anchorRow = null) {
+  if (!dom.videoGrid || dom.videoGrid.classList.contains("hidden")) return;
+
+  const totalItems = state.filteredVideos.length;
+  if (totalItems === 0) {
+    dom.videoGrid.innerHTML = "";
+    resetVirtualGridDOM();
+    return;
+  }
+
+  if (virtualGrid.renderedVersion !== virtualGrid.listVersion) {
+    virtualGrid.renderedCards.clear();
+    dom.videoGrid.innerHTML = "";
+    virtualGrid.startRow = -1;
+    virtualGrid.endRow = -1;
+    virtualGrid.renderedVersion = virtualGrid.listVersion;
+    force = true;
+  }
+
+  const cols = getGridColumns();
+  if (cols !== virtualGrid.cols) {
+    virtualGrid.cols = cols;
+    virtualGrid.rowHeight = 0;
+    force = true;
+  }
+
+  const totalRows = Math.ceil(totalItems / cols);
+  const stride = getRowStride();
+  const viewportH = window.innerHeight || 800;
+
+  let visStartRow = 0;
+  let visEndRow = Math.min(totalRows, Math.ceil(viewportH / stride) + 1);
+
+  if (typeof anchorRow === "number") {
+    visStartRow = Math.min(totalRows - 1, Math.max(0, anchorRow));
+    visEndRow = Math.min(totalRows, visStartRow + Math.ceil(viewportH / stride) + 1);
+  } else if (dom.videoGrid.getBoundingClientRect) {
+    const gridTopDocY = dom.videoGrid.getBoundingClientRect().top + (window.scrollY || 0);
+    const relTop = Math.max(0, (window.scrollY || 0) - gridTopDocY);
+    const relBottom = Math.max(0, (window.scrollY || 0) + viewportH - gridTopDocY);
+    visStartRow = Math.min(totalRows - 1, Math.max(0, Math.floor(relTop / stride)));
+    visEndRow = Math.min(totalRows, Math.max(visStartRow + 1, Math.ceil(relBottom / stride)));
+  }
+
+  const nextStartRow = Math.max(0, visStartRow - GRID_OVERSCAN_ROWS);
+  const nextEndRow = Math.min(totalRows, visEndRow + GRID_OVERSCAN_ROWS);
+
+  if (!force && virtualGrid.startRow >= 0) {
+    const topCovered =
+      virtualGrid.startRow === 0 ? nextStartRow === 0 : visStartRow >= virtualGrid.startRow + 2;
+    const bottomCovered =
+      virtualGrid.endRow === totalRows ? nextEndRow === totalRows : visEndRow <= virtualGrid.endRow - 2;
+    if (topCovered && bottomCovered) {
+      return;
+    }
+  }
+
+  const startIndex = nextStartRow * cols;
+  const endIndex = Math.min(totalItems, nextEndRow * cols);
+
+  let overlapStart = Infinity;
+  let overlapEnd = -1;
+
+  for (const [idx, el] of virtualGrid.renderedCards.entries()) {
+    if (idx < startIndex || idx >= endIndex) {
+      if (el.remove) el.remove();
+      else if (el.parentNode) el.parentNode.removeChild(el);
+      virtualGrid.renderedCards.delete(idx);
+    } else {
+      if (idx < overlapStart) overlapStart = idx;
+      if (idx + 1 > overlapEnd) overlapEnd = idx + 1;
+    }
+  }
+
+  if (virtualGrid.renderedCards.size === 0) {
+    dom.videoGrid.innerHTML = "";
+    const frag = document.createDocumentFragment();
+    for (let i = startIndex; i < endIndex; i++) {
+      const cardEl = createVideoCardElement(state.filteredVideos[i]);
+      virtualGrid.renderedCards.set(i, cardEl);
+      frag.appendChild(cardEl);
+    }
+    dom.videoGrid.appendChild(frag);
+  } else {
+    if (startIndex < overlapStart) {
+      const firstExisting = dom.videoGrid.firstElementChild;
+      const topFrag = document.createDocumentFragment();
+      for (let i = startIndex; i < overlapStart; i++) {
+        const cardEl = createVideoCardElement(state.filteredVideos[i]);
+        virtualGrid.renderedCards.set(i, cardEl);
+        topFrag.appendChild(cardEl);
+      }
+      if (firstExisting) {
+        dom.videoGrid.insertBefore(topFrag, firstExisting);
+      } else {
+        dom.videoGrid.appendChild(topFrag);
+      }
+    }
+    if (endIndex > overlapEnd) {
+      const bottomFrag = document.createDocumentFragment();
+      for (let i = overlapEnd; i < endIndex; i++) {
+        const cardEl = createVideoCardElement(state.filteredVideos[i]);
+        virtualGrid.renderedCards.set(i, cardEl);
+        bottomFrag.appendChild(cardEl);
+      }
+      dom.videoGrid.appendChild(bottomFrag);
+    }
+  }
+
+  if (virtualGrid.rowHeight === 0) {
+    const firstCard = dom.videoGrid.firstElementChild;
+    if (firstCard && firstCard.getBoundingClientRect) {
+      const measuredH = firstCard.getBoundingClientRect().height;
+      if (measuredH > 0) {
+        virtualGrid.rowHeight = measuredH;
+        const cs = window.getComputedStyle ? window.getComputedStyle(dom.videoGrid) : null;
+        virtualGrid.rowGap = (cs && parseFloat(cs.rowGap)) || (state.compactMode ? 24 : 40);
+      }
+    }
+  }
+
+  const finalStride = getRowStride();
+  dom.videoGrid.style.paddingTop = `${nextStartRow * finalStride}px`;
+  dom.videoGrid.style.paddingBottom = `${Math.max(0, totalRows - nextEndRow) * finalStride}px`;
+  virtualGrid.startRow = nextStartRow;
+  virtualGrid.endRow = nextEndRow;
+}
+
+function getAlphaBucket(rawStr, seenLatin) {
+  const trimmed = String(rawStr || "").trim();
+  if (!trimmed) return "#";
+  const base = trimmed[0]
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase();
+  if (/^[A-Z]$/.test(base)) return base;
+  return seenLatin ? "*" : "#";
+}
+
+function formatMilestoneIndex(idx) {
+  if (idx === 0) return "#1";
+  if (idx >= 1000) {
+    const k = idx / 1000;
+    return Number.isInteger(k) ? `${k}k` : `${k.toFixed(1).replace(/\.0$/, "")}k`;
+  }
+  return String(idx);
+}
+
+function buildScrubberCheckpoints(videos = state.filteredVideos, sortBy = state.sortBy) {
+  const total = videos.length;
+  if (total <= 12) return [];
+
+  if (sortBy === "date-new") {
+    const steps = [10, 20, 50, 100, 200, 300, 500, 1000, 2000, 5000];
+    const step = steps.find((s) => Math.ceil(total / s) <= 12) || 5000;
+    const checkpoints = [];
+    for (let start = 0; start < total; start += step) {
+      const end = Math.min(total - 1, start + step - 1);
+      const label = formatMilestoneIndex(start);
+      checkpoints.push({ key: String(start), label, startIndex: start, endIndex: end });
+    }
+    return checkpoints;
+  }
+
+  const VIEW_TIERS = [
+    [1_000_000_000, "1B+"],
+    [100_000_000, "100M"],
+    [10_000_000, "10M"],
+    [1_000_000, "1M"],
+    [500_000, "500k"],
+    [100_000, "100k"],
+    [50_000, "50k"],
+    [10_000, "10k"],
+    [1_000, "1k"],
+    [0, "<1k"],
+  ];
+
+  const DURATION_TIERS = [
+    [3600, "1h+"],
+    [1800, "30m"],
+    [900, "15m"],
+    [600, "10m"],
+    [420, "7m"],
+    [300, "5m"],
+    [240, "4m"],
+    [180, "3m"],
+    [120, "2m"],
+    [0, "<2m"],
+  ];
+
+  const COMMENT_TIERS = [
+    [100_000, "100k"],
+    [10_000, "10k"],
+    [1_000, "1k"],
+    [500, "500"],
+    [100, "100"],
+    [50, "50"],
+    [10, "10"],
+    [1, "1+"],
+    [0, "0"],
+  ];
+
+  const pickTier = (val, tiers) => {
+    const n = Number(val) || 0;
+    for (let i = 0; i < tiers.length; i++) {
+      if (n >= tiers[i][0]) return tiers[i][1];
+    }
+    return tiers[tiers.length - 1][1];
+  };
+
+  const checkpoints = [];
+  let seenLatin = false;
+
+  for (let i = 0; i < total; i++) {
+    const v = videos[i];
+    let label = "";
+
+    switch (sortBy) {
+      case "title-az": {
+        label = getAlphaBucket(v.title || "", seenLatin);
+        if (/^[A-Z]$/.test(label)) seenLatin = true;
+        break;
+      }
+      case "channel-az": {
+        label = getAlphaBucket(cleanArtistName(v.artist), seenLatin);
+        if (/^[A-Z]$/.test(label)) seenLatin = true;
+        break;
+      }
+      case "upload-new": {
+        const yr = v.published_at ? getVideoYear(v.published_at) : NaN;
+        label = !isNaN(yr) ? String(yr) : "—";
+        break;
+      }
+      case "views-high": {
+        label = pickTier(v.views, VIEW_TIERS);
+        break;
+      }
+      case "duration-long": {
+        label = pickTier(parseDuration(v.duration), DURATION_TIERS);
+        break;
+      }
+      case "comments-most": {
+        label = pickTier(v.comments, COMMENT_TIERS);
+        break;
+      }
+      default: {
+        label = "#";
+      }
+    }
+
+    const prev = checkpoints[checkpoints.length - 1];
+    if (prev && prev.label === label) {
+      prev.endIndex = i;
+    } else {
+      checkpoints.push({
+        key: `${label}-${checkpoints.length}`,
+        label,
+        startIndex: i,
+        endIndex: i,
+      });
+    }
+  }
+
+  return checkpoints;
+}
+
+function formatScrubberTooltip(checkpoint, video, index, total) {
+  if (!video || !checkpoint) {
+    return { primary: "", sub: "" };
+  }
+  const compact = (n) =>
+    new Intl.NumberFormat("en-US", { notation: "compact", compactDisplay: "short" }).format(n || 0);
+
+  switch (state.sortBy) {
+    case "title-az":
+      return {
+        primary: checkpoint.label,
+        sub: video.title || "Unavailable",
+      };
+    case "channel-az":
+      return {
+        primary: checkpoint.label,
+        sub: cleanArtistName(video.artist || "Unknown"),
+      };
+    case "upload-new": {
+      if (!video.published_at) {
+        return { primary: "No date", sub: video.title || "" };
+      }
+      const yr = getVideoYear(video.published_at);
+      const opts = { year: "numeric", month: "short" };
+      if (video.published_at.endsWith("T00:00:00Z")) opts.timeZone = "UTC";
+      const sub = new Date(video.published_at).toLocaleDateString(undefined, opts);
+      return { primary: String(yr), sub };
+    }
+    case "views-high":
+      return {
+        primary: `${compact(video.views)} views`,
+        sub: video.title || "",
+      };
+    case "duration-long":
+      return {
+        primary: formatDuration(video.duration).trim(),
+        sub: video.title || "",
+      };
+    case "comments-most":
+      return {
+        primary: `${compact(video.comments)} comments`,
+        sub: video.title || "",
+      };
+    case "date-new":
+    default:
+      return {
+        primary: `#${(index + 1).toLocaleString()}`,
+        sub: `of ${total.toLocaleString()} · ${video.title || ""}`,
+      };
+  }
+}
+
+function renderScrubberCheckpoints() {
+  if (!dom.scrubberCheckpoints || !dom.scrubberTrack) return;
+  const checkpoints = scrubberState.checkpoints;
+  if (!checkpoints.length) {
+    dom.scrubberCheckpoints.innerHTML = "";
+    scrubberState.renderedSignature = "";
+    scrubberState.activeCheckpointIdx = -1;
+    return;
+  }
+
+  const trackHeight =
+    dom.scrubberTrack.clientHeight || Math.max(180, (window.innerHeight || 700) - 220);
+  const hasMultiChar = checkpoints.some((c) => c.label.length > 2);
+  const minPxPerLabel = hasMultiChar ? 20 : 13;
+  const maxLabels = Math.max(4, Math.floor(trackHeight / minPxPerLabel));
+  const K = checkpoints.length;
+  const stride = K <= maxLabels ? 1 : Math.ceil((K - 1) / (maxLabels - 1));
+
+  const sig = `${state.sortBy}:${K}:${stride}:${checkpoints[0].label}:${checkpoints[K - 1].label}`;
+  if (scrubberState.renderedSignature === sig) return;
+  scrubberState.renderedSignature = sig;
+  scrubberState.activeCheckpointIdx = -1;
+
+  const html = checkpoints
+    .map((cp, k) => {
+      const isFirst = k === 0;
+      const isLast = k === K - 1;
+      const tooCloseToLast = !isLast && stride > 1 && K - 1 - k < Math.ceil(stride * 0.65);
+      const showText = isFirst || isLast || (!tooCloseToLast && k % stride === 0);
+      const safeLabel = escapeHtml(cp.label);
+
+      return `<div data-checkpoint-idx="${k}" class="scrubber-cp flex-1 w-full flex items-center justify-center px-1 text-[9px] sm:text-[10px] leading-none font-medium text-gray-500 dark:text-gray-400 transition-colors">${
+        showText
+          ? `<span class="scrubber-cp-text pointer-events-none">${safeLabel}</span>`
+          : `<span class="scrubber-cp-dot w-1 h-1 rounded-full bg-gray-300 dark:bg-gray-600 pointer-events-none"></span>`
+      }</div>`;
+    })
+    .join("");
+
+  dom.scrubberCheckpoints.innerHTML = html;
+}
+
+function highlightActiveCheckpoint(cpIdx) {
+  if (!dom.scrubberCheckpoints || cpIdx === scrubberState.activeCheckpointIdx) return;
+  const nodes = dom.scrubberCheckpoints.children;
+  if (scrubberState.activeCheckpointIdx >= 0 && nodes[scrubberState.activeCheckpointIdx]) {
+    const prevEl = nodes[scrubberState.activeCheckpointIdx];
+    prevEl.classList.remove("text-black", "dark:text-white", "font-bold");
+    prevEl.classList.add("text-gray-500", "dark:text-gray-400", "font-medium");
+    const dot = prevEl.querySelector(".scrubber-cp-dot");
+    if (dot) {
+      dot.classList.remove("bg-black", "dark:bg-white", "scale-125");
+      dot.classList.add("bg-gray-300", "dark:bg-gray-600");
+    }
+  }
+  if (cpIdx >= 0 && nodes[cpIdx]) {
+    const nextEl = nodes[cpIdx];
+    nextEl.classList.remove("text-gray-500", "dark:text-gray-400", "font-medium");
+    nextEl.classList.add("text-black", "dark:text-white", "font-bold");
+    const dot = nextEl.querySelector(".scrubber-cp-dot");
+    if (dot) {
+      dot.classList.remove("bg-gray-300", "dark:bg-gray-600");
+      dot.classList.add("bg-black", "dark:bg-white", "scale-125");
+    }
+  }
+  scrubberState.activeCheckpointIdx = cpIdx;
+}
+
+function showScrubberTooltip() {
+  if (!dom.scrubberTooltip) return;
+  if (scrubberState.tooltipHideTimeout) {
+    clearTimeout(scrubberState.tooltipHideTimeout);
+    scrubberState.tooltipHideTimeout = null;
+  }
+  dom.scrubberTooltip.classList.remove("opacity-0", "scale-95");
+  dom.scrubberTooltip.classList.add("opacity-100", "scale-100");
+}
+
+function scheduleHideScrubberTooltip(delayMs = 500) {
+  if (!dom.scrubberTooltip) return;
+  if (scrubberState.tooltipHideTimeout) {
+    clearTimeout(scrubberState.tooltipHideTimeout);
+  }
+  scrubberState.tooltipHideTimeout = setTimeout(() => {
+    scrubberState.tooltipHideTimeout = null;
+    if (!scrubberState.isDragging && dom.scrubberTooltip) {
+      dom.scrubberTooltip.classList.remove("opacity-100", "scale-100");
+      dom.scrubberTooltip.classList.add("opacity-0", "scale-95");
+    }
+  }, delayMs);
+}
+
+function updateScrubberPositionUI(fraction, cpIdx, itemIndex, withTooltip = false) {
+  if (!dom.scrubberThumb || !dom.scrubberTrack) return;
+  const clamped = Math.max(0, Math.min(1, fraction));
+  const trackH = dom.scrubberTrack.clientHeight || 300;
+  const padPx = 7;
+  const thumbY = padPx + clamped * Math.max(0, trackH - padPx * 2);
+  dom.scrubberThumb.style.top = `${thumbY}px`;
+
+  highlightActiveCheckpoint(cpIdx);
+
+  const total = state.filteredVideos.length;
+  const cp = scrubberState.checkpoints[cpIdx];
+  const video = state.filteredVideos[itemIndex];
+  const info = formatScrubberTooltip(cp, video, itemIndex, total);
+
+  dom.scrubberTrack.setAttribute("aria-valuemax", String(Math.max(1, total)));
+  dom.scrubberTrack.setAttribute("aria-valuenow", String(Math.min(total, Math.max(1, itemIndex + 1))));
+  if (info.primary) {
+    dom.scrubberTrack.setAttribute(
+      "aria-valuetext",
+      info.sub ? `${info.primary} — ${info.sub}` : info.primary,
+    );
+  }
+
+  if (withTooltip && dom.scrubberTooltip) {
+    dom.scrubberTooltipPrimary.textContent = info.primary;
+    dom.scrubberTooltipSub.textContent = info.sub;
+    const topBtnOffset = dom.scrubberTopBtn?.offsetHeight || 20;
+    const containerH = dom.fastScrubber?.clientHeight || trackH + 48;
+    const tooltipY = Math.max(24, Math.min(containerH - 24, topBtnOffset + thumbY + 4));
+    dom.scrubberTooltip.style.top = `${tooltipY}px`;
+    showScrubberTooltip();
+  }
+}
+
+function fractionToScrubberTarget(fraction) {
+  const checkpoints = scrubberState.checkpoints;
+  const total = state.filteredVideos.length;
+  if (!checkpoints.length || total === 0) {
+    return { cpIdx: 0, itemIndex: 0, edge: "top" };
+  }
+  const K = checkpoints.length;
+  if (fraction <= 0.003) {
+    return { cpIdx: 0, itemIndex: 0, edge: "top" };
+  }
+  if (fraction >= 0.997) {
+    return { cpIdx: K - 1, itemIndex: total - 1, edge: "bottom" };
+  }
+  const scaled = fraction * K;
+  const cpIdx = Math.min(K - 1, Math.floor(scaled));
+  const localT = scaled - cpIdx;
+  const cp = checkpoints[cpIdx];
+  const count = cp.endIndex - cp.startIndex + 1;
+  const itemIndex = Math.min(cp.endIndex, cp.startIndex + Math.floor(localT * count));
+  return { cpIdx, itemIndex, edge: null };
+}
+
+function findCheckpointIndexForVideo(itemIndex) {
+  const checkpoints = scrubberState.checkpoints;
+  let lo = 0;
+  let hi = checkpoints.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const cp = checkpoints[mid];
+    if (itemIndex < cp.startIndex) hi = mid - 1;
+    else if (itemIndex > cp.endIndex) lo = mid + 1;
+    else return mid;
+  }
+  return Math.max(0, Math.min(checkpoints.length - 1, lo));
+}
+
+function syncScrubberFromScroll() {
+  if (
+    !dom.fastScrubber ||
+    dom.fastScrubber.classList.contains("hidden") ||
+    scrubberState.isDragging ||
+    scrubberState.checkpoints.length === 0 ||
+    state.filteredVideos.length === 0
+  ) {
+    return;
+  }
+
+  const scrollY = window.scrollY || 0;
+  const viewportH = window.innerHeight || 800;
+  const docH = document.documentElement?.scrollHeight || 0;
+  const checkpoints = scrubberState.checkpoints;
+  const K = checkpoints.length;
+  const total = state.filteredVideos.length;
+
+  if (scrollY <= 8) {
+    updateScrubberPositionUI(0, 0, 0, false);
+    return;
+  }
+  if (docH > 0 && scrollY + viewportH >= docH - 12) {
+    updateScrubberPositionUI(1, K - 1, total - 1, false);
+    return;
+  }
+
+  const cols = virtualGrid.cols || getGridColumns();
+  const stride = getRowStride();
+  const gridTopDocY = dom.videoGrid.getBoundingClientRect
+    ? dom.videoGrid.getBoundingClientRect().top + scrollY
+    : 0;
+  const probeY = Math.max(0, scrollY + viewportH * 0.25 - gridTopDocY);
+  const currentRow = Math.max(0, Math.floor(probeY / stride));
+  const itemIndex = Math.min(total - 1, currentRow * cols);
+  const cpIdx = findCheckpointIndexForVideo(itemIndex);
+  const cp = checkpoints[cpIdx];
+  const count = Math.max(1, cp.endIndex - cp.startIndex + 1);
+  const localT = Math.min(1, Math.max(0, (itemIndex - cp.startIndex + 0.5) / count));
+  const fraction = (cpIdx + localT) / K;
+
+  updateScrubberPositionUI(fraction, cpIdx, itemIndex, false);
+}
+
+function scrollToVideoIndex(targetIndex, edge = null) {
+  const total = state.filteredVideos.length;
+  if (total === 0 || !dom.videoGrid) return;
+
+  const clampedIndex = Math.max(0, Math.min(total - 1, targetIndex));
+  const cols = getGridColumns();
+  const targetRow = Math.floor(clampedIndex / cols);
+
+  if (edge === "top") {
+    renderVirtualGrid(true, 0);
+    window.scrollTo({ top: 0, behavior: "auto" });
+    return;
+  }
+
+  renderVirtualGrid(true, targetRow);
+  const stride = getRowStride();
+  const gridTopDocY = dom.videoGrid.getBoundingClientRect
+    ? dom.videoGrid.getBoundingClientRect().top + (window.scrollY || 0)
+    : 0;
+
+  if (edge === "bottom") {
+    const totalRows = Math.ceil(total / cols);
+    const gridBottomDocY = gridTopDocY + totalRows * stride;
+    const targetY = Math.max(0, gridBottomDocY - (window.innerHeight || 800) + 96);
+    window.scrollTo({ top: targetY, behavior: "auto" });
+    return;
+  }
+
+  const rowTopDocY = Math.max(0, gridTopDocY + targetRow * stride - 16);
+  window.scrollTo({ top: rowTopDocY, behavior: "auto" });
+}
+
+function updateScrubberVisibility(hasAppData) {
+  if (!dom.fastScrubber || !dom.videoGrid) return;
+  const shouldShow = Boolean(
+    hasAppData &&
+      !(state.loading && !state.isLoadMore) &&
+      state.filteredVideos.length > 12 &&
+      scrubberState.checkpoints.length > 0,
+  );
+  dom.fastScrubber.classList.toggle("hidden", !shouldShow);
+  dom.fastScrubber.classList.toggle("flex", shouldShow);
+  dom.videoGrid.classList.toggle("pr-5", shouldShow);
+  dom.videoGrid.classList.toggle("sm:pr-0", shouldShow);
+}
+
+function scheduleScrubberLayoutRefresh() {
+  if (scrubberState.layoutRaf) return;
+  scrubberState.layoutRaf = requestAnimationFrame(() => {
+    scrubberState.layoutRaf = null;
+    scrubberState.renderedSignature = "";
+    renderScrubberCheckpoints();
+    syncScrubberFromScroll();
+  });
 }
 
 // --- Fetching Data ---
 
 function render() {
-  const isReady = state.gapiInited && state.gisInited;
+  const isReady = state.gisInited;
   const isLoadMore = state.isLoadMore;
   const hasAppData =
     state.isAuthenticated ||
@@ -2002,6 +2857,7 @@ function render() {
   }
 
   renderSidebar();
+  updateScrubberVisibility(hasAppData);
 
   // Loading & Empty States
   if (hasAppData) {
@@ -2013,12 +2869,14 @@ function render() {
       dom.emptyState.classList.remove("hidden");
       dom.videoGrid.classList.add("hidden");
       dom.videoGrid.innerHTML = "";
+      resetVirtualGridDOM();
     } else {
       dom.emptyState.classList.add("hidden");
       dom.videoGrid.classList.remove("hidden");
 
-      // Re-render the full list to ensure sorting/filtering is accurate
-      renderVideoList();
+      renderVirtualGrid();
+      renderScrubberCheckpoints();
+      syncScrubberFromScroll();
     }
 
     updateSentinel();
@@ -2036,10 +2894,7 @@ function updateSentinel() {
     return;
   }
 
-  if (
-    state.renderLimit < state.filteredVideos.length ||
-    (state.nextPageToken && !trimmedSearch)
-  ) {
+  if (state.nextPageToken && !trimmedSearch) {
     dom.scrollSentinel.classList.remove("hidden");
     if (state.loading && state.isLoadMore) {
       dom.scrollSentinel.innerHTML = `
@@ -2052,89 +2907,6 @@ function updateSentinel() {
   } else {
     dom.scrollSentinel.classList.add("hidden");
   }
-}
-
-function renderVideoList(append = false) {
-  if (!append) {
-    dom.videoGrid.innerHTML = "";
-  }
-
-  const start = append ? dom.videoGrid.children.length : 0;
-  const end = Math.min(state.renderLimit, state.filteredVideos.length);
-  const itemsToRender = state.filteredVideos.slice(start, end);
-
-  itemsToRender.forEach((video) => {
-    const clone = dom.videoTemplate.content.cloneNode(true);
-
-    const title = video.title || "Unavailable";
-    const isDeleted = checkIfDeleted(video);
-    const thumbnail = `https://i.ytimg.com/vi/${video.video_id}/mqdefault.jpg`;
-
-    // Image & Link
-    const img = clone.querySelector(".video-thumbnail");
-    const overlay = clone.querySelector(".deleted-overlay");
-
-    img.src = thumbnail;
-    img.alt = title;
-
-    if (isDeleted) {
-      overlay.classList.remove("hidden");
-      overlay.classList.add("flex");
-    }
-
-    // 404 check (thumbnail doesn't exist)
-    img.onerror = () => {
-      if (!video._is404) {
-        video._is404 = true;
-      }
-      overlay.classList.remove("hidden");
-      overlay.classList.add("flex");
-      img.src =
-        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="; // Transparent pixel
-    };
-
-    const baseUrl = video.is_music ? "https://music.youtube.com" : "https://www.youtube.com";
-    
-    // Internal Playback Button
-    const playBtn = clone.querySelector(".video-play-btn");
-    if (!isDeleted) {
-      playBtn.addEventListener("click", () => {
-        const index = state.filteredVideos.findIndex((v) => v.video_id === video.video_id);
-        const channelUrl = video.channel_id ? `${baseUrl}/channel/${encodeURIComponent(video.channel_id)}` : null;
-        playVideo(video.video_id, title, video.artist || "Unknown channel", thumbnail, channelUrl, index);
-      });
-    } else {
-      playBtn.classList.add("cursor-not-allowed");
-      playBtn.disabled = true;
-    }
-
-    // External Links
-    const links = clone.querySelectorAll(".video-link");
-    links.forEach(
-      (l) => (l.href = `${baseUrl}/watch?v=${encodeURIComponent(video.video_id)}`),
-    );
-
-    // Title
-    const titleEl = clone.querySelector(".video-title");
-    titleEl.innerHTML = highlightMatch(title, state.debouncedSearchTerm);
-
-    // Channel Info
-    const channelEl = clone.querySelector(".channel-title");
-    const chName = cleanArtistName(video.artist || "Unknown channel");
-    const chId = video.channel_id;
-
-    if (chId && !isDeleted) {
-      channelEl.innerHTML = `<a href="${baseUrl}/channel/${encodeURIComponent(chId)}" target="_blank" rel="noopener noreferrer" class="hover:text-black dark:hover:text-white hover:underline">${highlightMatch(chName, state.debouncedSearchTerm)}</a>`;
-    } else {
-      channelEl.innerHTML = highlightMatch(chName, state.debouncedSearchTerm);
-    }
-
-    // Dynamic Metadata
-    const metadataEl = clone.querySelector(".dynamic-metadata");
-    metadataEl.textContent = isDeleted ? "No stats" : getDynamicMetadata(video);
-
-    dom.videoGrid.appendChild(clone);
-  });
 }
 
 function triggerCelebration() {
@@ -2166,6 +2938,7 @@ function triggerCelebration() {
 }
 
 function renderSkeletons() {
+  resetVirtualGridDOM();
   dom.videoGrid.innerHTML = "";
   // Show 12 skeleton cards (typical grid count)
   for (let i = 0; i < 12; i++) {
@@ -2521,6 +3294,53 @@ function updateMediaSessionMetadata(videoId, title, cleanArtist) {
   }
 }
 
+function clearAutoplayFallback() {
+  if (state.autoplayFallbackTimeout) {
+    clearTimeout(state.autoplayFallbackTimeout);
+    state.autoplayFallbackTimeout = null;
+  }
+}
+
+function showPlayIconsReady() {
+  dom.playerIconLoading.classList.add("hidden");
+  dom.playerIconPlay.classList.remove("hidden");
+  dom.playerIconPause.classList.add("hidden");
+
+  dom.fsPlayerIconLoading.classList.add("hidden");
+  dom.fsPlayerIconPlay.classList.remove("hidden");
+  dom.fsPlayerIconPause.classList.add("hidden");
+
+  dom.playerPlayPause.disabled = false;
+  dom.fsPlayerPlayPause.disabled = false;
+}
+
+function scheduleAutoplayFallbackCheck(delayMs = 1200) {
+  clearAutoplayFallback();
+  state.autoplayFallbackTimeout = setTimeout(() => {
+    state.autoplayFallbackTimeout = null;
+    if (!state.isPlayerReady || !state.ytPlayer?.getPlayerState) return;
+    const st = state.ytPlayer.getPlayerState();
+    // 1 = PLAYING, 3 = BUFFERING; if stuck in 5 (CUED), -1 (UNSTARTED), or 2 (PAUSED), reveal Play button
+    if (st !== 1 && st !== 3) {
+      state.autoplayRequested = false;
+      showPlayIconsReady();
+    }
+  }, delayMs);
+}
+
+function configureYTPlayerIframe(player) {
+  try {
+    const iframe = player?.getIframe?.();
+    if (iframe) {
+      iframe.setAttribute("allow", "autoplay; encrypted-media");
+      iframe.setAttribute("tabindex", "-1");
+      iframe.setAttribute("title", "YouTube audio player");
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 function initYTPlayer() {
   const tag = document.createElement("script");
   tag.src = "https://www.youtube.com/iframe_api";
@@ -2538,32 +3358,32 @@ function initYTPlayer() {
     }
 
     state.ytPlayer = new YT.Player("ytplayer", {
-      height: "1",
-      width: "1",
+      height: "200",
+      width: "200",
       videoId: "",
       playerVars,
       events: {
-        onReady: () => {
+        onReady: (event) => {
+          configureYTPlayerIframe(event?.target || state.ytPlayer);
           state.isPlayerReady = true;
           dom.playerPlayPause.disabled = false;
           dom.fsPlayerPlayPause.disabled = false;
           if (state.pendingVideoId) {
             const vid = state.pendingVideoId;
             state.pendingVideoId = null;
+            state.autoplayRequested = true;
             state.ytPlayer.loadVideoById(vid);
+            state.ytPlayer.playVideo?.();
+            scheduleAutoplayFallbackCheck(1500);
           }
         },
         onStateChange: onPlayerStateChange,
         onError: (event) => {
           console.error("YouTube API Error:", event.data);
+          state.autoplayRequested = false;
+          clearAutoplayFallback();
           stopProgressInterval();
-          dom.playerIconLoading.classList.add("hidden");
-          dom.playerIconPlay.classList.remove("hidden");
-          dom.playerIconPause.classList.add("hidden");
-          
-          dom.fsPlayerIconLoading.classList.add("hidden");
-          dom.fsPlayerIconPlay.classList.remove("hidden");
-          dom.fsPlayerIconPause.classList.add("hidden");
+          showPlayIconsReady();
           
           if (event.data === 101 || event.data === 150) {
             dom.playerArtist.innerHTML = `<span class="text-red-500">Playback restricted on external sites</span>`;
@@ -2575,11 +3395,15 @@ function initYTPlayer() {
         }
       }
     });
+
+    configureYTPlayerIframe(state.ytPlayer);
   };
 }
 
 function onPlayerStateChange(event) {
   if (event.data === 1) { // Playing
+    state.autoplayRequested = false;
+    clearAutoplayFallback();
     dom.playerIconLoading.classList.add("hidden");
     dom.playerIconPlay.classList.add("hidden");
     dom.playerIconPause.classList.remove("hidden");
@@ -2588,6 +3412,7 @@ function onPlayerStateChange(event) {
     dom.fsPlayerIconPlay.classList.add("hidden");
     dom.fsPlayerIconPause.classList.remove("hidden");
     
+    dom.playerPlayPause.disabled = false;
     dom.fsPlayerPlayPause.disabled = false;
     if ("mediaSession" in navigator) {
       try {
@@ -2598,15 +3423,9 @@ function onPlayerStateChange(event) {
     }
     startProgressInterval();
   } else if (event.data === 2 || event.data === 0) { // Paused or Ended
-    dom.playerIconLoading.classList.add("hidden");
-    dom.playerIconPlay.classList.remove("hidden");
-    dom.playerIconPause.classList.add("hidden");
-    
-    dom.fsPlayerIconLoading.classList.add("hidden");
-    dom.fsPlayerIconPlay.classList.remove("hidden");
-    dom.fsPlayerIconPause.classList.add("hidden");
-    
-    dom.fsPlayerPlayPause.disabled = false;
+    state.autoplayRequested = false;
+    clearAutoplayFallback();
+    showPlayIconsReady();
     if ("mediaSession" in navigator) {
       try {
         navigator.mediaSession.playbackState = "paused";
@@ -2627,6 +3446,22 @@ function onPlayerStateChange(event) {
     dom.fsPlayerIconLoading.classList.remove("hidden");
     dom.fsPlayerIconPlay.classList.add("hidden");
     dom.fsPlayerIconPause.classList.add("hidden");
+  } else if (event.data === 5) { // Video cued (mobile browsers often cue on loadVideoById)
+    dom.playerPlayPause.disabled = false;
+    dom.fsPlayerPlayPause.disabled = false;
+    if (state.autoplayRequested) {
+      state.autoplayRequested = false;
+      event.target?.playVideo?.();
+      scheduleAutoplayFallbackCheck(900);
+    } else {
+      showPlayIconsReady();
+    }
+  } else if (event.data === -1) { // Unstarted
+    dom.playerPlayPause.disabled = false;
+    dom.fsPlayerPlayPause.disabled = false;
+    if (state.autoplayRequested) {
+      scheduleAutoplayFallbackCheck(1200);
+    }
   }
 }
 
@@ -2640,6 +3475,7 @@ function playVideo(
   fromShuffleNav = false,
 ) {
   stopProgressInterval();
+  clearAutoplayFallback();
   if (state.shuffleMode && !fromShuffleNav) {
     if (state.shuffleHistory[state.shuffleHistoryPos] !== videoId) {
       state.shuffleHistory = state.shuffleHistory.slice(0, state.shuffleHistoryPos + 1);
@@ -2654,8 +3490,10 @@ function playVideo(
   dom.bottomPlayer.classList.remove("translate-y-full");
   document.body.style.paddingBottom = "72px"; // Height of bottom player
   
-  if (dom.quickScrollContainer) {
-    dom.quickScrollContainer.classList.add("-translate-y-[80px]");
+  if (dom.fastScrubber) {
+    dom.fastScrubber.classList.remove("bottom-6");
+    dom.fastScrubber.classList.add("bottom-24");
+    scheduleScrubberLayoutRefresh();
   }
 
   // Reset progress UI for the new track
@@ -2712,9 +3550,15 @@ function playVideo(
   dom.fsPlayerIconPlay.classList.add("hidden");
   dom.fsPlayerIconPause.classList.add("hidden");
 
+  state.autoplayRequested = true;
+
   if (state.isPlayerReady && state.ytPlayer) {
     state.pendingVideoId = null;
+    dom.playerPlayPause.disabled = false;
+    dom.fsPlayerPlayPause.disabled = false;
     state.ytPlayer.loadVideoById(videoId);
+    state.ytPlayer.playVideo?.();
+    scheduleAutoplayFallbackCheck(1400);
   } else {
     state.pendingVideoId = videoId;
   }
