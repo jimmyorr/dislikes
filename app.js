@@ -2450,6 +2450,82 @@ function matchesVideoSearch(v, lowerQuery) {
   return false;
 }
 
+// Shared collator: String.prototype.localeCompare with options builds a new collator per call,
+// which made A–Z sorts of a few thousand items take 100ms+ on desktop (several times that on phones).
+const TEXT_COLLATOR = new Intl.Collator(undefined, { sensitivity: "base" });
+
+function compareText(a, b) {
+  return TEXT_COLLATOR.compare(a || "", b || "");
+}
+
+function getPublishedTs(v) {
+  if (!v.published_at) return NaN;
+  return Date.parse(v.published_at);
+}
+
+function getPublishedDayTs(v) {
+  if (!v.published_at) return NaN;
+  return Date.parse(String(v.published_at).split("T")[0]);
+}
+
+// Decorate-sort-undecorate so expensive keys (dates, ISO durations, cleaned artist names)
+// are computed once per item instead of once per comparison. Array.prototype.sort is stable,
+// so ties keep their original (date-added) order.
+function sortVideos(videos, sortBy) {
+  if (sortBy === "date-new" || !videos.length) return videos;
+
+  let keyOf;
+  let compare;
+  switch (sortBy) {
+    case "duration-long":
+      keyOf = (v) => parseDuration(v.duration || "PT0S");
+      compare = (a, b) => b.k - a.k;
+      break;
+    case "upload-new":
+      keyOf = getPublishedTs;
+      compare = (a, b) => {
+        const aMissing = isNaN(a.k);
+        const bMissing = isNaN(b.k);
+        if (aMissing && bMissing) return 0;
+        if (aMissing) return 1;
+        if (bMissing) return -1;
+        return b.k - a.k;
+      };
+      break;
+    case "comments-most":
+      keyOf = (v) => Number(v.comments) || 0;
+      compare = (a, b) => b.k - a.k;
+      break;
+    case "views-high":
+      keyOf = (v) => Number(v.views) || 0;
+      compare = (a, b) => b.k - a.k;
+      break;
+    case "channel-az":
+      keyOf = (v) => ({ artist: cleanArtistName(v.artist), day: getPublishedDayTs(v) });
+      compare = (a, b) => {
+        const artistCompare = compareText(a.k.artist, b.k.artist);
+        if (artistCompare !== 0) return artistCompare;
+        const aMissing = isNaN(a.k.day);
+        const bMissing = isNaN(b.k.day);
+        if (aMissing !== bMissing) return aMissing ? 1 : -1;
+        if (!aMissing && a.k.day !== b.k.day) return a.k.day - b.k.day;
+        return compareText(a.v.title, b.v.title);
+      };
+      break;
+    case "title-az":
+      keyOf = (v) => v.title || "";
+      compare = (a, b) => compareText(a.k, b.k);
+      break;
+    default:
+      return videos;
+  }
+
+  return videos
+    .map((v) => ({ v, k: keyOf(v) }))
+    .sort(compare)
+    .map((entry) => entry.v);
+}
+
 function filterVideos() {
   let results = state.videos.filter((v) => !isLibraryUploadVideo(v));
 
@@ -2478,53 +2554,7 @@ function filterVideos() {
   }
 
   // Sort
-  results.sort((a, b) => {
-    switch (state.sortBy) {
-      case "date-new":
-        return 0;
-      case "duration-long":
-        return (
-          parseDuration(b.duration || "PT0S") -
-          parseDuration(a.duration || "PT0S")
-        );
-      case "upload-new":
-        if (!a.published_at && !b.published_at) return 0;
-        if (!a.published_at) return 1;
-        if (!b.published_at) return -1;
-        return new Date(b.published_at) - new Date(a.published_at);
-      case "comments-most":
-        return b.comments - a.comments;
-      case "views-high":
-        return b.views - a.views;
-      case "channel-az": {
-        const artistCompare = cleanArtistName(a.artist).localeCompare(
-          cleanArtistName(b.artist),
-          undefined,
-          { sensitivity: "base" },
-        );
-        if (artistCompare !== 0) return artistCompare;
-
-        const dateA = a.published_at ? a.published_at.split("T")[0] : "";
-        const dateB = b.published_at ? b.published_at.split("T")[0] : "";
-
-        if (dateA !== dateB) {
-          if (!dateA) return 1;
-          if (!dateB) return -1;
-          return new Date(dateA) - new Date(dateB);
-        }
-
-        return (a.title || "").localeCompare(b.title || "", undefined, {
-          sensitivity: "base",
-        });
-      }
-      case "title-az":
-        return (a.title || "").localeCompare(b.title || "", undefined, {
-          sensitivity: "base",
-        });
-      default:
-        return 0;
-    }
-  });
+  results = sortVideos(results, state.sortBy);
 
   state.filteredVideos = results;
   virtualGrid.listVersion++;
