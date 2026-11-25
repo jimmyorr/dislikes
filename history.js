@@ -965,9 +965,7 @@ function whLikedAlbumsCard(agg, prevAgg, ctx, hint = "") {
   };
   const albums = albumsOf(agg);
   if (!ctx.liked.size || !albums.size) {
-    return `<section class="wh-card wh-card-albums"><header class="wh-card-head"><span class="wh-card-title">Albums</span></header><div class="wh-card-body"><p class="wh-muted">Albums come from your liked tracks: ${WH_ALBUM_MIN_TRACKS}+ liked tracks by one artist released the same day. ${
-      ctx.liked.size ? "None were played in this period." : "Load your likes to see them."
-    }</p></div></section>`;
+    return `<section class="wh-card wh-card-albums"><header class="wh-card-head"><span class="wh-card-title">Albums</span></header><div class="wh-card-body"><p class="wh-muted">${ctx.liked.size ? "No albums this period." : "Load your likes to see albums."}${hint ? ` ${hint}` : ""}</p></div></section>`;
   }
   const prevAlbums = prevAgg ? albumsOf(prevAgg) : null;
   const top = Array.from(albums.values())
@@ -1004,7 +1002,7 @@ function whLikedAlbumsCard(agg, prevAgg, ctx, hint = "") {
     "",
     firstHtml,
     rest,
-    `Albums you've liked ${WH_ALBUM_MIN_TRACKS}+ tracks from, matched by artist and release date.${hint ? ` ${hint}` : ""}`,
+    hint,
   );
 }
 
@@ -1086,7 +1084,7 @@ async function whLookupAlbums(trackCounts) {
     }
   } catch (e) {
     console.warn("Album lookup stopped:", e);
-    run.error = e && e.status === 401 ? "Sign in again to finish looking up albums." : "Album lookup stopped early. It picks up again next time.";
+    run.error = e && e.status === 401 ? "Sign in again to finish albums." : "Album lookup paused.";
   } finally {
     run.running = false;
     whSaveAlbumCache();
@@ -1120,7 +1118,7 @@ function whAlbumsCard(agg, prevAgg, ctx) {
   const L = wh.albumLookup;
   if (!lookedUp && !hasLikedAlbums && !L.running) {
     // Nothing looked up yet: fall back to albums inferred from likes
-    return whLikedAlbumsCard(agg, prevAgg, ctx, state.accessToken ? "" : "Sign in to look up album names for everything you play.");
+    return whLikedAlbumsCard(agg, prevAgg, ctx, state.accessToken ? "" : "Sign in for album names.");
   }
   const albumsOf = (a) => {
     const map = new Map();
@@ -1145,10 +1143,10 @@ function whAlbumsCard(agg, prevAgg, ctx) {
     return map;
   };
   const albums = albumsOf(agg);
-  const progress = L.running ? `Looking up albums: ${formatCount(L.done)} of ${formatCount(L.total)} tracks.` : L.error;
+  const progress = L.running ? `Looking up albums… ${Math.round((L.done / Math.max(1, L.total)) * 100)}%` : L.error;
   if (!albums.size) {
     return `<section class="wh-card wh-card-albums"><header class="wh-card-head"><span class="wh-card-title">Albums</span></header><div class="wh-card-body"><p class="wh-muted">${escapeHtml(
-      progress || "No album tracks played in this period. Singles are left out.",
+      progress || "No albums this period.",
     )}</p></div></section>`;
   }
   const prevAlbums = prevAgg ? albumsOf(prevAgg) : null;
@@ -1176,7 +1174,7 @@ function whAlbumsCard(agg, prevAgg, ctx) {
     "",
     firstHtml,
     rest,
-    progress || "Album names from YouTube, looked up for the period you view. Singles are left out.",
+    progress || "",
   );
 }
 
