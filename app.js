@@ -2280,7 +2280,8 @@ async function handleExportJson() {
   if (state.filteredVideos.length === 0) return;
 
   const exportData = state.filteredVideos;
-  const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+  // Drop internal fields (_origIdx, _is404) so exports stay clean and re-import cleanly
+  const blob = new Blob([JSON.stringify(exportData, (key, value) => (key.startsWith("_") ? undefined : value), 2)], {
     type: "application/json;charset=utf-8",
   });
   const objectUrl = URL.createObjectURL(blob);
@@ -2355,24 +2356,27 @@ function loadUploadedJsonFile(file) {
   if (!file) return;
 
   const lowerName = (file.name || "").toLowerCase();
-  if (lowerName.includes("dislike")) {
-    state.mode = "dislike";
-    localStorage.setItem("dislikes-mode", "dislike");
-  } else if (lowerName.includes("like")) {
-    state.mode = "like";
-    localStorage.setItem("dislikes-mode", "like");
-  }
+  const modeFromName = lowerName.includes("dislike")
+    ? "dislike"
+    : lowerName.includes("like")
+      ? "like"
+      : null;
 
   const reader = new FileReader();
   reader.onload = (e) => {
     try {
       const data = JSON.parse(e.target.result);
       if (Array.isArray(data)) {
-        invalidateActiveFetch();
         const normalized = normalizeImportedDataset(data);
         if (normalized.length === 0) {
           showToast("JSON file contained no valid videos", "error");
           return;
+        }
+        // Only switch mode once the file is known to be valid, so a bad file doesn't relabel the current library
+        invalidateActiveFetch();
+        if (modeFromName) {
+          state.mode = modeFromName;
+          localStorage.setItem("dislikes-mode", modeFromName);
         }
         state.dataSource = "upload";
         state.videos = normalized;
