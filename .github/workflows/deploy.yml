@@ -1,0 +1,63 @@
+# Deploys the site to GitHub Pages on every push to main, stamping the version on the way.
+#
+# PRs never touch the version: the repo always says "dev" (APP_VERSION in version.js,
+# SW_VERSION in sw.js, and the ?v=dev cache-busting query strings), so parallel PRs can't
+# conflict on it. Each deploy becomes MAJOR.MINOR.<run number>, e.g. 2.4.17.
+# Bump VERSION_PREFIX here only for a release you want to mark as bigger.
+#
+# Requires Settings > Pages > Build and deployment > Source = "GitHub Actions".
+
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  VERSION_PREFIX: "2.4"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Stamp version
+        run: |
+          VERSION="${VERSION_PREFIX}.${GITHUB_RUN_NUMBER}"
+          echo "Stamping v${VERSION}"
+          sed -i "s/^const APP_VERSION = \"dev\";/const APP_VERSION = \"${VERSION}\";/" version.js
+          sed -i "s/^const SW_VERSION = \"dev\";/const SW_VERSION = \"${VERSION}\";/" sw.js
+          sed -i "s/?v=dev\"/?v=${VERSION}\"/g" index.html privacy.html
+          # Fail the deploy rather than ship a half-stamped site
+          if grep -n '= "dev"\|?v=dev' version.js sw.js index.html privacy.html; then
+            echo "::error::Unstamped version left behind"
+            exit 1
+          fi
+
+      - name: Collect site files
+        run: |
+          mkdir _site
+          rsync -a --exclude='.git' --exclude='.github' --exclude='_site' ./ _site/
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
