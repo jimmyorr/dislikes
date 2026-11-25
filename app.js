@@ -1879,8 +1879,9 @@ function normalizeStoredVideo(v, assumeAllMusic = false, index = 0) {
   const isMusic =
     typeof v.is_music === "boolean" ? v.is_music : Boolean(assumeAllMusic || artTrack);
 
+  const { _is404, ...rest } = v;
   return {
-    ...v,
+    ...rest,
     views: parseViews(v.views),
     comments: Number(v.comments) || 0,
     published_at: publishedAt,
@@ -1941,7 +1942,12 @@ function saveToCache(
       totalResults,
       timestamp: Date.now()
     };
-    localStorage.setItem(`yt_dislikes_cache_${mode}`, JSON.stringify(data));
+    // _is404 is a per-session guess from a failed thumbnail load (often just a flaky connection),
+    // so never persist it or the track stays "Unavailable" forever.
+    localStorage.setItem(
+      `yt_dislikes_cache_${mode}`,
+      JSON.stringify(data, (key, value) => (key === "_is404" ? undefined : value)),
+    );
   } catch (e) {
     console.error("Failed to save cache:", e);
   }
