@@ -71,6 +71,7 @@ const state = {
   lastNavDirection: 1,
   restrictedVideoIds: new Set(),
   progressInterval: null,
+  isSeeking: false,
   shuffleMode: false,
   shuffleHistory: [],
   shuffleHistoryPos: -1,
@@ -545,7 +546,7 @@ function updateHeroCountDisplay(targetCount, animateSignature = null) {
     return;
   }
 
-  const fmt = (n) => new Intl.NumberFormat().format(n);
+  const fmt = formatCount;
   const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
 
   if (
@@ -1111,7 +1112,17 @@ function setupEventListeners() {
     }
   });
 
+  // While dragging, only preview the time; seek once on release. Seeking on every input event
+  // fired dozens of network seeks per drag, and the 500ms progress tick snapped the thumb back.
   dom.fsPlayerProgress.addEventListener("input", (e) => {
+    state.isSeeking = true;
+    if (state.ytPlayer && state.ytPlayer.getDuration) {
+      const duration = state.ytPlayer.getDuration();
+      dom.fsPlayerTimeCurrent.innerText = formatTime((e.target.value / 100) * duration);
+    }
+  });
+  dom.fsPlayerProgress.addEventListener("change", (e) => {
+    state.isSeeking = false;
     if (state.ytPlayer && state.ytPlayer.getDuration) {
       const duration = state.ytPlayer.getDuration();
       const seekTo = (e.target.value / 100) * duration;
@@ -1291,19 +1302,7 @@ function setupEventListeners() {
     if (!video || checkIfDeleted(video)) return;
     state.consecutiveAutoSkips = 0;
     state.lastNavDirection = 1;
-    const baseUrl = video.is_music ? "https://music.youtube.com" : "https://www.youtube.com";
-    const channelUrl = video.channel_id
-      ? `${baseUrl}/channel/${encodeURIComponent(video.channel_id)}`
-      : null;
-    const thumbnail = `https://i.ytimg.com/vi/${video.video_id}/mqdefault.jpg`;
-    playVideo(
-      video.video_id,
-      video.title || "Unavailable",
-      video.artist || "Unknown channel",
-      thumbnail,
-      channelUrl,
-      idx,
-    );
+    playTrackByIndex(idx);
   });
 
   // Fast Scrubber & Virtualized Grid Scroll / Resize Logic
@@ -1552,11 +1551,23 @@ function setupEventListeners() {
   );
 
   let resizeRafPending = false;
+  let lastResizeWidth = window.innerWidth;
   window.addEventListener("resize", () => {
     if (resizeRafPending) return;
     resizeRafPending = true;
     requestAnimationFrame(() => {
       resizeRafPending = false;
+      const width = window.innerWidth;
+      if (width === lastResizeWidth) {
+        // Height-only resize (mobile URL bar showing/hiding while scrolling): columns and card
+        // size are unchanged, so skip the full re-measure and just fill any newly exposed rows.
+        if (state.filteredVideos.length > 0 && !dom.viewContent.classList.contains("hidden")) {
+          renderVirtualGrid(false);
+          scheduleScrubberLayoutRefresh();
+        }
+        return;
+      }
+      lastResizeWidth = width;
       virtualGrid.cols = 0;
       virtualGrid.rowHeight = 0;
       scrubberState.renderedSignature = "";
@@ -1879,8 +1890,9 @@ function normalizeStoredVideo(v, assumeAllMusic = false, index = 0) {
   const isMusic =
     typeof v.is_music === "boolean" ? v.is_music : Boolean(assumeAllMusic || artTrack);
 
+  const { _is404, ...rest } = v;
   return {
-    ...v,
+    ...rest,
     views: parseViews(v.views),
     comments: Number(v.comments) || 0,
     published_at: publishedAt,
@@ -1941,7 +1953,12 @@ function saveToCache(
       totalResults,
       timestamp: Date.now()
     };
-    localStorage.setItem(`yt_dislikes_cache_${mode}`, JSON.stringify(data));
+    // _is404 is a per-session guess from a failed thumbnail load (often just a flaky connection),
+    // so never persist it or the track stays "Unavailable" forever.
+    localStorage.setItem(
+      `yt_dislikes_cache_${mode}`,
+      JSON.stringify(data, (key, value) => (key === "_is404" ? undefined : value)),
+    );
   } catch (e) {
     console.error("Failed to save cache:", e);
   }
@@ -1998,6 +2015,7 @@ function slimVideo(v) {
 
 let activeFetchPromise = null;
 let fetchGeneration = 0;
+let lastCacheSaveTs = 0;
 
 function invalidateActiveFetch() {
   fetchGeneration++;
@@ -2151,7 +2169,13 @@ async function fetchVideos(pageToken = null) {
 
       state.nextPageToken = nextToken;
       state.totalResults = total;
-      saveToCache(fetchMode, state.videos, nextToken, total);
+      // During "Load all", re-serializing the whole (growing) library into localStorage on every
+      // 50-item page is quadratic and blocks the main thread; save every few seconds and on the last page.
+      const now = Date.now();
+      if (!state.isFetchAll || !nextToken || now - lastCacheSaveTs > 3000) {
+        lastCacheSaveTs = now;
+        saveToCache(fetchMode, state.videos, nextToken, total);
+      }
       filterVideos();
 
       // The zero-yield fix for infinite scroll
@@ -2255,7 +2279,8 @@ async function handleExportJson() {
   if (state.filteredVideos.length === 0) return;
 
   const exportData = state.filteredVideos;
-  const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+  // Drop internal fields (_origIdx, _is404) so exports stay clean and re-import cleanly
+  const blob = new Blob([JSON.stringify(exportData, (key, value) => (key.startsWith("_") ? undefined : value), 2)], {
     type: "application/json;charset=utf-8",
   });
   const objectUrl = URL.createObjectURL(blob);
@@ -2330,24 +2355,27 @@ function loadUploadedJsonFile(file) {
   if (!file) return;
 
   const lowerName = (file.name || "").toLowerCase();
-  if (lowerName.includes("dislike")) {
-    state.mode = "dislike";
-    localStorage.setItem("dislikes-mode", "dislike");
-  } else if (lowerName.includes("like")) {
-    state.mode = "like";
-    localStorage.setItem("dislikes-mode", "like");
-  }
+  const modeFromName = lowerName.includes("dislike")
+    ? "dislike"
+    : lowerName.includes("like")
+      ? "like"
+      : null;
 
   const reader = new FileReader();
   reader.onload = (e) => {
     try {
       const data = JSON.parse(e.target.result);
       if (Array.isArray(data)) {
-        invalidateActiveFetch();
         const normalized = normalizeImportedDataset(data);
         if (normalized.length === 0) {
           showToast("JSON file contained no valid videos", "error");
           return;
+        }
+        // Only switch mode once the file is known to be valid, so a bad file doesn't relabel the current library
+        invalidateActiveFetch();
+        if (modeFromName) {
+          state.mode = modeFromName;
+          localStorage.setItem("dislikes-mode", modeFromName);
         }
         state.dataSource = "upload";
         state.videos = normalized;
@@ -2450,6 +2478,123 @@ function matchesVideoSearch(v, lowerQuery) {
   return false;
 }
 
+// Shared collator: String.prototype.localeCompare with options builds a new collator per call,
+// which made A–Z sorts of a few thousand items take 100ms+ on desktop (several times that on phones).
+const TEXT_COLLATOR = new Intl.Collator(undefined, { sensitivity: "base" });
+
+// Intl formatters are costly to construct; build them once instead of per card / per render.
+const COMPACT_NUMBER_FORMAT = new Intl.NumberFormat("en-US", {
+  notation: "compact",
+  compactDisplay: "short",
+});
+const COUNT_NUMBER_FORMAT = new Intl.NumberFormat();
+const DAY_DATE_FORMAT = new Intl.DateTimeFormat(undefined, { year: "numeric", month: "short", day: "numeric" });
+const DAY_DATE_FORMAT_UTC = new Intl.DateTimeFormat(undefined, {
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+  timeZone: "UTC",
+});
+const MONTH_DATE_FORMAT = new Intl.DateTimeFormat(undefined, { year: "numeric", month: "short" });
+const MONTH_DATE_FORMAT_UTC = new Intl.DateTimeFormat(undefined, {
+  year: "numeric",
+  month: "short",
+  timeZone: "UTC",
+});
+
+function formatCompactNumber(n) {
+  return COMPACT_NUMBER_FORMAT.format(n || 0);
+}
+
+function formatCount(n) {
+  return COUNT_NUMBER_FORMAT.format(n);
+}
+
+// Midnight-UTC dates are release dates parsed from "Released on:" and must not shift a day in western time zones.
+function formatPublishedDate(publishedAt, withDay = true) {
+  const isUtcMidnight = String(publishedAt).endsWith("T00:00:00Z");
+  const formatter = withDay
+    ? isUtcMidnight
+      ? DAY_DATE_FORMAT_UTC
+      : DAY_DATE_FORMAT
+    : isUtcMidnight
+      ? MONTH_DATE_FORMAT_UTC
+      : MONTH_DATE_FORMAT;
+  return formatter.format(new Date(publishedAt));
+}
+
+function compareText(a, b) {
+  return TEXT_COLLATOR.compare(a || "", b || "");
+}
+
+function getPublishedTs(v) {
+  if (!v.published_at) return NaN;
+  return Date.parse(v.published_at);
+}
+
+function getPublishedDayTs(v) {
+  if (!v.published_at) return NaN;
+  return Date.parse(String(v.published_at).split("T")[0]);
+}
+
+// Decorate-sort-undecorate so expensive keys (dates, ISO durations, cleaned artist names)
+// are computed once per item instead of once per comparison. Array.prototype.sort is stable,
+// so ties keep their original (date-added) order.
+function sortVideos(videos, sortBy) {
+  if (sortBy === "date-new" || !videos.length) return videos;
+
+  let keyOf;
+  let compare;
+  switch (sortBy) {
+    case "duration-long":
+      keyOf = (v) => parseDuration(v.duration || "PT0S");
+      compare = (a, b) => b.k - a.k;
+      break;
+    case "upload-new":
+      keyOf = getPublishedTs;
+      compare = (a, b) => {
+        const aMissing = isNaN(a.k);
+        const bMissing = isNaN(b.k);
+        if (aMissing && bMissing) return 0;
+        if (aMissing) return 1;
+        if (bMissing) return -1;
+        return b.k - a.k;
+      };
+      break;
+    case "comments-most":
+      keyOf = (v) => Number(v.comments) || 0;
+      compare = (a, b) => b.k - a.k;
+      break;
+    case "views-high":
+      keyOf = (v) => Number(v.views) || 0;
+      compare = (a, b) => b.k - a.k;
+      break;
+    case "channel-az":
+      keyOf = (v) => ({ artist: cleanArtistName(v.artist), day: getPublishedDayTs(v) });
+      compare = (a, b) => {
+        const artistCompare = compareText(a.k.artist, b.k.artist);
+        if (artistCompare !== 0) return artistCompare;
+        const aMissing = isNaN(a.k.day);
+        const bMissing = isNaN(b.k.day);
+        if (aMissing !== bMissing) return aMissing ? 1 : -1;
+        if (!aMissing && a.k.day !== b.k.day) return a.k.day - b.k.day;
+        return compareText(a.v.title, b.v.title);
+      };
+      break;
+    case "title-az":
+      keyOf = (v) => v.title || "";
+      compare = (a, b) => compareText(a.k, b.k);
+      break;
+    default:
+      return videos;
+  }
+
+  return videos
+    .map((v) => ({ v, k: keyOf(v) }))
+    .sort(compare)
+    .map((entry) => entry.v);
+}
+
 function filterVideos() {
   let results = state.videos.filter((v) => !isLibraryUploadVideo(v));
 
@@ -2478,53 +2623,7 @@ function filterVideos() {
   }
 
   // Sort
-  results.sort((a, b) => {
-    switch (state.sortBy) {
-      case "date-new":
-        return 0;
-      case "duration-long":
-        return (
-          parseDuration(b.duration || "PT0S") -
-          parseDuration(a.duration || "PT0S")
-        );
-      case "upload-new":
-        if (!a.published_at && !b.published_at) return 0;
-        if (!a.published_at) return 1;
-        if (!b.published_at) return -1;
-        return new Date(b.published_at) - new Date(a.published_at);
-      case "comments-most":
-        return b.comments - a.comments;
-      case "views-high":
-        return b.views - a.views;
-      case "channel-az": {
-        const artistCompare = cleanArtistName(a.artist).localeCompare(
-          cleanArtistName(b.artist),
-          undefined,
-          { sensitivity: "base" },
-        );
-        if (artistCompare !== 0) return artistCompare;
-
-        const dateA = a.published_at ? a.published_at.split("T")[0] : "";
-        const dateB = b.published_at ? b.published_at.split("T")[0] : "";
-
-        if (dateA !== dateB) {
-          if (!dateA) return 1;
-          if (!dateB) return -1;
-          return new Date(dateA) - new Date(dateB);
-        }
-
-        return (a.title || "").localeCompare(b.title || "", undefined, {
-          sensitivity: "base",
-        });
-      }
-      case "title-az":
-        return (a.title || "").localeCompare(b.title || "", undefined, {
-          sensitivity: "base",
-        });
-      default:
-        return 0;
-    }
-  });
+  results = sortVideos(results, state.sortBy);
 
   state.filteredVideos = results;
   virtualGrid.listVersion++;
@@ -2787,6 +2886,7 @@ function acquireVideoCard(video, index, deferThumbnail = false) {
 
   card.dataset.videoIndex = String(index);
   img.alt = title;
+  playBtn.setAttribute("aria-label", isDeleted ? `${title} (unavailable)` : `Play ${title}`);
 
   overlay.classList.toggle("hidden", !isDeleted);
   overlay.classList.toggle("flex", isDeleted);
@@ -3108,8 +3208,7 @@ function formatScrubberTooltip(checkpoint, video, index, total) {
   if (!video || !checkpoint) {
     return { primary: "", sub: "" };
   }
-  const compact = (n) =>
-    new Intl.NumberFormat("en-US", { notation: "compact", compactDisplay: "short" }).format(n || 0);
+  const compact = formatCompactNumber;
 
   switch (state.sortBy) {
     case "title-az":
@@ -3127,9 +3226,7 @@ function formatScrubberTooltip(checkpoint, video, index, total) {
         return { primary: "No date", sub: video.title || "" };
       }
       const yr = getVideoYear(video.published_at);
-      const opts = { year: "numeric", month: "short" };
-      if (video.published_at.endsWith("T00:00:00Z")) opts.timeZone = "UTC";
-      const sub = new Date(video.published_at).toLocaleDateString(undefined, opts);
+      const sub = formatPublishedDate(video.published_at, false);
       return { primary: String(yr), sub };
     }
     case "views-high":
@@ -3520,7 +3617,7 @@ function render() {
   // Library Stats Hero Count & Subtitle
   const currentCount = state.filteredVideos.length;
   const totalCount = state.totalResults;
-  const fmt = (n) => new Intl.NumberFormat().format(n);
+  const fmt = formatCount;
   const hasViewCap = state.maxViews !== null && !state.unavailableOnly;
 
   let countText = "";
@@ -3890,11 +3987,7 @@ function calculateAnalytics() {
 }
 
 function getDynamicMetadata(video) {
-  const compact = (n) =>
-    new Intl.NumberFormat("en-US", {
-      notation: "compact",
-      compactDisplay: "short",
-    }).format(n || 0);
+  const compact = formatCompactNumber;
 
   switch (state.sortBy) {
     case "views-high":
@@ -3903,11 +3996,7 @@ function getDynamicMetadata(video) {
       return formatDuration(video.duration);
     case "upload-new": {
       if (!video.published_at) return "Unknown date";
-      const opts = { year: "numeric", month: "short", day: "numeric" };
-      if (video.published_at.endsWith("T00:00:00Z")) {
-        opts.timeZone = "UTC";
-      }
-      return new Date(video.published_at).toLocaleDateString(undefined, opts);
+      return formatPublishedDate(video.published_at, true);
     }
     case "comments-most":
       return `${compact(video.comments)} comments`;
@@ -4139,7 +4228,10 @@ function initYTPlayer() {
           showPlayIconsReady();
 
           const isEmbedRestricted = event.data === 101 || event.data === 150;
-          if (isEmbedRestricted && state.currentVideoId) {
+          // 100 = removed or private. Like embed restrictions, it will never play here, so skip it
+          // during Play/Shuffle instead of stopping the queue.
+          const isUnplayable = isEmbedRestricted || event.data === 100;
+          if (isUnplayable && state.currentVideoId) {
             state.restrictedVideoIds.add(state.currentVideoId);
             updatePrevNextButtons();
             const hasPlayableNow = state.filteredVideos.some((v) => isVideoPlayable(v));
@@ -4157,9 +4249,16 @@ function initYTPlayer() {
 
             if (canAdvance && state.consecutiveAutoSkips < 15) {
               state.consecutiveAutoSkips++;
-              dom.playerArtist.innerHTML = `<span class="text-red-600 dark:text-red-400">Restricted on external sites — skipping...</span>`;
-              dom.fsPlayerArtist.innerHTML = `<span class="text-red-600 dark:text-red-400">Restricted on external sites — skipping...</span>`;
-              showToast("Playback restricted on external sites — skipping track");
+              const skipMsg = isEmbedRestricted
+                ? "Restricted on external sites — skipping..."
+                : "Video unavailable — skipping...";
+              dom.playerArtist.innerHTML = `<span class="text-red-600 dark:text-red-400">${skipMsg}</span>`;
+              dom.fsPlayerArtist.innerHTML = `<span class="text-red-600 dark:text-red-400">${skipMsg}</span>`;
+              showToast(
+                isEmbedRestricted
+                  ? "Playback restricted on external sites — skipping track"
+                  : "Video unavailable — skipping track",
+              );
               state.autoSkipTimeout = setTimeout(() => {
                 state.autoSkipTimeout = null;
                 if (state.lastNavDirection === -1 && !state.shuffleMode) {
@@ -4424,12 +4523,12 @@ function startProgressInterval() {
       const duration = state.ytPlayer.getDuration();
       if (duration > 0) {
         const percent = (current / duration) * 100;
-        dom.fsPlayerProgress.value = percent;
+        if (!state.isSeeking) dom.fsPlayerProgress.value = percent;
         dom.bottomPlayerProgressBar.style.width = `${percent}%`;
         
         const currentFormatted = formatTime(current);
         const totalFormatted = formatTime(duration);
-        dom.fsPlayerTimeCurrent.innerText = currentFormatted;
+        if (!state.isSeeking) dom.fsPlayerTimeCurrent.innerText = currentFormatted;
         dom.fsPlayerTimeTotal.innerText = totalFormatted;
         dom.playerTimeCurrent.innerText = currentFormatted;
         dom.playerTimeTotal.innerText = totalFormatted;
