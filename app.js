@@ -4,6 +4,33 @@ const CLIENT_ID =
 const SCOPES = "https://www.googleapis.com/auth/youtube.readonly";
 // VERSION is now defined in version.js
 
+const MAX_VIEWS_STEPS = [
+  { value: 1_000, shortLabel: "1K", fullLabel: "Under 1K" },
+  { value: 5_000, shortLabel: "5K", fullLabel: "Under 5K" },
+  { value: 10_000, shortLabel: "10K", fullLabel: "Under 10K" },
+  { value: 50_000, shortLabel: "50K", fullLabel: "Under 50K" },
+  { value: 100_000, shortLabel: "100K", fullLabel: "Under 100K" },
+  { value: 500_000, shortLabel: "500K", fullLabel: "Under 500K" },
+  { value: 1_000_000, shortLabel: "1M", fullLabel: "Under 1M" },
+  { value: null, shortLabel: "Any", fullLabel: "Any" },
+];
+
+function loadInitialMaxViews() {
+  const saved = localStorage.getItem("dislikes-max-views");
+  if (saved !== null) {
+    if (saved === "any" || saved === "") return null;
+    const parsed = parseInt(saved, 10);
+    const match = MAX_VIEWS_STEPS.find((s) => s.value === parsed);
+    return match ? match.value : null;
+  }
+  if (localStorage.getItem("dislikes-hidden-gems") === "true") {
+    localStorage.setItem("dislikes-max-views", "100000");
+    localStorage.removeItem("dislikes-hidden-gems");
+    return 100_000;
+  }
+  return null;
+}
+
 // --- State ---
 const state = {
   gisInited: false,
@@ -14,7 +41,7 @@ const state = {
   theme: localStorage.getItem("dislikes-theme") || "system",
   compactMode: localStorage.getItem("dislikes-compact") !== null ? localStorage.getItem("dislikes-compact") === "true" : true,
   musicOnly: localStorage.getItem("dislikes-music-only") !== null ? localStorage.getItem("dislikes-music-only") === "true" : true,
-  hiddenGems: localStorage.getItem("dislikes-hidden-gems") === "true",
+  maxViews: loadInitialMaxViews(),
   unavailableOnly: localStorage.getItem("dislikes-unavailable-only") === "true",
   videos: [],
   filteredVideos: [],
@@ -39,6 +66,10 @@ const state = {
   pendingVideoId: null,
   autoplayRequested: false,
   autoplayFallbackTimeout: null,
+  autoSkipTimeout: null,
+  consecutiveAutoSkips: 0,
+  lastNavDirection: 1,
+  restrictedVideoIds: new Set(),
   progressInterval: null,
   shuffleMode: false,
   shuffleHistory: [],
@@ -69,6 +100,8 @@ const dom = {
 
   resultsHeroCount: document.getElementById("results-hero-count"),
   resultsCount: document.getElementById("results-count"),
+  playAllButton: document.getElementById("play-all-button"),
+  shufflePlayButton: document.getElementById("shuffle-play-button"),
   libraryChipsRow: document.getElementById("library-chips-row"),
   searchInput: document.getElementById("search-input"),
   searchClearButton: document.getElementById("search-clear-button"),
@@ -77,8 +110,14 @@ const dom = {
   sortLabel: document.getElementById("sort-label"),
   sortChevron: document.getElementById("sort-chevron"),
   sortMenu: document.getElementById("sort-menu"),
-  hiddenGemsButton: document.getElementById("hidden-gems-button"),
-  shufflePlayButton: document.getElementById("shuffle-play-button"),
+  filtersDropdown: document.getElementById("filters-dropdown"),
+  filtersTrigger: document.getElementById("filters-trigger"),
+  filtersActiveBadge: document.getElementById("filters-active-badge"),
+  filtersMenu: document.getElementById("filters-menu"),
+  filtersResetButton: document.getElementById("filters-reset-button"),
+  maxViewsSlider: document.getElementById("max-views-slider"),
+  maxViewsLabel: document.getElementById("max-views-label"),
+  maxViewsStops: document.getElementById("max-views-stops"),
 
   emptyState: document.getElementById("empty-state"),
   gridTopSpacer: document.getElementById("grid-top-spacer"),
@@ -153,8 +192,7 @@ const dom = {
 
   videoTemplate: document.getElementById("video-card-template"),
   skeletonTemplate: document.getElementById("skeleton-template"),
-  modeToggle: document.getElementById("mode-toggle"),
-  modeText: document.getElementById("mode-text"),
+  modeToggleGroup: document.getElementById("mode-toggle-group"),
   welcomeTitle: document.getElementById("welcome-title"),
   welcomeDesc: document.getElementById("welcome-desc"),
 
@@ -164,12 +202,10 @@ const dom = {
   themeColorMeta: document.getElementById("theme-color-meta"),
   compactToggle: document.getElementById("compact-toggle"),
   musicToggle: document.getElementById("music-toggle"),
-  hiddenGemsToggle: document.getElementById("hidden-gems-toggle"),
   unavailableToggle: document.getElementById("unavailable-toggle"),
 
   favicon: document.getElementById("favicon"),
   appleIcon: document.getElementById("apple-icon"),
-  siteLogo: document.getElementById("site-logo"),
   footerResetButton: document.getElementById("footer-reset-button"),
   resetAppLink: document.getElementById("reset-app-link"),
   initializationTrouble: document.getElementById("initialization-trouble"),
@@ -213,6 +249,10 @@ function closeAllPopovers(exceptMenu = null) {
     dom.settingsMenu.classList.add("hidden");
     if (dom.settingsButton) dom.settingsButton.setAttribute("aria-expanded", "false");
   }
+  if (dom.filtersMenu && dom.filtersMenu !== exceptMenu) {
+    dom.filtersMenu.classList.add("hidden");
+    if (dom.filtersTrigger) dom.filtersTrigger.setAttribute("aria-expanded", "false");
+  }
   if (dom.sortMenu && dom.sortMenu !== exceptMenu) {
     dom.sortMenu.classList.add("hidden");
     if (dom.sortTrigger) dom.sortTrigger.setAttribute("aria-expanded", "false");
@@ -228,9 +268,31 @@ function closeAllPopovers(exceptMenu = null) {
 function isAnyPopoverOpen() {
   return Boolean(
     (dom.settingsMenu && !dom.settingsMenu.classList.contains("hidden")) ||
+      (dom.filtersMenu && !dom.filtersMenu.classList.contains("hidden")) ||
       (dom.sortMenu && !dom.sortMenu.classList.contains("hidden")) ||
       (dom.sidebarFilterMenu && !dom.sidebarFilterMenu.classList.contains("hidden"))
   );
+}
+
+function updateModeToggleUI(mode) {
+  if (!dom.modeToggleGroup) return;
+  const buttons = dom.modeToggleGroup.querySelectorAll(".mode-option");
+  buttons.forEach((btn) => {
+    const isActive = btn.dataset.modeValue === mode;
+    btn.setAttribute("aria-checked", String(isActive));
+    btn.tabIndex = isActive ? 0 : -1;
+    btn.classList.toggle("bg-white", isActive);
+    btn.classList.toggle("dark:bg-[#343434]", isActive);
+    btn.classList.toggle("text-gray-950", isActive);
+    btn.classList.toggle("dark:text-white", isActive);
+    btn.classList.toggle("shadow-sm", isActive);
+    btn.classList.toggle("font-semibold", isActive);
+    btn.classList.toggle("text-gray-500", !isActive);
+    btn.classList.toggle("dark:text-[#9a9a9a]", !isActive);
+    btn.classList.toggle("hover:text-gray-900", !isActive);
+    btn.classList.toggle("dark:hover:text-white", !isActive);
+    btn.classList.toggle("font-medium", !isActive);
+  });
 }
 
 function updateThemeToggleUI(theme) {
@@ -394,32 +456,80 @@ function setMobileFiltersOpen(isOpen) {
   if (iconEl) iconEl.classList.toggle("rotate-180", isOpen);
 }
 
-function updateHiddenGemsUI() {
-  const on = Boolean(state.hiddenGems);
-  if (dom.hiddenGemsToggle) {
-    dom.hiddenGemsToggle.checked = on;
+function getMaxViewsStepIndex() {
+  const idx = MAX_VIEWS_STEPS.findIndex((s) => s.value === state.maxViews);
+  return idx === -1 ? MAX_VIEWS_STEPS.length - 1 : idx;
+}
+
+function updateFiltersUI() {
+  const stepIdx = getMaxViewsStepIndex();
+  const stepObj = MAX_VIEWS_STEPS[stepIdx];
+
+  if (dom.maxViewsSlider) {
+    dom.maxViewsSlider.value = String(stepIdx);
+    dom.maxViewsSlider.setAttribute("aria-valuetext", stepObj.fullLabel);
   }
-  if (dom.hiddenGemsButton) {
-    dom.hiddenGemsButton.setAttribute("aria-pressed", String(on));
-    dom.hiddenGemsButton.classList.toggle("bg-gray-950", on);
-    dom.hiddenGemsButton.classList.toggle("text-white", on);
-    dom.hiddenGemsButton.classList.toggle("dark:bg-white", on);
-    dom.hiddenGemsButton.classList.toggle("dark:text-black", on);
-    dom.hiddenGemsButton.classList.toggle("bg-gray-100", !on);
-    dom.hiddenGemsButton.classList.toggle("dark:bg-[#212121]", !on);
-    dom.hiddenGemsButton.classList.toggle("text-gray-700", !on);
-    dom.hiddenGemsButton.classList.toggle("dark:text-[#e5e5e5]", !on);
-    dom.hiddenGemsButton.classList.toggle("hover:bg-gray-200/70", !on);
-    dom.hiddenGemsButton.classList.toggle("dark:hover:bg-[#2d2d2d]", !on);
+  if (dom.maxViewsLabel) {
+    dom.maxViewsLabel.textContent = stepObj.fullLabel;
+  }
+  if (dom.maxViewsStops) {
+    const stopBtns = dom.maxViewsStops.querySelectorAll(".max-views-stop");
+    stopBtns.forEach((btn) => {
+      const active = parseInt(btn.dataset.maxViewsStep, 10) === stepIdx;
+      btn.classList.toggle("text-gray-950", active);
+      btn.classList.toggle("dark:text-white", active);
+      btn.classList.toggle("font-bold", active);
+      btn.classList.toggle("text-gray-400", !active);
+      btn.classList.toggle("dark:text-[#888888]", !active);
+      btn.classList.toggle("hover:text-gray-700", !active);
+      btn.classList.toggle("dark:hover:text-[#cccccc]", !active);
+      btn.classList.toggle("font-medium", !active);
+    });
+  }
+
+  if (dom.musicToggle) dom.musicToggle.checked = state.musicOnly;
+  if (dom.unavailableToggle) dom.unavailableToggle.checked = state.unavailableOnly;
+
+  const activeDiffCount =
+    (state.maxViews !== null ? 1 : 0) +
+    (!state.musicOnly ? 1 : 0) +
+    (state.unavailableOnly ? 1 : 0);
+
+  if (dom.filtersResetButton) {
+    dom.filtersResetButton.classList.toggle("hidden", activeDiffCount === 0);
+  }
+  if (dom.filtersActiveBadge) {
+    const showBadge = activeDiffCount > 0;
+    dom.filtersActiveBadge.classList.toggle("hidden", !showBadge);
+    dom.filtersActiveBadge.classList.toggle("inline-flex", showBadge);
+    if (showBadge) {
+      dom.filtersActiveBadge.textContent =
+        activeDiffCount === 1 && state.maxViews !== null
+          ? `<${stepObj.shortLabel}`
+          : String(activeDiffCount);
+    }
   }
 }
 
-function setHiddenGems(enabled) {
-  const next = Boolean(enabled);
-  if (next === state.hiddenGems) return;
-  state.hiddenGems = next;
-  localStorage.setItem("dislikes-hidden-gems", String(next));
-  updateHiddenGemsUI();
+function setMaxViewsStep(stepIndex) {
+  const clamped = Math.max(0, Math.min(MAX_VIEWS_STEPS.length - 1, Number(stepIndex)));
+  const nextVal = MAX_VIEWS_STEPS[clamped].value;
+  if (nextVal === state.maxViews) return;
+  state.maxViews = nextVal;
+  localStorage.setItem("dislikes-max-views", nextVal === null ? "any" : String(nextVal));
+  updateFiltersUI();
+  filterVideos();
+  render();
+}
+
+function resetFilters() {
+  state.maxViews = null;
+  state.musicOnly = true;
+  state.unavailableOnly = false;
+  localStorage.setItem("dislikes-max-views", "any");
+  localStorage.setItem("dislikes-music-only", "true");
+  localStorage.setItem("dislikes-unavailable-only", "false");
+  updateFiltersUI();
   filterVideos();
   render();
 }
@@ -509,7 +619,8 @@ function init() {
 
   applyTheme(state.theme);
   updateThemeToggleUI(state.theme);
-  updateHiddenGemsUI();
+  updateModeToggleUI(state.mode);
+  updateFiltersUI();
 
   if (dom.compactToggle) {
     dom.compactToggle.checked = state.compactMode;
@@ -642,10 +753,25 @@ function updateSearchClearButton() {
   dom.searchClearButton.classList.toggle("flex", hasValue);
 }
 
+function isVideoPlayable(video) {
+  return Boolean(
+    video &&
+      !checkIfDeleted(video) &&
+      !state.restrictedVideoIds.has(video.video_id),
+  );
+}
+
+function clearAutoSkipTimeout() {
+  if (state.autoSkipTimeout) {
+    clearTimeout(state.autoSkipTimeout);
+    state.autoSkipTimeout = null;
+  }
+}
+
 function findAdjacentPlayableIndex(fromIndex, step) {
   let i = fromIndex + step;
   while (i >= 0 && i < state.filteredVideos.length) {
-    if (!checkIfDeleted(state.filteredVideos[i])) {
+    if (isVideoPlayable(state.filteredVideos[i])) {
       return i;
     }
     i += step;
@@ -656,7 +782,7 @@ function findAdjacentPlayableIndex(fromIndex, step) {
 function getPlayableIndices() {
   const indices = [];
   for (let i = 0; i < state.filteredVideos.length; i++) {
-    if (!checkIfDeleted(state.filteredVideos[i])) {
+    if (isVideoPlayable(state.filteredVideos[i])) {
       indices.push(i);
     }
   }
@@ -665,16 +791,39 @@ function getPlayableIndices() {
 
 function updateShuffleUI() {
   const on = state.shuffleMode;
-  [dom.playerShuffle, dom.fsPlayerShuffle].forEach((btn) => {
-    if (!btn) return;
-    btn.setAttribute("aria-pressed", String(on));
-    btn.classList.toggle("text-black", on);
-    btn.classList.toggle("dark:text-white", on);
-    btn.classList.toggle("bg-black/10", on);
-    btn.classList.toggle("dark:bg-white/15", on);
-    btn.classList.toggle("text-gray-400", !on);
-    btn.classList.toggle("dark:text-gray-500", !on);
-  });
+  if (dom.playerShuffle) {
+    dom.playerShuffle.setAttribute("aria-pressed", String(on));
+    dom.playerShuffle.classList.toggle("text-black", on);
+    dom.playerShuffle.classList.toggle("dark:text-white", on);
+    dom.playerShuffle.classList.toggle("bg-black/10", on);
+    dom.playerShuffle.classList.toggle("dark:bg-white/15", on);
+    dom.playerShuffle.classList.toggle("text-black/55", !on);
+    dom.playerShuffle.classList.toggle("dark:text-gray-500", !on);
+  }
+  if (dom.fsPlayerShuffle) {
+    dom.fsPlayerShuffle.setAttribute("aria-pressed", String(on));
+    dom.fsPlayerShuffle.classList.toggle("text-black", on);
+    dom.fsPlayerShuffle.classList.toggle("dark:text-white", on);
+    dom.fsPlayerShuffle.classList.toggle("bg-black/10", on);
+    dom.fsPlayerShuffle.classList.toggle("dark:bg-white/15", on);
+    dom.fsPlayerShuffle.classList.toggle("text-gray-400", !on);
+    dom.fsPlayerShuffle.classList.toggle("dark:text-gray-500", !on);
+  }
+}
+
+function startOrderedPlay() {
+  const playable = getPlayableIndices();
+  if (playable.length === 0) {
+    showToast("No playable tracks in current view", "error");
+    return;
+  }
+  state.shuffleMode = false;
+  state.shuffleHistory = [];
+  state.shuffleHistoryPos = -1;
+  state.consecutiveAutoSkips = 0;
+  state.lastNavDirection = 1;
+  updateShuffleUI();
+  playTrackByIndex(playable[0], false);
 }
 
 function startShufflePlay() {
@@ -685,6 +834,8 @@ function startShufflePlay() {
   }
 
   state.shuffleMode = true;
+  state.consecutiveAutoSkips = 0;
+  state.lastNavDirection = 1;
   let candidates = playable;
   if (playable.length > 1 && state.currentVideoId) {
     const others = playable.filter(
@@ -703,7 +854,10 @@ function startShufflePlay() {
 function toggleShuffleMode() {
   state.shuffleMode = !state.shuffleMode;
   if (state.shuffleMode) {
-    state.shuffleHistory = state.currentVideoId ? [state.currentVideoId] : [];
+    state.shuffleHistory =
+      state.currentVideoId && !state.restrictedVideoIds.has(state.currentVideoId)
+        ? [state.currentVideoId]
+        : [];
     state.shuffleHistoryPos = state.shuffleHistory.length - 1;
   } else {
     state.shuffleHistory = [];
@@ -714,8 +868,13 @@ function toggleShuffleMode() {
   showToast(state.shuffleMode ? "Shuffle on" : "Shuffle off");
 }
 
-function playPrevTrack() {
-  if (state.ytPlayer && state.ytPlayer.getCurrentTime) {
+function playPrevTrack(fromAutoSkip = false) {
+  if (fromAutoSkip !== true) {
+    state.consecutiveAutoSkips = 0;
+  }
+  state.lastNavDirection = -1;
+
+  if (fromAutoSkip !== true && state.ytPlayer && state.ytPlayer.getCurrentTime) {
     if (state.ytPlayer.getCurrentTime() > 3) {
       state.ytPlayer.seekTo(0, true);
       return;
@@ -726,7 +885,7 @@ function playPrevTrack() {
     for (let p = state.shuffleHistoryPos - 1; p >= 0; p--) {
       const vid = state.shuffleHistory[p];
       const idx = state.filteredVideos.findIndex(
-        (v) => v.video_id === vid && !checkIfDeleted(v),
+        (v) => v.video_id === vid && isVideoPlayable(v),
       );
       if (idx !== -1) {
         state.shuffleHistoryPos = p;
@@ -744,19 +903,24 @@ function playPrevTrack() {
     }
   }
 
-  if (state.ytPlayer && state.ytPlayer.seekTo) {
+  if (fromAutoSkip !== true && state.ytPlayer && state.ytPlayer.seekTo) {
     state.ytPlayer.seekTo(0, true);
   }
 }
 
-function playNextTrack() {
+function playNextTrack(fromAutoSkip = false) {
+  if (fromAutoSkip !== true) {
+    state.consecutiveAutoSkips = 0;
+  }
+  state.lastNavDirection = 1;
+
   if (state.shuffleMode) {
     // Step forward through shuffle history if user previously stepped back
     if (state.shuffleHistoryPos < state.shuffleHistory.length - 1) {
       for (let p = state.shuffleHistoryPos + 1; p < state.shuffleHistory.length; p++) {
         const vid = state.shuffleHistory[p];
         const idx = state.filteredVideos.findIndex(
-          (v) => v.video_id === vid && !checkIfDeleted(v),
+          (v) => v.video_id === vid && isVideoPlayable(v),
         );
         if (idx !== -1) {
           state.shuffleHistoryPos = p;
@@ -781,7 +945,10 @@ function playNextTrack() {
               (i) => state.filteredVideos[i].video_id !== state.currentVideoId,
             )
           : playable;
-      state.shuffleHistory = state.currentVideoId ? [state.currentVideoId] : [];
+      state.shuffleHistory =
+        state.currentVideoId && !state.restrictedVideoIds.has(state.currentVideoId)
+          ? [state.currentVideoId]
+          : [];
       state.shuffleHistoryPos = state.shuffleHistory.length - 1;
     }
 
@@ -808,7 +975,9 @@ function closePlayer() {
   }
   stopProgressInterval();
   clearAutoplayFallback();
+  clearAutoSkipTimeout();
   state.autoplayRequested = false;
+  state.consecutiveAutoSkips = 0;
   state.currentVideoIndex = -1;
   state.currentVideoId = null;
   state.pendingVideoId = null;
@@ -871,13 +1040,11 @@ function setupEventListeners() {
   dom.fsPlayerPlayPause.addEventListener("click", togglePlayPause);
   dom.fsPlayerThumbnail.addEventListener("click", togglePlayPause);
 
+  if (dom.playAllButton) {
+    dom.playAllButton.addEventListener("click", startOrderedPlay);
+  }
   if (dom.shufflePlayButton) {
     dom.shufflePlayButton.addEventListener("click", startShufflePlay);
-  }
-  if (dom.hiddenGemsButton) {
-    dom.hiddenGemsButton.addEventListener("click", () => {
-      setHiddenGems(!state.hiddenGems);
-    });
   }
   if (dom.playerShuffle) {
     dom.playerShuffle.addEventListener("click", toggleShuffleMode);
@@ -910,6 +1077,12 @@ function setupEventListeners() {
         const activeEl = document.activeElement;
         if (dom.sortMenu && !dom.sortMenu.classList.contains("hidden") && dom.sortDropdown?.contains(activeEl)) {
           dom.sortTrigger?.focus();
+        } else if (
+          dom.filtersMenu &&
+          !dom.filtersMenu.classList.contains("hidden") &&
+          dom.filtersDropdown?.contains(activeEl)
+        ) {
+          dom.filtersTrigger?.focus();
         } else if (
           dom.sidebarFilterMenu &&
           !dom.sidebarFilterMenu.classList.contains("hidden") &&
@@ -1116,6 +1289,8 @@ function setupEventListeners() {
     if (isNaN(idx) || idx < 0 || idx >= state.filteredVideos.length) return;
     const video = state.filteredVideos[idx];
     if (!video || checkIfDeleted(video)) return;
+    state.consecutiveAutoSkips = 0;
+    state.lastNavDirection = 1;
     const baseUrl = video.is_music ? "https://music.youtube.com" : "https://www.youtube.com";
     const channelUrl = video.channel_id
       ? `${baseUrl}/channel/${encodeURIComponent(video.channel_id)}`
@@ -1394,9 +1569,13 @@ function setupEventListeners() {
     });
   });
 
-  dom.modeToggle.addEventListener("click", () => {
-    state.mode = state.mode === "dislike" ? "like" : "dislike";
+  const selectMode = (nextMode) => {
+    if (!nextMode || (nextMode !== "like" && nextMode !== "dislike") || nextMode === state.mode) {
+      return;
+    }
+    state.mode = nextMode;
     localStorage.setItem("dislikes-mode", state.mode);
+    updateModeToggleUI(state.mode);
 
     invalidateActiveFetch();
 
@@ -1422,7 +1601,65 @@ function setupEventListeners() {
     }
     window.scrollTo({ top: 0, behavior: "auto" });
     render();
-  });
+  };
+
+  if (dom.modeToggleGroup) {
+    dom.modeToggleGroup.addEventListener("click", (e) => {
+      const btn = e.target.closest(".mode-option");
+      if (!btn) return;
+      selectMode(btn.dataset.modeValue);
+    });
+
+    dom.modeToggleGroup.addEventListener("keydown", (e) => {
+      if (e.key !== "ArrowRight" && e.key !== "ArrowLeft" && e.key !== "ArrowDown" && e.key !== "ArrowUp") {
+        return;
+      }
+      const buttons = Array.from(dom.modeToggleGroup.querySelectorAll(".mode-option"));
+      if (!buttons.length) return;
+      e.preventDefault();
+      const currentIdx = buttons.findIndex((b) => b.dataset.modeValue === state.mode);
+      const delta = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : -1;
+      const nextBtn = buttons[(Math.max(0, currentIdx) + delta + buttons.length) % buttons.length];
+      if (nextBtn) {
+        selectMode(nextBtn.dataset.modeValue);
+        nextBtn.focus();
+      }
+    });
+  }
+
+  // Dedicated Filters Popover Logic
+  if (dom.filtersTrigger && dom.filtersMenu) {
+    dom.filtersTrigger.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const willOpen = dom.filtersMenu.classList.contains("hidden");
+      closeAllPopovers(dom.filtersMenu);
+      dom.filtersMenu.classList.toggle("hidden", !willOpen);
+      dom.filtersTrigger.setAttribute("aria-expanded", String(willOpen));
+    });
+  }
+
+  if (dom.maxViewsSlider) {
+    dom.maxViewsSlider.addEventListener("input", (e) => {
+      setMaxViewsStep(parseInt(e.target.value, 10));
+    });
+  }
+
+  if (dom.maxViewsStops) {
+    dom.maxViewsStops.addEventListener("click", (e) => {
+      const btn = e.target.closest(".max-views-stop");
+      if (!btn) return;
+      const step = parseInt(btn.dataset.maxViewsStep, 10);
+      if (!isNaN(step)) {
+        setMaxViewsStep(step);
+      }
+    });
+  }
+
+  if (dom.filtersResetButton) {
+    dom.filtersResetButton.addEventListener("click", () => {
+      resetFilters();
+    });
+  }
 
   // Settings Menu Logic
   dom.settingsButton.addEventListener("click", (e) => {
@@ -1442,6 +1679,14 @@ function setupEventListeners() {
     ) {
       dom.settingsMenu.classList.add("hidden");
       dom.settingsButton.setAttribute("aria-expanded", "false");
+    }
+    if (
+      dom.filtersMenu &&
+      !dom.filtersMenu.classList.contains("hidden") &&
+      !dom.filtersDropdown.contains(e.target)
+    ) {
+      dom.filtersMenu.classList.add("hidden");
+      dom.filtersTrigger.setAttribute("aria-expanded", "false");
     }
     if (
       dom.sortMenu &&
@@ -1519,17 +1764,10 @@ function setupEventListeners() {
     const isMusicOnly = e.target.checked;
     state.musicOnly = isMusicOnly;
     localStorage.setItem("dislikes-music-only", isMusicOnly);
+    updateFiltersUI();
     filterVideos();
     render();
   });
-
-  // Hidden Gems Logic
-  if (dom.hiddenGemsToggle) {
-    dom.hiddenGemsToggle.checked = state.hiddenGems;
-    dom.hiddenGemsToggle.addEventListener("change", (e) => {
-      setHiddenGems(e.target.checked);
-    });
-  }
 
   // Unavailable Only Logic
   dom.unavailableToggle.checked = state.unavailableOnly;
@@ -1537,6 +1775,7 @@ function setupEventListeners() {
     const isUnavailableOnly = e.target.checked;
     state.unavailableOnly = isUnavailableOnly;
     localStorage.setItem("dislikes-unavailable-only", isUnavailableOnly);
+    updateFiltersUI();
     filterVideos();
     render();
   });
@@ -2212,8 +2451,8 @@ function filterVideos() {
     results = results.filter((v) => v.is_music);
   }
 
-  if (state.hiddenGems) {
-    results = results.filter((v) => !checkIfDeleted(v) && (Number(v.views) || 0) < 100_000);
+  if (state.maxViews !== null && !state.unavailableOnly) {
+    results = results.filter((v) => !checkIfDeleted(v) && (Number(v.views) || 0) < state.maxViews);
   }
 
   // Keep the left nav browsable across the full collection (cowneck/music style)
@@ -3216,17 +3455,13 @@ function render() {
 
   // Dynamic Text based on mode
   const isDislike = state.mode === "dislike";
-  if (dom.modeText) {
-    dom.modeText.textContent = isDislike ? "Dislikes" : "Likes";
-  } else {
-    dom.modeToggle.textContent = isDislike ? "Dislikes" : "Likes";
-  }
+  updateModeToggleUI(state.mode);
   dom.welcomeTitle.textContent = `Your YouTube ${isDislike ? "disliked" : "liked"} videos.`;
   dom.welcomeDesc.innerHTML = `View, filter, and sort your ${isDislike ? "dislikes" : "likes"}.<br>Simple, private, and minimal.`;
 
   document.title = isDislike ? "Dislikes" : "Likes";
   updateFavicon(state.mode);
-  updateHiddenGemsUI();
+  updateFiltersUI();
 
   if (dom.topbarAppControls) {
     dom.topbarAppControls.classList.toggle("hidden", !hasAppData);
@@ -3282,6 +3517,7 @@ function render() {
   const currentCount = state.filteredVideos.length;
   const totalCount = state.totalResults;
   const fmt = (n) => new Intl.NumberFormat().format(n);
+  const hasViewCap = state.maxViews !== null && !state.unavailableOnly;
 
   let countText = "";
   const noun = state.musicOnly
@@ -3297,22 +3533,23 @@ function render() {
     countText = "Loading library...";
   } else {
     const animSig =
-      !trimmedSearch && !state.hiddenGems && !state.unavailableOnly && !state.nextPageToken
+      !trimmedSearch && !hasViewCap && !state.unavailableOnly && !state.nextPageToken
         ? `${state.dataSource}:${state.mode}:${state.videos.length}`
         : null;
     updateHeroCountDisplay(currentCount, animSig);
 
-    if (state.nextPageToken && !trimmedSearch && !state.hiddenGems && !state.unavailableOnly) {
+    if (state.nextPageToken && !trimmedSearch && !hasViewCap && !state.unavailableOnly) {
       if (totalCount && totalCount > state.videos.length) {
         countText = `of ~${fmt(totalCount)} loaded`;
       } else {
         countText = "Loaded so far";
       }
-    } else if (trimmedSearch || state.hiddenGems || state.unavailableOnly) {
+    } else if (trimmedSearch || hasViewCap || state.unavailableOnly) {
       if (state.unavailableOnly && !trimmedSearch) {
         countText = `Unavailable ${noun}`;
-      } else if (state.hiddenGems && !trimmedSearch) {
-        countText = `Hidden gem ${noun}`;
+      } else if (hasViewCap && !trimmedSearch) {
+        const stepObj = MAX_VIEWS_STEPS[getMaxViewsStepIndex()];
+        countText = `${stepObj.fullLabel} views`;
       } else {
         countText = `Matching ${noun}`;
       }
@@ -3324,6 +3561,11 @@ function render() {
   }
 
   dom.resultsCount.textContent = countText;
+
+  const hasPlayable =
+    !(state.loading && !isLoadMore) && state.filteredVideos.some((v) => isVideoPlayable(v));
+  if (dom.playAllButton) dom.playAllButton.disabled = !hasPlayable;
+  if (dom.shufflePlayButton) dom.shufflePlayButton.disabled = !hasPlayable;
 
   // Load All Button State
   const showLoadAll = Boolean(state.nextPageToken && !trimmedSearch);
@@ -3717,7 +3959,6 @@ function updateFavicon(mode) {
   if (state.iconCache[mode]) {
     dom.favicon.href = state.iconCache[mode];
     dom.appleIcon.href = state.iconCache[mode];
-    if (dom.siteLogo) dom.siteLogo.src = state.iconCache[mode];
     return;
   }
 
@@ -3740,7 +3981,6 @@ function updateFavicon(mode) {
     state.iconCache[mode] = dataUrl;
     dom.favicon.href = dataUrl;
     dom.appleIcon.href = dataUrl;
-    if (dom.siteLogo) dom.siteLogo.src = dataUrl;
   };
 }
 
@@ -3888,21 +4128,56 @@ function initYTPlayer() {
         },
         onStateChange: onPlayerStateChange,
         onError: (event) => {
-          console.error("YouTube API Error:", event.data);
+          console.warn("YouTube player error:", event.data);
           state.autoplayRequested = false;
           clearAutoplayFallback();
+          clearAutoSkipTimeout();
           stopProgressInterval();
           showPlayIconsReady();
-          
-          if (event.data === 101 || event.data === 150) {
-            dom.playerArtist.innerHTML = `<span class="text-red-500">Playback restricted on external sites</span>`;
-            dom.fsPlayerArtist.innerHTML = `<span class="text-red-500">Playback restricted on external sites</span>`;
-          } else {
-            dom.playerArtist.innerHTML = `<span class="text-red-500">Video unavailable</span>`;
-            dom.fsPlayerArtist.innerHTML = `<span class="text-red-500">Video unavailable</span>`;
+
+          const isEmbedRestricted = event.data === 101 || event.data === 150;
+          if (isEmbedRestricted && state.currentVideoId) {
+            state.restrictedVideoIds.add(state.currentVideoId);
+            updatePrevNextButtons();
+            const hasPlayableNow = state.filteredVideos.some((v) => isVideoPlayable(v));
+            if (dom.playAllButton) dom.playAllButton.disabled = !hasPlayableNow;
+            if (dom.shufflePlayButton) dom.shufflePlayButton.disabled = !hasPlayableNow;
+
+            let canAdvance = false;
+            if (state.shuffleMode) {
+              canAdvance = getPlayableIndices().length > 0;
+            } else if (state.lastNavDirection === -1) {
+              canAdvance = findAdjacentPlayableIndex(state.currentVideoIndex, -1) !== -1;
+            } else {
+              canAdvance = findAdjacentPlayableIndex(state.currentVideoIndex, 1) !== -1;
+            }
+
+            if (canAdvance && state.consecutiveAutoSkips < 15) {
+              state.consecutiveAutoSkips++;
+              dom.playerArtist.innerHTML = `<span class="text-red-600 dark:text-red-400">Restricted on external sites — skipping...</span>`;
+              dom.fsPlayerArtist.innerHTML = `<span class="text-red-600 dark:text-red-400">Restricted on external sites — skipping...</span>`;
+              showToast("Playback restricted on external sites — skipping track");
+              state.autoSkipTimeout = setTimeout(() => {
+                state.autoSkipTimeout = null;
+                if (state.lastNavDirection === -1 && !state.shuffleMode) {
+                  playPrevTrack(true);
+                } else {
+                  playNextTrack(true);
+                }
+              }, 350);
+              return;
+            }
           }
-        }
-      }
+
+          if (isEmbedRestricted) {
+            dom.playerArtist.innerHTML = `<span class="text-red-600 dark:text-red-400">Playback restricted on external sites</span>`;
+            dom.fsPlayerArtist.innerHTML = `<span class="text-red-600 dark:text-red-400">Playback restricted on external sites</span>`;
+          } else {
+            dom.playerArtist.innerHTML = `<span class="text-red-600 dark:text-red-400">Video unavailable</span>`;
+            dom.fsPlayerArtist.innerHTML = `<span class="text-red-600 dark:text-red-400">Video unavailable</span>`;
+          }
+        },
+      },
     });
 
     configureYTPlayerIframe(state.ytPlayer);
@@ -3912,7 +4187,9 @@ function initYTPlayer() {
 function onPlayerStateChange(event) {
   if (event.data === 1) { // Playing
     state.autoplayRequested = false;
+    state.consecutiveAutoSkips = 0;
     clearAutoplayFallback();
+    clearAutoSkipTimeout();
     dom.playerIconLoading.classList.add("hidden");
     dom.playerIconPlay.classList.add("hidden");
     dom.playerIconPause.classList.remove("hidden");
@@ -3985,6 +4262,7 @@ function playVideo(
 ) {
   stopProgressInterval();
   clearAutoplayFallback();
+  clearAutoSkipTimeout();
   if (state.shuffleMode && !fromShuffleNav) {
     if (state.shuffleHistory[state.shuffleHistoryPos] !== videoId) {
       state.shuffleHistory = state.shuffleHistory.slice(0, state.shuffleHistoryPos + 1);
@@ -4029,26 +4307,33 @@ function playVideo(
     dom.fsPlayerArtist.innerText = cleanArtist;
   }
   
-  // Full-screen player updates
+  // Use guaranteed borderless mqdefault.jpg for mini-player ambient tinting so YouTube's
+  // 120x90 gray maxresdefault placeholder never washes out the collapsed mini-player.
+  dom.bottomPlayerBg.style.backgroundImage = `url(${thumbUrl})`;
+
+  // Full-screen player updates (prefer maxresdefault, falling back when missing or 120x90 placeholder)
   const maxResUrl = `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`;
   const hqResUrl = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
-  
-  dom.fsPlayerThumbnail.src = maxResUrl;
-  dom.fsPlayerBg.style.backgroundImage = `url(${maxResUrl})`;
-  dom.bottomPlayerBg.style.backgroundImage = `url(${maxResUrl})`;
-  
-  // Fallbacks if maxres doesn't exist
-  dom.fsPlayerThumbnail.onerror = () => {
+
+  const stepDownFsArt = () => {
     if (dom.fsPlayerThumbnail.src === maxResUrl) {
       dom.fsPlayerThumbnail.src = hqResUrl;
       dom.fsPlayerBg.style.backgroundImage = `url(${hqResUrl})`;
-      dom.bottomPlayerBg.style.backgroundImage = `url(${hqResUrl})`;
     } else if (dom.fsPlayerThumbnail.src === hqResUrl) {
       dom.fsPlayerThumbnail.src = thumbUrl;
       dom.fsPlayerBg.style.backgroundImage = `url(${thumbUrl})`;
-      dom.bottomPlayerBg.style.backgroundImage = `url(${thumbUrl})`;
     }
   };
+
+  dom.fsPlayerThumbnail.onload = () => {
+    if (dom.fsPlayerThumbnail.naturalWidth > 0 && dom.fsPlayerThumbnail.naturalWidth <= 120) {
+      stepDownFsArt();
+    }
+  };
+  dom.fsPlayerThumbnail.onerror = stepDownFsArt;
+
+  dom.fsPlayerThumbnail.src = maxResUrl;
+  dom.fsPlayerBg.style.backgroundImage = `url(${maxResUrl})`;
   dom.fsPlayerTitle.innerText = title;
   
   dom.playerIconLoading.classList.remove("hidden");

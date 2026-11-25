@@ -88,7 +88,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=2.0.9" />
+    <link rel="stylesheet" href="styles.css?v=2.1.0" />
     <script>
       (function () {
         try {
@@ -222,48 +222,70 @@
       <div
         class="px-4 sm:px-6 lg:px-8 py-2.5 md:py-0 md:h-16 flex flex-wrap md:flex-nowrap items-center justify-between gap-x-4 gap-y-2.5"
       >
-        <!-- Brand / Mode Switcher -->
+        <!-- 2-Way Segmented Mode Switcher (Likes | Dislikes) -->
         <div class="order-1 flex items-center shrink-0">
-          <button
-            id="mode-toggle"
-            type="button"
-            title="Switch between likes and dislikes"
-            class="group inline-flex items-center gap-2.5 py-1 pr-1.5 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-black dark:focus-visible:ring-white"
+          <div
+            id="mode-toggle-group"
+            role="radiogroup"
+            aria-label="Library mode"
+            class="inline-flex items-center p-1 rounded-full bg-gray-100 dark:bg-[#1c1c1c] border border-gray-200/70 dark:border-white/[0.07] gap-0.5"
           >
-            <img
-              id="site-logo"
-              src="icon.png"
-              class="w-6 h-6 sm:w-7 sm:h-7 object-contain shrink-0 transition-transform duration-200 group-hover:scale-105"
-              alt="Logo"
-            />
-            <span
-              id="mode-text"
-              class="text-[19px] sm:text-[21px] font-bold tracking-[-0.025em] text-gray-950 dark:text-white leading-none"
-              >Dislikes</span
-            >
-            <span
-              aria-hidden="true"
-              class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-100 dark:bg-[#212121] text-gray-500 dark:text-[#aaaaaa] group-hover:text-black dark:group-hover:text-white group-hover:bg-gray-200/80 dark:group-hover:bg-[#2f2f2f] transition-colors"
+            <button
+              type="button"
+              role="radio"
+              data-mode-value="like"
+              aria-checked="true"
+              class="mode-option h-7 sm:h-8 px-2.5 sm:px-3.5 rounded-full inline-flex items-center gap-1.5 text-[13px] sm:text-[14px] leading-none transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-black dark:focus-visible:ring-white"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
-                width="11"
-                height="11"
+                width="14"
+                height="14"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
-                stroke-width="2.4"
+                stroke-width="2.1"
                 stroke-linecap="round"
                 stroke-linejoin="round"
+                class="shrink-0"
               >
-                <path d="m7 15 5 5 5-5" />
-                <path d="m7 9 5-5 5 5" />
+                <path d="M7 10v12" />
+                <path
+                  d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"
+                />
               </svg>
-            </span>
-          </button>
+              <span>Likes</span>
+            </button>
+            <button
+              type="button"
+              role="radio"
+              data-mode-value="dislike"
+              aria-checked="false"
+              class="mode-option h-7 sm:h-8 px-2.5 sm:px-3.5 rounded-full inline-flex items-center gap-1.5 text-[13px] sm:text-[14px] leading-none transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-black dark:focus-visible:ring-white"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.1"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="shrink-0"
+              >
+                <path d="M17 14V2" />
+                <path
+                  d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"
+                />
+              </svg>
+              <span>Dislikes</span>
+            </button>
+          </div>
         </div>
 
-        <!-- Unified Topbar Search, Sort & Quick Controls (shown when library is active) -->
+        <!-- Unified Topbar Search, Sort & Filters (shown when library is active) -->
         <div
           id="topbar-app-controls"
           class="hidden order-3 md:order-2 w-full md:w-auto md:flex-1 items-center justify-end gap-2"
@@ -434,58 +456,141 @@
             </div>
           </div>
 
-          <button
-            id="hidden-gems-button"
-            type="button"
-            aria-pressed="false"
-            title="Hidden gems (under 100K views)"
-            aria-label="Hidden gems (under 100K views)"
-            class="shrink-0 h-9 w-9 sm:h-10 xl:w-auto xl:px-3.5 rounded-full inline-flex items-center justify-center gap-1.5 text-[13px] font-medium bg-gray-100 dark:bg-[#212121] text-gray-700 dark:text-[#e5e5e5] hover:bg-gray-200/70 dark:hover:bg-[#2d2d2d] hover:text-black dark:hover:text-white transition-colors"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
+          <!-- Dedicated Filters Popover (Max views discrete slider, Music only, Unavailable only) -->
+          <div id="filters-dropdown" class="relative shrink-0">
+            <button
+              type="button"
+              id="filters-trigger"
+              aria-haspopup="true"
+              aria-expanded="false"
+              aria-controls="filters-menu"
+              aria-label="Filters"
+              title="Filters"
+              class="h-9 sm:h-10 inline-flex items-center justify-center gap-1.5 px-3 sm:px-3.5 rounded-full text-[13px] sm:text-[13.5px] font-medium bg-gray-100 dark:bg-[#212121] text-gray-900 dark:text-[#f1f1f1] hover:bg-gray-200/70 dark:hover:bg-[#2d2d2d] border border-transparent focus:outline-none focus:border-gray-300 dark:focus:border-white/25 transition-colors"
             >
-              <path d="M6 3h12l4 6-10 13L2 9Z" />
-              <path d="M11 3 8 9l4 13 4-13-3-6" />
-              <path d="M2 9h20" />
-            </svg>
-            <span class="hidden xl:inline">Hidden gems</span>
-          </button>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="shrink-0 text-gray-600 dark:text-[#cccccc]"
+              >
+                <line x1="4" x2="4" y1="21" y2="14" />
+                <line x1="4" x2="4" y1="10" y2="3" />
+                <line x1="12" x2="12" y1="21" y2="12" />
+                <line x1="12" x2="12" y1="8" y2="3" />
+                <line x1="20" x2="20" y1="21" y2="16" />
+                <line x1="20" x2="20" y1="12" y2="3" />
+                <line x1="2" x2="6" y1="14" y2="14" />
+                <line x1="10" x2="14" y1="8" y2="8" />
+                <line x1="18" x2="22" y1="16" y2="16" />
+              </svg>
+              <span class="hidden sm:inline">Filters</span>
+              <span
+                id="filters-active-badge"
+                class="hidden items-center justify-center px-1.5 py-0.5 rounded-full text-[11px] font-semibold leading-none bg-gray-950 text-white dark:bg-white dark:text-black tabular-nums"
+              ></span>
+            </button>
 
-          <button
-            id="shuffle-play-button"
-            type="button"
-            title="Shuffle play"
-            aria-label="Shuffle play"
-            class="shrink-0 h-9 w-9 sm:h-10 xl:w-auto xl:px-3.5 rounded-full inline-flex items-center justify-center gap-1.5 text-[13px] font-medium bg-gray-100 dark:bg-[#212121] text-gray-700 dark:text-[#e5e5e5] hover:bg-gray-200/70 dark:hover:bg-[#2d2d2d] hover:text-black dark:hover:text-white transition-colors"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
+            <div
+              id="filters-menu"
+              class="hidden absolute right-0 top-full mt-2 w-72 sm:w-80 bg-white dark:bg-[#181818] border border-gray-200/80 dark:border-white/10 shadow-2xl rounded-2xl p-4 z-[60]"
             >
-              <polyline points="16 3 21 3 21 8"></polyline>
-              <line x1="4" y1="20" x2="21" y2="3"></line>
-              <polyline points="21 16 21 21 16 21"></polyline>
-              <line x1="15" y1="15" x2="21" y2="21"></line>
-              <line x1="4" y1="4" x2="9" y2="9"></line>
-            </svg>
-            <span class="hidden xl:inline">Shuffle</span>
-          </button>
+              <div class="flex items-center justify-between mb-3.5">
+                <span
+                  class="text-[11px] font-semibold text-gray-400 dark:text-[#999999] uppercase tracking-[0.1em]"
+                  >Filters</span
+                >
+                <button
+                  id="filters-reset-button"
+                  type="button"
+                  class="hidden text-xs font-medium text-gray-500 dark:text-[#aaaaaa] hover:text-black dark:hover:text-white transition-colors"
+                >
+                  Reset
+                </button>
+              </div>
+
+              <div class="space-y-4">
+                <!-- Discrete Max Views Slider -->
+                <div class="space-y-2">
+                  <div class="flex items-center justify-between gap-2">
+                    <label
+                      for="max-views-slider"
+                      class="text-[13.5px] font-medium text-gray-800 dark:text-gray-200"
+                      >Max views</label
+                    >
+                    <span
+                      id="max-views-label"
+                      class="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-100 dark:bg-[#262626] text-gray-900 dark:text-white tabular-nums"
+                      >Any</span
+                    >
+                  </div>
+
+                  <input
+                    type="range"
+                    id="max-views-slider"
+                    min="0"
+                    max="7"
+                    step="1"
+                    value="7"
+                    aria-label="Max views"
+                    class="w-full h-1.5 bg-gray-200 dark:bg-[#333333] rounded-lg appearance-none cursor-pointer accent-gray-950 dark:accent-white"
+                  />
+
+                  <div
+                    id="max-views-stops"
+                    class="flex items-center justify-between text-[10.5px] font-medium tabular-nums select-none pt-0.5"
+                  >
+                    <button type="button" data-max-views-step="0" class="max-views-stop px-0.5 py-0.5 rounded transition-colors">1K</button>
+                    <button type="button" data-max-views-step="1" class="max-views-stop px-0.5 py-0.5 rounded transition-colors">5K</button>
+                    <button type="button" data-max-views-step="2" class="max-views-stop px-0.5 py-0.5 rounded transition-colors">10K</button>
+                    <button type="button" data-max-views-step="3" class="max-views-stop px-0.5 py-0.5 rounded transition-colors">50K</button>
+                    <button type="button" data-max-views-step="4" class="max-views-stop px-0.5 py-0.5 rounded transition-colors">100K</button>
+                    <button type="button" data-max-views-step="5" class="max-views-stop px-0.5 py-0.5 rounded transition-colors">500K</button>
+                    <button type="button" data-max-views-step="6" class="max-views-stop px-0.5 py-0.5 rounded transition-colors">1M</button>
+                    <button type="button" data-max-views-step="7" class="max-views-stop px-0.5 py-0.5 rounded transition-colors">Any</button>
+                  </div>
+                </div>
+
+                <hr class="border-gray-100 dark:border-white/10" />
+
+                <div class="space-y-3">
+                  <label class="flex items-center justify-between cursor-pointer py-0.5">
+                    <span class="text-[13.5px] text-gray-700 dark:text-gray-200"
+                      >Music only</span
+                    >
+                    <span class="relative inline-flex items-center">
+                      <input type="checkbox" id="music-toggle" class="sr-only peer" />
+                      <span
+                        class="w-9 h-5 bg-gray-200 dark:bg-[#333333] rounded-full peer peer-checked:bg-gray-900 dark:peer-checked:bg-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white dark:peer-checked:after:bg-black after:rounded-full after:h-4 after:w-4 after:transition-transform peer-checked:after:translate-x-4 transition-colors"
+                      ></span>
+                    </span>
+                  </label>
+
+                  <label class="flex items-center justify-between cursor-pointer py-0.5">
+                    <span class="text-[13.5px] text-gray-700 dark:text-gray-200"
+                      >Unavailable only</span
+                    >
+                    <span class="relative inline-flex items-center">
+                      <input
+                        type="checkbox"
+                        id="unavailable-toggle"
+                        class="sr-only peer"
+                      />
+                      <span
+                        class="w-9 h-5 bg-gray-200 dark:bg-[#333333] rounded-full peer peer-checked:bg-gray-900 dark:peer-checked:bg-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white dark:peer-checked:after:bg-black after:rounded-full after:h-4 after:w-4 after:transition-transform peer-checked:after:translate-x-4 transition-colors"
+                      ></span>
+                    </span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
 
           <div
             aria-hidden="true"
@@ -526,8 +631,8 @@
             aria-expanded="false"
             aria-controls="settings-menu"
             class="w-9 h-9 inline-flex items-center justify-center text-gray-500 dark:text-[#aaaaaa] hover:text-black dark:hover:text-white transition-colors rounded-full hover:bg-gray-100 dark:hover:bg-[#212121]"
-            title="Settings"
-            aria-label="Settings"
+            title="Appearance &amp; settings"
+            aria-label="Appearance &amp; settings"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -554,7 +659,7 @@
             <div class="px-4 py-3">
               <span
                 class="block text-[11px] font-semibold text-gray-400 dark:text-[#999999] uppercase tracking-[0.1em] mb-3"
-                >Appearance &amp; filters</span
+                >Appearance</span
               >
               <div class="space-y-3.5">
                 <div class="space-y-1.5">
@@ -603,50 +708,6 @@
                   >
                   <span class="relative inline-flex items-center">
                     <input type="checkbox" id="compact-toggle" class="sr-only peer" />
-                    <span
-                      class="w-9 h-5 bg-gray-200 dark:bg-[#333333] rounded-full peer peer-checked:bg-gray-900 dark:peer-checked:bg-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white dark:peer-checked:after:bg-black after:rounded-full after:h-4 after:w-4 after:transition-transform peer-checked:after:translate-x-4 transition-colors"
-                    ></span>
-                  </span>
-                </label>
-
-                <label class="flex items-center justify-between cursor-pointer py-0.5">
-                  <span class="text-[13.5px] text-gray-700 dark:text-gray-200"
-                    >Music only</span
-                  >
-                  <span class="relative inline-flex items-center">
-                    <input type="checkbox" id="music-toggle" class="sr-only peer" />
-                    <span
-                      class="w-9 h-5 bg-gray-200 dark:bg-[#333333] rounded-full peer peer-checked:bg-gray-900 dark:peer-checked:bg-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white dark:peer-checked:after:bg-black after:rounded-full after:h-4 after:w-4 after:transition-transform peer-checked:after:translate-x-4 transition-colors"
-                    ></span>
-                  </span>
-                </label>
-
-                <label class="flex items-center justify-between cursor-pointer py-0.5">
-                  <span class="text-[13.5px] text-gray-700 dark:text-gray-200"
-                    >Hidden gems (&lt;100K)</span
-                  >
-                  <span class="relative inline-flex items-center">
-                    <input
-                      type="checkbox"
-                      id="hidden-gems-toggle"
-                      class="sr-only peer"
-                    />
-                    <span
-                      class="w-9 h-5 bg-gray-200 dark:bg-[#333333] rounded-full peer peer-checked:bg-gray-900 dark:peer-checked:bg-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white dark:peer-checked:after:bg-black after:rounded-full after:h-4 after:w-4 after:transition-transform peer-checked:after:translate-x-4 transition-colors"
-                    ></span>
-                  </span>
-                </label>
-
-                <label class="flex items-center justify-between cursor-pointer py-0.5">
-                  <span class="text-[13.5px] text-gray-700 dark:text-gray-200"
-                    >Unavailable only</span
-                  >
-                  <span class="relative inline-flex items-center">
-                    <input
-                      type="checkbox"
-                      id="unavailable-toggle"
-                      class="sr-only peer"
-                    />
                     <span
                       class="w-9 h-5 bg-gray-200 dark:bg-[#333333] rounded-full peer peer-checked:bg-gray-900 dark:peer-checked:bg-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white dark:peer-checked:after:bg-black after:rounded-full after:h-4 after:w-4 after:transition-transform peer-checked:after:translate-x-4 transition-colors"
                     ></span>
@@ -929,6 +990,62 @@
                 </div>
               </div>
 
+              <!-- Play / Shuffle Current Results -->
+              <div
+                id="library-playback-actions"
+                class="grid grid-cols-2 gap-2 pt-1"
+              >
+                <button
+                  id="play-all-button"
+                  type="button"
+                  title="Play current results in order"
+                  class="h-9 px-3.5 rounded-full inline-flex items-center justify-center gap-1.5 text-[13px] font-semibold bg-gray-950 text-white dark:bg-white dark:text-black hover:bg-gray-800 dark:hover:bg-[#e5e5e5] transition-colors disabled:opacity-40 disabled:pointer-events-none"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="shrink-0"
+                  >
+                    <polygon points="6 4 20 12 6 20 6 4"></polygon>
+                  </svg>
+                  <span>Play</span>
+                </button>
+
+                <button
+                  id="shuffle-play-button"
+                  type="button"
+                  title="Shuffle current results"
+                  class="h-9 px-3.5 rounded-full inline-flex items-center justify-center gap-1.5 text-[13px] font-semibold bg-gray-100 text-gray-900 dark:bg-[#1f1f1f] dark:text-[#f1f1f1] hover:bg-gray-200/80 dark:hover:bg-[#2c2c2c] transition-colors disabled:opacity-40 disabled:pointer-events-none"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.1"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="shrink-0"
+                  >
+                    <polyline points="16 3 21 3 21 8"></polyline>
+                    <line x1="4" y1="20" x2="21" y2="3"></line>
+                    <polyline points="21 16 21 21 16 21"></polyline>
+                    <line x1="15" y1="15" x2="21" y2="21"></line>
+                    <line x1="4" y1="4" x2="9" y2="9"></line>
+                  </svg>
+                  <span>Shuffle</span>
+                </button>
+              </div>
+
               <div
                 id="library-chips-row"
                 class="hidden flex-wrap items-center gap-1.5 pt-0.5"
@@ -1090,15 +1207,15 @@
     <!-- Bottom Player UI -->
     <div
       id="bottom-player"
-      class="invisible fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-[#121212] border-t border-gray-200/80 dark:border-white/10 transition-transform duration-300 translate-y-full shadow-[0_-8px_24px_rgba(0,0,0,0.12)] dark:shadow-[0_-8px_28px_rgba(0,0,0,0.6)] overflow-hidden cursor-pointer"
+      class="invisible fixed bottom-0 left-0 right-0 z-50 bg-[#f4f4f6] dark:bg-[#121212] border-t border-black/10 dark:border-white/10 transition-transform duration-300 translate-y-full shadow-[0_-8px_24px_rgba(0,0,0,0.12)] dark:shadow-[0_-8px_28px_rgba(0,0,0,0.6)] overflow-hidden cursor-pointer"
     >
       <!-- Background Color Sampling -->
       <div
         id="bottom-player-bg"
-        class="absolute inset-0 bg-cover bg-center opacity-100 blur-[20px] scale-[1.2] pointer-events-none transition-all duration-1000 z-0"
+        class="absolute inset-0 bg-cover bg-center opacity-70 dark:opacity-100 blur-[36px] scale-[1.85] saturate-[1.9] dark:saturate-125 brightness-105 dark:brightness-100 pointer-events-none transition-all duration-700 z-0"
       ></div>
       <div
-        class="absolute inset-0 bg-white/85 dark:bg-[#0f0f0f]/80 pointer-events-none z-0"
+        class="absolute inset-0 bg-gradient-to-r from-white/40 via-white/58 to-white/74 dark:from-[#0f0f0f]/70 dark:via-[#0f0f0f]/78 dark:to-[#0f0f0f]/85 pointer-events-none z-0"
       ></div>
 
       <!-- Progress Bar -->
@@ -1107,7 +1224,7 @@
         id="bottom-player-progress-container"
       >
         <div
-          class="w-full h-[3px] group-hover/seek:h-1.5 bg-gray-200 dark:bg-white/15 overflow-hidden transition-all"
+          class="w-full h-[3px] group-hover/seek:h-1.5 bg-black/10 dark:bg-white/15 overflow-hidden transition-all"
         >
           <div
             id="bottom-player-progress-bar"
@@ -1136,7 +1253,7 @@
             ></h4>
             <p
               id="player-artist"
-              class="text-xs text-gray-600 dark:text-[#aaaaaa] truncate"
+              class="text-xs text-black/70 dark:text-[#aaaaaa] truncate"
             ></p>
           </div>
         </div>
@@ -1144,7 +1261,7 @@
         <!-- Center: Controls -->
         <div class="flex items-center gap-2 sm:gap-4 shrink-0 w-1/3 justify-center">
           <span
-            class="text-xs text-gray-500 dark:text-[#999999] hidden lg:block mr-1.5 w-10 text-right font-medium tabular-nums"
+            class="text-xs text-black/65 dark:text-[#999999] hidden lg:block mr-1.5 w-10 text-right font-medium tabular-nums"
             ><span id="player-time-current">0:00</span></span
           >
           <button
@@ -1152,7 +1269,7 @@
             type="button"
             title="Previous track"
             aria-label="Previous track"
-            class="p-2 text-gray-800 dark:text-gray-200 hover:text-black dark:hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            class="p-2 text-gray-900 dark:text-gray-200 hover:text-black dark:hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -1174,7 +1291,7 @@
             type="button"
             title="Play or pause"
             aria-label="Play or pause"
-            class="w-10 h-10 rounded-full bg-gray-950 dark:bg-white text-white dark:text-black flex items-center justify-center hover:scale-105 transition-transform shrink-0"
+            class="w-10 h-10 rounded-full bg-gray-950 dark:bg-white text-white dark:text-black flex items-center justify-center hover:scale-105 transition-transform shadow-sm shrink-0"
             disabled
           >
             <svg
@@ -1236,7 +1353,7 @@
             type="button"
             title="Next track"
             aria-label="Next track"
-            class="p-2 text-gray-800 dark:text-gray-200 hover:text-black dark:hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            class="p-2 text-gray-900 dark:text-gray-200 hover:text-black dark:hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -1254,7 +1371,7 @@
             </svg>
           </button>
           <span
-            class="text-xs text-gray-500 dark:text-[#999999] hidden lg:block ml-1.5 w-10 text-left font-medium tabular-nums"
+            class="text-xs text-black/65 dark:text-[#999999] hidden lg:block ml-1.5 w-10 text-left font-medium tabular-nums"
             ><span id="player-time-total">-:--</span></span
           >
         </div>
@@ -1267,7 +1384,7 @@
             title="Toggle shuffle"
             aria-label="Toggle shuffle"
             aria-pressed="false"
-            class="p-2 rounded-full text-gray-400 dark:text-gray-500 hover:text-black dark:hover:text-white transition-colors"
+            class="p-2 rounded-full text-black/55 dark:text-gray-500 hover:text-black dark:hover:text-white transition-colors"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -1292,7 +1409,7 @@
             type="button"
             title="Close player"
             aria-label="Close player"
-            class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+            class="p-2 rounded-full text-black/60 dark:text-gray-400 hover:text-black dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -1810,8 +1927,8 @@
         },
       );
     </script>
-    <script src="version.js?v=2.0.9"></script>
-    <script src="app.js?v=2.0.9"></script>
+    <script src="version.js?v=2.1.0"></script>
+    <script src="app.js?v=2.1.0"></script>
     <script>
       if ("serviceWorker" in navigator) {
         // Reload at most once when a genuinely newer SW_VERSION activates over an older running page
