@@ -1548,6 +1548,9 @@ function setupEventListeners() {
     let handledByPointer = false;
     let scrubMoveRaf = null;
     let scrubPauseTimer = null;
+    // Loads the thumbnails on screen when the finger rests mid-scrub (see commitPendingTarget)
+    let scrubDwellTimer = null;
+    let scrubDwellY = 0;
     let pendingTarget = null;
     let committedItemIndex = -1;
 
@@ -1559,6 +1562,10 @@ function setupEventListeners() {
       if (scrubPauseTimer) {
         clearTimeout(scrubPauseTimer);
         scrubPauseTimer = null;
+      }
+      if (scrubDwellTimer) {
+        clearTimeout(scrubDwellTimer);
+        scrubDwellTimer = null;
       }
     };
 
@@ -1573,9 +1580,21 @@ function setupEventListeners() {
 
     const commitPendingTarget = (deferThumbs) => {
       if (!pendingTarget) return;
-      if (!deferThumbs || pendingTarget.itemIndex !== committedItemIndex) {
+      const moved = pendingTarget.itemIndex !== committedItemIndex;
+      if (!deferThumbs || moved) {
         committedItemIndex = pendingTarget.itemIndex;
         scrollToVideoIndex(pendingTarget.itemIndex, pendingTarget.edge, deferThumbs);
+      }
+      // Thumbnails stay deferred while the finger is moving (decoding a screenful per jump
+      // is what runs iOS out of memory), but once it rests on one spot load that screenful
+      // so the user sees artwork without having to let go.
+      if (deferThumbs && scrubberState.isDragging && (moved || !scrubDwellTimer)) {
+        if (scrubDwellTimer) clearTimeout(scrubDwellTimer);
+        scrubDwellY = latestClientY;
+        scrubDwellTimer = setTimeout(() => {
+          scrubDwellTimer = null;
+          if (scrubberState.isDragging) hydrateVisibleThumbnails(true);
+        }, 250);
       }
     };
 
@@ -1632,6 +1651,11 @@ function setupEventListeners() {
 
       if (scrubPauseTimer) {
         clearTimeout(scrubPauseTimer);
+      }
+      // A resting finger still jitters a few pixels; only real movement cancels the dwell load
+      if (scrubDwellTimer && Math.abs(e.clientY - scrubDwellY) > 8) {
+        clearTimeout(scrubDwellTimer);
+        scrubDwellTimer = null;
       }
       // Only commit a discrete scroll jump when finger pauses briefly (prevents iOS WebKit TileController OOM)
       scrubPauseTimer = setTimeout(() => {
@@ -3259,6 +3283,7 @@ function teardownCardImage(card) {
   img.onerror = null;
   delete img.dataset.pendingSrc;
   img.removeAttribute("src");
+  setThumbLoading(card, true);
   card._boundVideoId = null;
 }
 
@@ -3288,6 +3313,12 @@ function resetVirtualGridDOM() {
   if (dom.gridBottomSpacer) dom.gridBottomSpacer.style.height = "0px";
 }
 
+// While a card's thumbnail is missing or still downloading, its play button shows a skeleton
+// shimmer (the .thumb-loading styles in index.html) instead of an empty box.
+function setThumbLoading(card, loading) {
+  card?._refs?.playBtn?.classList.toggle("thumb-loading", loading);
+}
+
 function hydrateCardThumbnail(card, video) {
   const refs = card?._refs;
   if (!refs?.img || !video) return;
@@ -3299,6 +3330,7 @@ function hydrateCardThumbnail(card, video) {
   if (checkIfDeleted(video)) {
     img.onerror = null;
     img.src = BLANK_PIXEL;
+    setThumbLoading(card, false);
     return;
   }
 
@@ -3330,16 +3362,22 @@ function hydrateCardThumbnail(card, video) {
     overlay.classList.remove("hidden");
     overlay.classList.add("flex");
     img.src = BLANK_PIXEL;
+    setThumbLoading(card, false);
   };
+  setThumbLoading(card, true);
   img.src = thumbnail;
+  // Already in the memory cache: show it right away rather than flashing the shimmer
+  if (img.complete && img.naturalWidth > 0) setThumbLoading(card, false);
 }
 
-function hydrateVisibleThumbnails() {
+// `duringScrub` lets the scrubber load what's on screen once the finger rests on a spot,
+// instead of waiting for it to lift.
+function hydrateVisibleThumbnails(duringScrub = false) {
   if (virtualGrid.hydrateTimer) {
     clearTimeout(virtualGrid.hydrateTimer);
     virtualGrid.hydrateTimer = null;
   }
-  if (scrubberState.isDragging) return;
+  if (scrubberState.isDragging && !duringScrub) return;
   for (const [idx, card] of virtualGrid.renderedCards.entries()) {
     if (card?._refs?.img?.dataset?.pendingSrc) {
       const video = state.filteredVideos[idx];
@@ -3378,6 +3416,11 @@ function createVideoCard() {
       metadataEl: card.querySelector(".dynamic-metadata"),
       playsBadge: card.querySelector(".plays-badge"),
     };
+    // One listener per pooled card (not per bind): the image arrived, so drop the shimmer
+    const refs = card._refs;
+    refs.img.addEventListener("load", () => {
+      if (refs.img.getAttribute("src")) refs.playBtn.classList.remove("thumb-loading");
+    });
   }
   return card;
 }
@@ -3394,7 +3437,9 @@ function bindVideoCard(card, video, index, deferThumbnail = false) {
   card.dataset.videoIndex = String(index);
   card.dataset.videoId = video.video_id;
   card.classList.toggle("is-current", video.video_id === state.currentVideoId);
-  img.alt = title;
+  // Keep alt empty: the button's aria-label already names the track, and Safari paints a
+  // non-empty alt as large raw text over the box while the image is missing.
+  img.alt = "";
   playBtn.setAttribute("aria-label", isDeleted ? `${title} (unavailable)` : `Play ${title}`);
 
   overlay.classList.toggle("hidden", !isDeleted);
@@ -3414,6 +3459,7 @@ function bindVideoCard(card, video, index, deferThumbnail = false) {
     img.onerror = null;
     img.removeAttribute("src");
     img.dataset.pendingSrc = thumbnail;
+    setThumbLoading(card, true);
   } else {
     hydrateCardThumbnail(card, video);
   }

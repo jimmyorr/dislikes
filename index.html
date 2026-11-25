@@ -88,7 +88,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=2.2.1" />
+    <link rel="stylesheet" href="styles.css?v=2.2.2" />
     <script>
       (function () {
         try {
@@ -1040,6 +1040,33 @@
         .now-playing-badge i { animation: none; transform: scaleY(0.7); }
         .now-playing-badge i:nth-child(2) { transform: scaleY(1); }
         .now-playing-badge i:nth-child(3) { transform: scaleY(0.5); }
+      }
+      /* Thumbnail placeholder: a soft skeleton shimmer until the image arrives, then a quick
+         fade-in. The shimmer only runs on cards that are still loading. */
+      .video-play-btn .video-thumbnail {
+        transition: transform 300ms, opacity 220ms ease-out;
+      }
+      .video-play-btn.thumb-loading .video-thumbnail {
+        opacity: 0;
+      }
+      .video-play-btn.thumb-loading::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(100deg, transparent 20%, rgb(0 0 0 / 0.05) 50%, transparent 80%);
+        transform: translateX(-100%);
+        animation: thumb-shimmer 1.4s ease-in-out infinite;
+        pointer-events: none;
+      }
+      .dark .video-play-btn.thumb-loading::before {
+        background: linear-gradient(100deg, transparent 20%, rgb(255 255 255 / 0.06) 50%, transparent 80%);
+      }
+      @keyframes thumb-shimmer {
+        to { transform: translateX(100%); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .video-play-btn.thumb-loading::before { animation: none; display: none; }
+        .video-play-btn .video-thumbnail { transition: none; }
       }
       @media (hover: hover) and (pointer: fine) {
         .video-play-btn:hover .video-thumbnail {
@@ -2873,7 +2900,7 @@
         <button
           type="button"
           aria-label="Play track"
-          class="video-play-btn block relative w-full aspect-video [.compact-mode_&]:aspect-square group/btn overflow-hidden rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-black dark:focus-visible:ring-white bg-gray-100 dark:bg-[#1e1e1e]"
+          class="video-play-btn thumb-loading block relative w-full aspect-video [.compact-mode_&]:aspect-square group/btn overflow-hidden rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-black dark:focus-visible:ring-white bg-gray-100 dark:bg-[#1e1e1e]"
         >
           <img
             class="video-thumbnail w-full h-full object-cover transition-transform duration-300"
@@ -3002,9 +3029,9 @@
         },
       );
     </script>
-    <script src="version.js?v=2.2.1"></script>
-    <script src="app.js?v=2.2.1"></script>
-    <script src="history.js?v=2.2.1"></script>
+    <script src="version.js?v=2.2.2"></script>
+    <script src="app.js?v=2.2.2"></script>
+    <script src="history.js?v=2.2.2"></script>
     <script>
       if ("serviceWorker" in navigator) {
         // Reload at most once when a genuinely newer SW_VERSION activates over an older running page
