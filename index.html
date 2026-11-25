@@ -379,6 +379,52 @@
           background: var(--wh-soft);
         }
       }
+      /* Settings popover: Watch history actions. 44px tap targets; Remove kept apart and tinted red. */
+      .wh-set-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 4px;
+      }
+      .wh-set-btn {
+        flex: 1 1 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 44px;
+        padding: 0 12px;
+        border-radius: 10px;
+        border: 1px solid var(--wh-line);
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--wh-fg);
+        background: transparent;
+        transition: background-color 0.15s;
+      }
+      .wh-set-btn.hidden {
+        display: none;
+      }
+      .wh-set-btn:active {
+        background: var(--wh-soft);
+      }
+      .wh-set-btn-danger {
+        color: #dc2626;
+        border-color: rgba(220, 38, 38, 0.3);
+      }
+      .dark .wh-set-btn-danger {
+        color: #f87171;
+        border-color: rgba(248, 113, 113, 0.3);
+      }
+      .wh-set-btn-danger:active {
+        background: rgba(239, 68, 68, 0.1);
+      }
+      @media (hover: hover) and (pointer: fine) {
+        .wh-set-btn:hover {
+          background: var(--wh-soft);
+        }
+        .wh-set-btn-danger:hover {
+          background: rgba(239, 68, 68, 0.1);
+        }
+      }
       .wh-btn-primary {
         background: var(--wh-fg);
         color: var(--wh-panel);
@@ -1094,28 +1140,33 @@
         .now-playing-badge i:nth-child(2) { transform: scaleY(1); }
         .now-playing-badge i:nth-child(3) { transform: scaleY(0.5); }
       }
-      /* Thumbnail placeholder: a soft skeleton shimmer until the image arrives, then a quick
-         fade-in. The shimmer only runs on cards that are still loading. */
+      /* Thumbnail placeholder: a soft skeleton shimmer until the image arrives.
+         The shimmer animates background-position, not transform or opacity, on purpose:
+         those run as GPU animations in WebKit, which gives every loading card its own
+         compositing layer. With a screenful of cards loading at once, iOS Safari stopped
+         painting the page at all on first load (blank until a touch) - see v2.2.4. */
       .video-play-btn .video-thumbnail {
-        transition: transform 300ms, opacity 220ms ease-out;
+        transition: transform 300ms;
       }
       .video-play-btn.thumb-loading .video-thumbnail {
-        opacity: 0;
+        visibility: hidden;
       }
       .video-play-btn.thumb-loading::before {
         content: "";
         position: absolute;
         inset: 0;
-        background: linear-gradient(100deg, transparent 20%, rgb(0 0 0 / 0.05) 50%, transparent 80%);
-        transform: translateX(-100%);
+        background-image: linear-gradient(100deg, transparent 35%, rgb(0 0 0 / 0.05) 50%, transparent 65%);
+        background-size: 300% 100%;
+        background-repeat: no-repeat;
         animation: thumb-shimmer 1.4s ease-in-out infinite;
         pointer-events: none;
       }
       .dark .video-play-btn.thumb-loading::before {
-        background: linear-gradient(100deg, transparent 20%, rgb(255 255 255 / 0.06) 50%, transparent 80%);
+        background-image: linear-gradient(100deg, transparent 35%, rgb(255 255 255 / 0.06) 50%, transparent 65%);
       }
       @keyframes thumb-shimmer {
-        to { transform: translateX(100%); }
+        from { background-position: 100% 0; }
+        to { background-position: 0% 0; }
       }
       @media (prefers-reduced-motion: reduce) {
         .video-play-btn.thumb-loading::before { animation: none; display: none; }
@@ -1705,12 +1756,11 @@
                 >Watch history</span
               >
               <p id="wh-settings-status" class="text-xs text-gray-500 dark:text-[#aaaaaa] mb-2">Not imported</p>
-              <div class="flex flex-wrap gap-x-3 gap-y-1 text-[13px]">
-                <button type="button" data-wh-import class="font-medium text-gray-900 dark:text-white hover:underline">
+              <div class="wh-set-actions">
+                <button type="button" data-wh-import class="wh-set-btn">
                   <span data-requires-no-history>Import from Takeout</span><span data-requires-history class="hidden">Replace</span>
                 </button>
-                <button type="button" data-wh-insights data-requires-history class="hidden font-medium text-gray-900 dark:text-white hover:underline">Insights</button>
-                <button type="button" id="wh-settings-remove" data-requires-history class="hidden text-red-600 dark:text-red-400 hover:underline">Remove</button>
+                <button type="button" id="wh-settings-remove" data-requires-history class="hidden wh-set-btn wh-set-btn-danger">Remove</button>
               </div>
             </div>
 
