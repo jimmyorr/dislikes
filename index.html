@@ -88,7 +88,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=2.2.2" />
+    <link rel="stylesheet" href="styles.css?v=2.2.3" />
     <script>
       (function () {
         try {
@@ -236,6 +236,7 @@
         --wh-artists: #ede9fe;
         --wh-albums: #dcfce7;
         --wh-tracks: #dbeafe;
+        --wh-podcasts: #f3e8ff;
       }
       .dark {
         --wh-fg: #f1f1f1;
@@ -251,6 +252,7 @@
         --wh-artists: #2e1065;
         --wh-albums: #052e16;
         --wh-tracks: #172554;
+        --wh-podcasts: #3b0764;
       }
       .plays-badge {
         position: absolute;
@@ -703,7 +705,7 @@
       }
       @media (min-width: 900px) {
         .wh-cards {
-          grid-template-columns: repeat(3, minmax(0, 1fr));
+          grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
         }
       }
       .wh-card,
@@ -731,6 +733,9 @@
       }
       .wh-card-tracks .wh-card-head {
         background: var(--wh-tracks);
+      }
+      .wh-card-podcasts .wh-card-head {
+        background: var(--wh-podcasts);
       }
       .wh-card-title {
         font-size: 14px;
@@ -828,6 +833,25 @@
         color: var(--wh-muted);
         font-size: 12px;
         font-variant-numeric: tabular-nums;
+      }
+      .wh-card-art .wh-list-item img {
+        width: 36px;
+        height: 36px;
+        border-radius: 6px;
+        object-fit: cover;
+        flex-shrink: 0;
+        background: var(--wh-soft);
+      }
+      .wh-name-main,
+      .wh-name-sub {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .wh-name-sub {
+        font-size: 11.5px;
+        color: var(--wh-muted);
       }
       .wh-list-thumbs img {
         width: 40px;
@@ -1822,6 +1846,10 @@
             <label class="wh-check">
               <input type="checkbox" id="insights-music-toggle" checked />
               <span>Music only</span>
+            </label>
+            <label class="wh-check" title="Podcasts and talk shows, shown as their own card">
+              <input type="checkbox" id="insights-podcast-toggle" checked />
+              <span>Podcasts</span>
             </label>
             <div class="wh-stepper">
               <button type="button" id="insights-prev" aria-label="Previous period">
@@ -3029,9 +3057,9 @@
         },
       );
     </script>
-    <script src="version.js?v=2.2.2"></script>
-    <script src="app.js?v=2.2.2"></script>
-    <script src="history.js?v=2.2.2"></script>
+    <script src="version.js?v=2.2.3"></script>
+    <script src="app.js?v=2.2.3"></script>
+    <script src="history.js?v=2.2.3"></script>
     <script>
       if ("serviceWorker" in navigator) {
         // Reload at most once when a genuinely newer SW_VERSION activates over an older running page
