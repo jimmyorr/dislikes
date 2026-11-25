@@ -82,15 +82,24 @@
       gtag("config", "G-6RNVL7JZVJ");
     </script>
 
-    <link rel="stylesheet" href="styles.css?v=2.0.8" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css?v=2.0.9" />
     <script>
       (function () {
         try {
-          var t = localStorage.getItem('dislikes-theme') || 'system';
-          var isDark = t === 'dark' || (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-          document.documentElement.classList.toggle('dark', isDark);
-          var meta = document.getElementById('theme-color-meta');
-          if (meta) meta.setAttribute('content', isDark ? '#0a0a0a' : '#ffffff');
+          var t = localStorage.getItem("dislikes-theme") || "system";
+          var isDark =
+            t === "dark" ||
+            (t === "system" &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches);
+          document.documentElement.classList.toggle("dark", isDark);
+          var meta = document.getElementById("theme-color-meta");
+          if (meta) meta.setAttribute("content", isDark ? "#0a0a0a" : "#ffffff");
         } catch {
           /* ignore */
         }
@@ -102,13 +111,9 @@
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 
     <style>
-      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap");
-
       :root {
         --bg: #ffffff;
-        --fg: #000000;
-        --dim: #666666;
-        --border: #e5e7eb;
+        --fg: #0a0a0a;
       }
 
       body {
@@ -117,12 +122,10 @@
           -apple-system,
           BlinkMacSystemFont,
           sans-serif;
-        background-color: var(--bg);
-        color: var(--fg);
         line-height: 1.5;
         -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
       }
-
 
       input,
       select,
@@ -130,20 +133,10 @@
         font-family: inherit;
       }
 
-      @media (hover: hover) {
-        .video-card {
-          transition: opacity 0.2s ease;
-        }
-
-        .video-card:hover {
-          opacity: 0.8;
-        }
-      }
-
       /* Minimal scrollbar */
       ::-webkit-scrollbar {
-        width: 4px;
-        height: 4px;
+        width: 6px;
+        height: 6px;
       }
 
       ::-webkit-scrollbar-track {
@@ -151,23 +144,23 @@
       }
 
       ::-webkit-scrollbar-thumb {
-        background: rgba(150, 150, 150, 0.3);
-        border-radius: 10px;
+        background: rgba(140, 140, 140, 0.28);
+        border-radius: 9999px;
       }
 
       ::-webkit-scrollbar-thumb:hover {
-        background: rgba(150, 150, 150, 0.5);
+        background: rgba(140, 140, 140, 0.48);
       }
 
       mark {
-        background: #fffbeb;
+        background: #fef3c7;
         color: #92400e;
         padding: 0 2px;
-        border-radius: 2px;
+        border-radius: 3px;
       }
 
       .dark mark {
-        background: rgba(251, 191, 36, 0.25);
+        background: rgba(251, 191, 36, 0.22);
         color: #fde68a;
       }
 
@@ -175,7 +168,6 @@
         from {
           transform: rotate(0deg);
         }
-
         to {
           transform: rotate(360deg);
         }
@@ -190,7 +182,6 @@
         0% {
           background-position: -200% 0;
         }
-
         100% {
           background-position: 200% 0;
         }
@@ -205,51 +196,328 @@
         );
         background-size: 200% 100%;
         animation: shimmer 1.5s infinite linear;
-        border-radius: 2px;
+        border-radius: 6px;
       }
 
       .dark .skeleton {
         background: linear-gradient(
           90deg,
-          #1f2937 25%,
-          #374151 50%,
-          #1f2937 75%
+          #181818 25%,
+          #242424 50%,
+          #181818 75%
         );
         background-size: 200% 100%;
       }
-
     </style>
   </head>
 
-  <body class="bg-white dark:bg-[#0a0a0a] text-black dark:text-gray-100 min-h-screen flex flex-col font-sans antialiased selection:bg-black selection:text-white dark:selection:bg-white dark:selection:text-black">
+  <body
+    class="bg-white dark:bg-[#0a0a0a] text-gray-950 dark:text-[#f5f5f5] min-h-dvh flex flex-col font-sans antialiased selection:bg-black selection:text-white dark:selection:bg-white dark:selection:text-black"
+  >
+    <!-- Unified Sticky Topbar -->
     <header
-      class="sticky top-0 z-50 bg-white/80 dark:bg-[#0a0a0a]/80 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 py-4"
+      id="app-header"
+      class="sticky top-0 z-50 bg-white/90 dark:bg-[#0a0a0a]/90 backdrop-blur-md border-b border-gray-200/80 dark:border-white/10"
     >
-      <div class="max-w-6xl mx-auto px-6 flex justify-between items-center">
-        <div class="flex items-center gap-3">
+      <div
+        class="px-4 sm:px-6 lg:px-8 py-2.5 md:py-0 md:h-16 flex flex-wrap md:flex-nowrap items-center justify-between gap-x-4 gap-y-2.5"
+      >
+        <!-- Brand / Mode Switcher -->
+        <div class="order-1 flex items-center shrink-0">
           <button
             id="mode-toggle"
+            type="button"
             title="Switch between likes and dislikes"
-            class="flex items-center gap-2 text-lg font-medium tracking-tight hover:opacity-70 transition-opacity"
+            class="group inline-flex items-center gap-2.5 py-1 pr-1.5 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-black dark:focus-visible:ring-white"
           >
-            <img id="site-logo" src="icon.png" class="w-6 h-6 object-contain" alt="Logo" />
-            <span id="mode-text">Dislikes</span>
+            <img
+              id="site-logo"
+              src="icon.png"
+              class="w-6 h-6 sm:w-7 sm:h-7 object-contain shrink-0 transition-transform duration-200 group-hover:scale-105"
+              alt="Logo"
+            />
+            <span
+              id="mode-text"
+              class="text-[19px] sm:text-[21px] font-bold tracking-[-0.025em] text-gray-950 dark:text-white leading-none"
+              >Dislikes</span
+            >
+            <span
+              aria-hidden="true"
+              class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-100 dark:bg-[#212121] text-gray-500 dark:text-[#aaaaaa] group-hover:text-black dark:group-hover:text-white group-hover:bg-gray-200/80 dark:group-hover:bg-[#2f2f2f] transition-colors"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="11"
+                height="11"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.4"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="m7 15 5 5 5-5" />
+                <path d="m7 9 5-5 5 5" />
+              </svg>
+            </span>
           </button>
         </div>
 
-        <div class="flex items-center gap-2 relative">
+        <!-- Unified Topbar Search, Sort & Quick Controls (shown when library is active) -->
+        <div
+          id="topbar-app-controls"
+          class="hidden order-3 md:order-2 w-full md:w-auto md:flex-1 items-center justify-end gap-2"
+        >
+          <div class="relative flex-1 md:flex-initial md:w-64 lg:w-80 xl:w-96 min-w-0">
+            <span
+              aria-hidden="true"
+              class="pointer-events-none absolute inset-y-0 left-0 pl-3.5 flex items-center text-gray-400 dark:text-[#888888]"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.3-4.3" />
+              </svg>
+            </span>
+            <input
+              type="text"
+              id="search-input"
+              placeholder="Search titles or artists..."
+              aria-label="Search videos"
+              class="w-full h-9 sm:h-10 text-[13.5px] rounded-full pl-9 pr-8 bg-gray-100 dark:bg-[#212121] text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-[#888888] border border-transparent hover:bg-gray-200/60 dark:hover:bg-[#292929] focus:bg-white dark:focus:bg-[#262626] focus:outline-none focus:border-gray-300 dark:focus:border-white/25 transition-colors"
+            />
+            <button
+              type="button"
+              id="search-clear-button"
+              title="Clear search"
+              aria-label="Clear search"
+              class="hidden absolute inset-y-0 right-0 pr-3 pl-1.5 items-center justify-center text-gray-400 hover:text-black dark:hover:text-white transition-colors"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+
+          <div id="sort-dropdown" class="relative shrink-0">
+            <button
+              type="button"
+              id="sort-trigger"
+              aria-haspopup="listbox"
+              aria-expanded="false"
+              aria-controls="sort-menu"
+              aria-label="Sort videos"
+              class="h-9 sm:h-10 inline-flex items-center justify-between gap-1.5 sm:gap-2 px-3 sm:px-3.5 rounded-full text-[13px] sm:text-[13.5px] font-medium bg-gray-100 dark:bg-[#212121] text-gray-900 dark:text-[#f1f1f1] hover:bg-gray-200/70 dark:hover:bg-[#2d2d2d] border border-transparent focus:outline-none focus:border-gray-300 dark:focus:border-white/25 transition-colors min-w-[96px] sm:min-w-[132px]"
+            >
+              <span id="sort-label" class="truncate">Recent</span>
+              <svg
+                id="sort-chevron"
+                class="w-3.5 h-3.5 text-gray-500 dark:text-[#aaaaaa] shrink-0 transition-transform duration-150"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.2"
+                  d="M19 9l-7 7-7-7"
+                ></path>
+              </svg>
+            </button>
+            <div
+              id="sort-menu"
+              role="listbox"
+              aria-label="Sort videos"
+              class="hidden absolute right-0 top-full mt-2 w-48 bg-white dark:bg-[#181818] border border-gray-200/80 dark:border-white/10 shadow-2xl rounded-xl py-1.5 z-50"
+            >
+              <button
+                type="button"
+                role="option"
+                data-value="date-new"
+                aria-selected="true"
+                class="dropdown-option w-full flex items-center justify-between gap-3 px-3.5 py-2 text-[13.5px] text-left transition-colors"
+              >
+                <span>Recent</span>
+                <svg class="check-icon w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
+              </button>
+              <button
+                type="button"
+                role="option"
+                data-value="views-high"
+                aria-selected="false"
+                class="dropdown-option w-full flex items-center justify-between gap-3 px-3.5 py-2 text-[13.5px] text-left transition-colors"
+              >
+                <span>Most viewed</span>
+                <svg class="check-icon w-4 h-4 shrink-0 opacity-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
+              </button>
+              <button
+                type="button"
+                role="option"
+                data-value="views-low"
+                aria-selected="false"
+                class="dropdown-option w-full flex items-center justify-between gap-3 px-3.5 py-2 text-[13.5px] text-left transition-colors"
+              >
+                <span>Least viewed</span>
+                <svg class="check-icon w-4 h-4 shrink-0 opacity-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
+              </button>
+              <button
+                type="button"
+                role="option"
+                data-value="duration-long"
+                aria-selected="false"
+                class="dropdown-option w-full flex items-center justify-between gap-3 px-3.5 py-2 text-[13.5px] text-left transition-colors"
+              >
+                <span>Duration</span>
+                <svg class="check-icon w-4 h-4 shrink-0 opacity-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
+              </button>
+              <button
+                type="button"
+                role="option"
+                data-value="upload-new"
+                aria-selected="false"
+                class="dropdown-option w-full flex items-center justify-between gap-3 px-3.5 py-2 text-[13.5px] text-left transition-colors"
+              >
+                <span>Upload date</span>
+                <svg class="check-icon w-4 h-4 shrink-0 opacity-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
+              </button>
+              <button
+                type="button"
+                role="option"
+                data-value="comments-most"
+                aria-selected="false"
+                class="dropdown-option w-full flex items-center justify-between gap-3 px-3.5 py-2 text-[13.5px] text-left transition-colors"
+              >
+                <span>Comment count</span>
+                <svg class="check-icon w-4 h-4 shrink-0 opacity-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
+              </button>
+              <button
+                type="button"
+                role="option"
+                data-value="channel-az"
+                aria-selected="false"
+                class="dropdown-option w-full flex items-center justify-between gap-3 px-3.5 py-2 text-[13.5px] text-left transition-colors"
+              >
+                <span>Channel</span>
+                <svg class="check-icon w-4 h-4 shrink-0 opacity-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
+              </button>
+              <button
+                type="button"
+                role="option"
+                data-value="title-az"
+                aria-selected="false"
+                class="dropdown-option w-full flex items-center justify-between gap-3 px-3.5 py-2 text-[13.5px] text-left transition-colors"
+              >
+                <span>Title</span>
+                <svg class="check-icon w-4 h-4 shrink-0 opacity-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
+              </button>
+            </div>
+          </div>
+
+          <button
+            id="hidden-gems-button"
+            type="button"
+            aria-pressed="false"
+            title="Hidden gems (under 100K views)"
+            aria-label="Hidden gems (under 100K views)"
+            class="shrink-0 h-9 w-9 sm:h-10 xl:w-auto xl:px-3.5 rounded-full inline-flex items-center justify-center gap-1.5 text-[13px] font-medium bg-gray-100 dark:bg-[#212121] text-gray-700 dark:text-[#e5e5e5] hover:bg-gray-200/70 dark:hover:bg-[#2d2d2d] hover:text-black dark:hover:text-white transition-colors"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M6 3h12l4 6-10 13L2 9Z" />
+              <path d="M11 3 8 9l4 13 4-13-3-6" />
+              <path d="M2 9h20" />
+            </svg>
+            <span class="hidden xl:inline">Hidden gems</span>
+          </button>
+
+          <button
+            id="shuffle-play-button"
+            type="button"
+            title="Shuffle play"
+            aria-label="Shuffle play"
+            class="shrink-0 h-9 w-9 sm:h-10 xl:w-auto xl:px-3.5 rounded-full inline-flex items-center justify-center gap-1.5 text-[13px] font-medium bg-gray-100 dark:bg-[#212121] text-gray-700 dark:text-[#e5e5e5] hover:bg-gray-200/70 dark:hover:bg-[#2d2d2d] hover:text-black dark:hover:text-white transition-colors"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <polyline points="16 3 21 3 21 8"></polyline>
+              <line x1="4" y1="20" x2="21" y2="3"></line>
+              <polyline points="21 16 21 21 16 21"></polyline>
+              <line x1="15" y1="15" x2="21" y2="21"></line>
+              <line x1="4" y1="4" x2="9" y2="9"></line>
+            </svg>
+            <span class="hidden xl:inline">Shuffle</span>
+          </button>
+
+          <div
+            aria-hidden="true"
+            class="hidden md:block h-5 w-px bg-gray-200 dark:bg-white/10 ml-0.5"
+          ></div>
+        </div>
+
+        <!-- Account & Settings Cluster -->
+        <div
+          class="order-2 md:order-3 flex items-center gap-1.5 sm:gap-2 shrink-0 relative"
+        >
           <div
             id="auth-indicator"
-            class="hidden items-center gap-4 text-sm mr-2"
+            class="hidden items-center gap-1.5 text-[13px]"
           >
-            <span id="auth-status-text" class="text-gray-500 hidden sm:inline">Authenticated</span>
             <button
               id="signout-button"
-              class="text-gray-900 dark:text-gray-100 underline hover:no-underline font-medium"
+              type="button"
+              class="h-9 px-3 rounded-full text-[13px] font-medium text-gray-600 dark:text-[#b3b3b3] hover:text-black dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#212121] transition-colors"
             >
               Sign out
             </button>
           </div>
+
+          <button
+            id="auth-button"
+            type="button"
+            disabled
+            class="h-9 px-4 rounded-full text-[13px] font-medium bg-gray-900 text-white dark:bg-white dark:text-black hover:opacity-90 transition-opacity opacity-50 cursor-not-allowed"
+          >
+            <span id="auth-text">Loading...</span>
+          </button>
 
           <button
             id="settings-button"
@@ -257,14 +525,14 @@
             aria-haspopup="true"
             aria-expanded="false"
             aria-controls="settings-menu"
-            class="p-2 text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors rounded-full hover:bg-gray-50 dark:hover:bg-gray-800"
+            class="w-9 h-9 inline-flex items-center justify-center text-gray-500 dark:text-[#aaaaaa] hover:text-black dark:hover:text-white transition-colors rounded-full hover:bg-gray-100 dark:hover:bg-[#212121]"
             title="Settings"
             aria-label="Settings"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              width="20"
-              height="20"
+              width="19"
+              height="19"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -274,347 +542,413 @@
             >
               <circle cx="12" cy="12" r="3" />
               <path
-                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
+                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
               />
             </svg>
           </button>
 
           <div
             id="settings-menu"
-            class="hidden absolute right-0 top-12 w-56 bg-white dark:bg-[#121212] border border-gray-100 dark:border-gray-800 shadow-xl rounded-lg py-1 z-[60]"
+            class="hidden absolute right-0 top-11 w-64 bg-white dark:bg-[#181818] border border-gray-200/80 dark:border-white/10 shadow-2xl rounded-2xl py-1.5 z-[60]"
           >
             <div class="px-4 py-3">
-              <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Appearance</label>
-              <div class="space-y-3">
+              <span
+                class="block text-[11px] font-semibold text-gray-400 dark:text-[#999999] uppercase tracking-[0.1em] mb-3"
+                >Appearance &amp; filters</span
+              >
+              <div class="space-y-3.5">
                 <div class="space-y-1.5">
-                  <span class="block text-sm text-gray-700 dark:text-gray-200">Theme</span>
-                  <div id="theme-toggle-group" role="radiogroup" aria-label="Theme" class="grid grid-cols-3 gap-0.5 p-0.5 bg-gray-100 dark:bg-gray-800 rounded-md">
-                    <button type="button" role="radio" data-theme-value="system" aria-checked="true" class="theme-option py-1 text-xs font-medium rounded transition-colors">System</button>
-                    <button type="button" role="radio" data-theme-value="light" aria-checked="false" class="theme-option py-1 text-xs font-medium rounded transition-colors">Light</button>
-                    <button type="button" role="radio" data-theme-value="dark" aria-checked="false" class="theme-option py-1 text-xs font-medium rounded transition-colors">Dark</button>
+                  <span class="block text-[13.5px] text-gray-700 dark:text-gray-200"
+                    >Theme</span
+                  >
+                  <div
+                    id="theme-toggle-group"
+                    role="radiogroup"
+                    aria-label="Theme"
+                    class="grid grid-cols-3 gap-0.5 p-1 bg-gray-100 dark:bg-[#242424] rounded-lg"
+                  >
+                    <button
+                      type="button"
+                      role="radio"
+                      data-theme-value="system"
+                      aria-checked="true"
+                      class="theme-option py-1 text-xs font-medium rounded-md transition-colors"
+                    >
+                      System
+                    </button>
+                    <button
+                      type="button"
+                      role="radio"
+                      data-theme-value="light"
+                      aria-checked="false"
+                      class="theme-option py-1 text-xs font-medium rounded-md transition-colors"
+                    >
+                      Light
+                    </button>
+                    <button
+                      type="button"
+                      role="radio"
+                      data-theme-value="dark"
+                      aria-checked="false"
+                      class="theme-option py-1 text-xs font-medium rounded-md transition-colors"
+                    >
+                      Dark
+                    </button>
                   </div>
                 </div>
-                <label class="flex items-center justify-between cursor-pointer">
-                  <span class="text-sm text-gray-700 dark:text-gray-200">Compact grid</span>
-                  <div class="relative">
-                    <input type="checkbox" id="compact-toggle" class="sr-only peer">
-                    <div class="w-8 h-4 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-black dark:peer-checked:bg-blue-600"></div>
-                  </div>
+
+                <label class="flex items-center justify-between cursor-pointer py-0.5">
+                  <span class="text-[13.5px] text-gray-700 dark:text-gray-200"
+                    >Compact grid</span
+                  >
+                  <span class="relative inline-flex items-center">
+                    <input type="checkbox" id="compact-toggle" class="sr-only peer" />
+                    <span
+                      class="w-9 h-5 bg-gray-200 dark:bg-[#333333] rounded-full peer peer-checked:bg-gray-900 dark:peer-checked:bg-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white dark:peer-checked:after:bg-black after:rounded-full after:h-4 after:w-4 after:transition-transform peer-checked:after:translate-x-4 transition-colors"
+                    ></span>
+                  </span>
                 </label>
-                <label class="flex items-center justify-between cursor-pointer">
-                  <span class="text-sm text-gray-700 dark:text-gray-200">Music only</span>
-                  <div class="relative">
-                    <input type="checkbox" id="music-toggle" class="sr-only peer">
-                    <div class="w-8 h-4 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-black dark:peer-checked:bg-blue-600"></div>
-                  </div>
+
+                <label class="flex items-center justify-between cursor-pointer py-0.5">
+                  <span class="text-[13.5px] text-gray-700 dark:text-gray-200"
+                    >Music only</span
+                  >
+                  <span class="relative inline-flex items-center">
+                    <input type="checkbox" id="music-toggle" class="sr-only peer" />
+                    <span
+                      class="w-9 h-5 bg-gray-200 dark:bg-[#333333] rounded-full peer peer-checked:bg-gray-900 dark:peer-checked:bg-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white dark:peer-checked:after:bg-black after:rounded-full after:h-4 after:w-4 after:transition-transform peer-checked:after:translate-x-4 transition-colors"
+                    ></span>
+                  </span>
                 </label>
-                <label class="flex items-center justify-between cursor-pointer">
-                  <span class="text-sm text-gray-700 dark:text-gray-200">Unavailable only</span>
-                  <div class="relative">
-                    <input type="checkbox" id="unavailable-toggle" class="sr-only peer">
-                    <div class="w-8 h-4 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-black dark:peer-checked:bg-blue-600"></div>
-                  </div>
+
+                <label class="flex items-center justify-between cursor-pointer py-0.5">
+                  <span class="text-[13.5px] text-gray-700 dark:text-gray-200"
+                    >Hidden gems (&lt;100K)</span
+                  >
+                  <span class="relative inline-flex items-center">
+                    <input
+                      type="checkbox"
+                      id="hidden-gems-toggle"
+                      class="sr-only peer"
+                    />
+                    <span
+                      class="w-9 h-5 bg-gray-200 dark:bg-[#333333] rounded-full peer peer-checked:bg-gray-900 dark:peer-checked:bg-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white dark:peer-checked:after:bg-black after:rounded-full after:h-4 after:w-4 after:transition-transform peer-checked:after:translate-x-4 transition-colors"
+                    ></span>
+                  </span>
+                </label>
+
+                <label class="flex items-center justify-between cursor-pointer py-0.5">
+                  <span class="text-[13.5px] text-gray-700 dark:text-gray-200"
+                    >Unavailable only</span
+                  >
+                  <span class="relative inline-flex items-center">
+                    <input
+                      type="checkbox"
+                      id="unavailable-toggle"
+                      class="sr-only peer"
+                    />
+                    <span
+                      class="w-9 h-5 bg-gray-200 dark:bg-[#333333] rounded-full peer peer-checked:bg-gray-900 dark:peer-checked:bg-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white dark:peer-checked:after:bg-black after:rounded-full after:h-4 after:w-4 after:transition-transform peer-checked:after:translate-x-4 transition-colors"
+                    ></span>
+                  </span>
                 </label>
               </div>
             </div>
 
-            <hr class="my-1 border-gray-50 dark:border-gray-800" />
+            <hr class="my-1 border-gray-100 dark:border-white/10" />
 
             <a
               href="privacy.html"
-              class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800"
+              class="block px-4 py-2 text-[13.5px] text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/[0.06] transition-colors"
               >Privacy policy</a
             >
             <a
               href="https://github.com/jimmyorr/dislikes"
               target="_blank"
               rel="noopener noreferrer"
-              class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800"
+              class="block px-4 py-2 text-[13.5px] text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/[0.06] transition-colors"
               >GitHub source</a
             >
-            <hr class="my-1 border-gray-50 dark:border-gray-800" />
+            <hr class="my-1 border-gray-100 dark:border-white/10" />
             <button
               id="header-reset-button"
-              class="w-full text-left block px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+              type="button"
+              class="w-full text-left block px-4 py-2 text-[13.5px] text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
             >
               Reset app
             </button>
           </div>
-
-          <button
-            id="auth-button"
-            disabled
-            class="text-sm font-medium px-3 py-1.5 border border-black dark:border-gray-500 rounded opacity-50 cursor-not-allowed"
-          >
-            <span id="auth-text">Loading...</span>
-          </button>
         </div>
       </div>
     </header>
 
-    <main class="max-w-6xl mx-auto px-6 py-6 lg:py-12 flex-grow w-full">
-      <!-- Error -->
+    <main class="flex-1 flex flex-col w-full">
+      <!-- Error Banner -->
       <div
         id="error-container"
-        class="hidden mb-8 p-4 border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm flex-col sm:flex-row justify-between items-center gap-4"
+        class="hidden mx-4 sm:mx-6 lg:mx-8 mt-4 p-4 rounded-xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 text-sm flex-col sm:flex-row justify-between items-center gap-4"
       >
         <p id="error-message"></p>
         <button
           id="error-retry-button"
-          class="shrink-0 px-3 py-1 bg-red-600 text-white rounded font-medium hover:bg-red-700 transition-colors"
+          type="button"
+          class="shrink-0 px-4 py-1.5 bg-red-600 text-white rounded-full text-xs font-medium hover:bg-red-700 transition-colors"
         >
           Retry
         </button>
       </div>
 
-      <!-- Landing -->
-      <div id="view-welcome" class="py-20 text-center">
-        <h2 id="welcome-title" class="text-3xl font-semibold mb-4">
+      <!-- Welcome / Landing View -->
+      <div
+        id="view-welcome"
+        class="flex-1 flex flex-col items-center justify-center px-6 py-20 sm:py-28 text-center max-w-xl mx-auto w-full"
+      >
+        <h2
+          id="welcome-title"
+          class="text-3xl sm:text-4xl font-bold tracking-[-0.03em] text-gray-950 dark:text-white mb-3.5"
+        >
           Your YouTube disliked videos.
         </h2>
-        <p id="welcome-desc" class="text-gray-600 dark:text-gray-400 mb-10 max-w-md mx-auto">
-          View, filter, and sort your dislikes.<br>Simple, private, and minimal.
+        <p
+          id="welcome-desc"
+          class="text-[15px] text-gray-500 dark:text-[#aaaaaa] mb-9 max-w-md mx-auto leading-relaxed"
+        >
+          View, filter, and sort your dislikes.<br />Simple, private, and minimal.
         </p>
-        <div class="flex flex-col sm:flex-row gap-4 justify-center items-center">
+        <div
+          class="flex flex-col sm:flex-row gap-3 justify-center items-center w-full sm:w-auto"
+        >
           <button
             id="hero-auth-button"
+            type="button"
             disabled
-            class="px-8 py-3 bg-black dark:bg-white text-white dark:text-black rounded font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+            class="w-full sm:w-auto px-7 py-3 bg-gray-950 dark:bg-white text-white dark:text-black rounded-full text-sm font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
           >
             Initializing...
           </button>
           <button
             id="hero-demo-button"
-            class="px-8 py-3 bg-gray-100 dark:bg-[#1a1a1a] text-black dark:text-white rounded font-medium hover:bg-gray-200 dark:hover:bg-[#2a2a2a] transition-colors border border-gray-200 dark:border-gray-800"
+            type="button"
+            class="w-full sm:w-auto px-7 py-3 bg-gray-100 dark:bg-[#212121] text-gray-900 dark:text-white rounded-full text-sm font-medium hover:bg-gray-200/80 dark:hover:bg-[#2d2d2d] transition-colors"
           >
             View a demo
           </button>
+          <button
+            id="hero-upload-button"
+            type="button"
+            class="w-full sm:w-auto px-6 py-3 bg-transparent border border-gray-200 dark:border-white/15 text-gray-700 dark:text-[#d4d4d4] rounded-full text-sm font-medium hover:border-gray-400 dark:hover:border-white/35 hover:text-black dark:hover:text-white transition-colors"
+          >
+            Upload JSON
+          </button>
         </div>
-        <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-4 tracking-wider uppercase">
-          Local only. Data never leaves your browser.
+        <p
+          class="text-[11px] text-gray-400 dark:text-[#777777] mt-5 tracking-[0.08em] uppercase font-medium"
+        >
+          Local only · Data never leaves your browser · Drop a JSON file anywhere
         </p>
         <div
           id="initialization-trouble"
-          class="hidden mt-8 text-xs text-gray-500"
+          class="hidden mt-8 text-xs text-gray-500 dark:text-[#888888]"
         >
           <p>
             Taking too long?
-            <button id="reset-app-link" class="underline hover:text-black dark:hover:text-white">
+            <button
+              id="reset-app-link"
+              type="button"
+              class="underline hover:text-black dark:hover:text-white"
+            >
               Reset app
             </button>
           </p>
         </div>
       </div>
 
-      <!-- App -->
-      <div id="view-content" class="hidden">
-        <div
-          class="flex flex-col lg:flex-row gap-4 lg:gap-12 items-start lg:items-end mb-6 lg:mb-12"
-        >
-          <div class="space-y-1 lg:w-64 shrink-0">
-            <div class="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-              <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-gray-800 text-sm font-medium text-gray-700 dark:text-gray-300">
-                <span id="results-count">0 videos</span>
-              </div>
-              <button
-                id="active-filter-badge"
-                type="button"
-                title="Clear active filter"
-                class="hidden items-center gap-1.5 max-w-full px-3 py-1.5 rounded-full bg-black text-white dark:bg-white dark:text-black text-xs font-medium hover:opacity-80 transition-opacity"
+      <!-- Full-Bleed App Workspace -->
+      <div id="view-content" class="hidden flex-1 w-full">
+        <div class="flex flex-col lg:flex-row w-full min-h-[calc(100dvh-4rem)]">
+          <!-- Left Navigation & Library Stats Sidebar -->
+          <aside
+            class="w-full lg:w-[280px] xl:w-[292px] shrink-0 border-b lg:border-b-0 lg:border-r border-gray-200/80 dark:border-white/10 bg-white dark:bg-[#0a0a0a] lg:sticky lg:top-16 lg:h-[calc(100dvh-4rem)] lg:flex lg:flex-col pl-4 pr-12 sm:pl-6 sm:pr-14 lg:px-6 py-3 lg:pt-6 lg:pb-4 z-30"
+          >
+            <!-- Library Stats & Subtle Data Actions -->
+            <div class="shrink-0 lg:mb-6 flex flex-col gap-2.5">
+              <div
+                class="flex items-center justify-between gap-2 lg:flex-col lg:items-stretch lg:gap-3"
               >
-                <span id="active-filter-label" class="truncate max-w-[180px]"></span>
-                <span aria-hidden="true" class="font-bold leading-none">&times;</span>
-              </button>
-              <button
-                id="load-all-button"
-                class="hidden whitespace-nowrap text-xs font-bold uppercase tracking-wider px-3 py-1.5 border border-gray-200 dark:border-gray-800 rounded hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition-colors items-center gap-2"
-              >
-                Load all
-              </button>
-            </div>
-          </div>
-
-          <div class="flex flex-col md:flex-row items-stretch md:items-center gap-2 flex-1 w-full lg:w-auto">
-            <div class="relative flex-1 w-full min-w-[200px]">
-              <input
-                type="text"
-                id="search-input"
-                placeholder="Search..."
-                aria-label="Search videos"
-                class="w-full text-sm border border-gray-200 dark:border-gray-800 rounded pl-3 pr-8 py-1.5 bg-white dark:bg-[#121212] focus:outline-none focus:border-black dark:focus:border-gray-500 transition-colors"
-              />
-              <button
-                type="button"
-                id="search-clear-button"
-                title="Clear search"
-                aria-label="Clear search"
-                class="hidden absolute inset-y-0 right-0 px-2.5 items-center justify-center text-gray-400 hover:text-black dark:hover:text-white transition-colors"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-              </button>
-            </div>
-
-            <div class="flex items-center gap-2 shrink-0">
-              <div id="sort-dropdown" class="relative flex-grow min-w-[140px]">
-                <button
-                  type="button"
-                  id="sort-trigger"
-                  aria-haspopup="listbox"
-                  aria-expanded="false"
-                  aria-controls="sort-menu"
-                  aria-label="Sort videos"
-                  class="w-full flex items-center justify-between gap-2 px-3 py-1.5 border border-gray-200 dark:border-gray-800 rounded text-sm bg-white dark:bg-[#121212] text-gray-900 dark:text-gray-200 hover:border-gray-400 dark:hover:border-gray-600 focus:outline-none focus:border-black dark:focus:border-gray-500 transition-colors"
-                >
-                  <span id="sort-label" class="truncate">Recent</span>
-                  <svg id="sort-chevron" class="w-4 h-4 text-gray-500 dark:text-gray-400 shrink-0 transition-transform duration-150" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                </button>
                 <div
-                  id="sort-menu"
-                  role="listbox"
-                  aria-label="Sort videos"
-                  class="hidden absolute left-0 right-0 sm:right-auto sm:min-w-[180px] top-full mt-1.5 bg-white dark:bg-[#121212] border border-gray-200 dark:border-gray-800 shadow-xl rounded-lg py-1 z-40"
+                  class="order-2 lg:order-1 flex items-center justify-end lg:justify-between gap-1 shrink-0"
                 >
-                  <button type="button" role="option" data-value="date-new" aria-selected="true" class="dropdown-option w-full flex items-center justify-between gap-3 px-3 py-2 text-sm text-left transition-colors">
-                    <span>Recent</span>
-                    <svg class="check-icon w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
+                  <h2
+                    class="hidden lg:block text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-400 dark:text-[#9a9a9a]"
+                  >
+                    Library stats
+                  </h2>
+                  <div id="library-actions-group" class="hidden sm:flex items-center gap-0.5">
+                    <button
+                      id="copy-ids-button"
+                      type="button"
+                      title="Copy video IDs"
+                      aria-label="Copy video IDs"
+                      class="p-1.5 rounded-md text-gray-400 dark:text-[#9a9a9a] hover:text-black dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="15"
+                        height="15"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+                        <path
+                          d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"
+                        />
+                      </svg>
+                    </button>
+
+                    <input
+                      type="file"
+                      id="upload-json-input"
+                      accept=".json,application/json"
+                      class="hidden"
+                    />
+                    <button
+                      id="upload-json-button"
+                      type="button"
+                      title="Upload JSON"
+                      aria-label="Upload JSON"
+                      class="p-1.5 rounded-md text-gray-400 dark:text-[#9a9a9a] hover:text-black dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="15"
+                        height="15"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="17 8 12 3 7 8" />
+                        <line x1="12" y1="3" x2="12" y2="15" />
+                      </svg>
+                    </button>
+
+                    <button
+                      id="export-json-button"
+                      type="button"
+                      title="Export as JSON"
+                      aria-label="Export as JSON"
+                      class="p-1.5 rounded-md text-gray-400 dark:text-[#9a9a9a] hover:text-black dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="15"
+                        height="15"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="7 10 12 15 17 10" />
+                        <line x1="12" y1="15" x2="12" y2="3" />
+                      </svg>
+                    </button>
+
+                    <button
+                      id="clear-cache-button"
+                      type="button"
+                      title="Refresh from YouTube"
+                      aria-label="Refresh from YouTube"
+                      class="hidden p-1.5 rounded-md text-gray-400 dark:text-[#9a9a9a] hover:text-black dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="15"
+                        height="15"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"
+                        ></path>
+                        <path d="M21 3v5h-5"></path>
+                      </svg>
+                    </button>
+                  </div>
+
+                  <button
+                    id="mobile-filter-toggle"
+                    type="button"
+                    aria-expanded="false"
+                    aria-controls="sidebar-content"
+                    class="lg:hidden ml-1 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-[#212121] hover:bg-gray-200/70 dark:hover:bg-[#2d2d2d] text-[12.5px] font-medium text-gray-800 dark:text-[#eaeaea] transition-colors shrink-0"
+                  >
+                    <span>Show filters</span>
+                    <svg
+                      class="w-3.5 h-3.5 text-gray-500 dark:text-[#aaaaaa] transition-transform duration-200"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2.2"
+                        d="M19 9l-7 7-7-7"
+                      ></path>
+                    </svg>
                   </button>
-                  <button type="button" role="option" data-value="views-high" aria-selected="false" class="dropdown-option w-full flex items-center justify-between gap-3 px-3 py-2 text-sm text-left transition-colors">
-                    <span>Views</span>
-                    <svg class="check-icon w-4 h-4 shrink-0 opacity-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
-                  </button>
-                  <button type="button" role="option" data-value="duration-long" aria-selected="false" class="dropdown-option w-full flex items-center justify-between gap-3 px-3 py-2 text-sm text-left transition-colors">
-                    <span>Duration</span>
-                    <svg class="check-icon w-4 h-4 shrink-0 opacity-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
-                  </button>
-                  <button type="button" role="option" data-value="upload-new" aria-selected="false" class="dropdown-option w-full flex items-center justify-between gap-3 px-3 py-2 text-sm text-left transition-colors">
-                    <span>Upload date</span>
-                    <svg class="check-icon w-4 h-4 shrink-0 opacity-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
-                  </button>
-                  <button type="button" role="option" data-value="comments-most" aria-selected="false" class="dropdown-option w-full flex items-center justify-between gap-3 px-3 py-2 text-sm text-left transition-colors">
-                    <span>Comment count</span>
-                    <svg class="check-icon w-4 h-4 shrink-0 opacity-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
-                  </button>
-                  <button type="button" role="option" data-value="channel-az" aria-selected="false" class="dropdown-option w-full flex items-center justify-between gap-3 px-3 py-2 text-sm text-left transition-colors">
-                    <span>Channel</span>
-                    <svg class="check-icon w-4 h-4 shrink-0 opacity-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
-                  </button>
-                  <button type="button" role="option" data-value="title-az" aria-selected="false" class="dropdown-option w-full flex items-center justify-between gap-3 px-3 py-2 text-sm text-left transition-colors">
-                    <span>Title</span>
-                    <svg class="check-icon w-4 h-4 shrink-0 opacity-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
-                  </button>
+                </div>
+
+                <div
+                  class="order-1 lg:order-2 flex items-baseline gap-2 lg:flex-col lg:items-start lg:gap-1 min-w-0"
+                >
+                  <span
+                    id="results-hero-count"
+                    class="text-[20px] lg:text-[38px] font-bold tracking-[-0.03em] leading-none text-gray-950 dark:text-white tabular-nums"
+                    >0</span
+                  >
+                  <span
+                    id="results-count"
+                    class="text-[12.5px] lg:text-[13px] text-gray-500 dark:text-[#aaaaaa] truncate"
+                    >0 videos</span
+                  >
                 </div>
               </div>
 
-              <button
-                id="shuffle-play-button"
-                type="button"
-                title="Shuffle play"
-                aria-label="Shuffle play"
-                class="shrink-0 p-2 border border-gray-200 dark:border-gray-800 rounded text-gray-600 dark:text-gray-400 hover:text-black hover:border-black dark:hover:text-white dark:hover:border-white transition-colors"
+              <div
+                id="library-chips-row"
+                class="hidden flex-wrap items-center gap-1.5 pt-0.5"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="16 3 21 3 21 8"></polyline>
-                  <line x1="4" y1="20" x2="21" y2="3"></line>
-                  <polyline points="21 16 21 21 16 21"></polyline>
-                  <line x1="15" y1="15" x2="21" y2="21"></line>
-                  <line x1="4" y1="4" x2="9" y2="9"></line>
-                </svg>
-              </button>
-
-              <button
-                id="copy-ids-button"
-                title="Copy video IDs as list"
-                class="hidden md:flex shrink-0 p-2 border border-gray-200 dark:border-gray-800 rounded text-gray-600 dark:text-gray-400 hover:text-black hover:border-black dark:hover:text-white dark:hover:border-white transition-colors"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
+                <button
+                  id="load-all-button"
+                  type="button"
+                  class="hidden whitespace-nowrap text-xs font-medium px-3 py-1 rounded-full bg-gray-100 dark:bg-[#212121] text-gray-800 dark:text-[#eaeaea] hover:bg-gray-950 hover:text-white dark:hover:bg-white dark:hover:text-black transition-colors items-center gap-1.5"
                 >
-                  <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
-                  <path
-                    d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"
-                  />
-                </svg>
-              </button>
-
-              <input type="file" id="upload-json-input" accept=".json" class="hidden" />
-              <button
-                id="upload-json-button"
-                title="Upload JSON"
-                class="hidden md:flex shrink-0 p-2 border border-gray-200 dark:border-gray-800 rounded text-gray-600 dark:text-gray-400 hover:text-black hover:border-black dark:hover:text-white dark:hover:border-white transition-colors"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="17 8 12 3 7 8" />
-                  <line x1="12" y1="3" x2="12" y2="15" />
-                </svg>
-              </button>
-
-              <button
-                id="export-json-button"
-                title="Export list as JSON"
-                class="hidden md:flex shrink-0 p-2 border border-gray-200 dark:border-gray-800 rounded text-gray-600 dark:text-gray-400 hover:text-black hover:border-black dark:hover:text-white dark:hover:border-white transition-colors"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="7 10 12 15 17 10" />
-                  <line x1="12" y1="15" x2="12" y2="3" />
-                </svg>
-              </button>
-
-              <button
-                id="clear-cache-button"
-                title="Refresh from YouTube"
-                aria-label="Refresh from YouTube"
-                class="shrink-0 p-2 border border-gray-200 dark:border-gray-800 rounded text-gray-600 dark:text-gray-400 hover:text-black hover:border-black dark:hover:text-white dark:hover:border-white transition-colors"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"></path>
-                  <path d="M21 3v5h-5"></path>
-                </svg>
-              </button>
+                  Load all
+                </button>
+              </div>
             </div>
 
-
-          </div>
-        </div>
-
-        <div class="flex flex-col lg:flex-row gap-4 lg:gap-12">
-          <!-- Sidebar -->
-          <div class="lg:w-64 shrink-0 flex flex-col gap-4">
-            <button id="mobile-filter-toggle" type="button" aria-expanded="false" aria-controls="sidebar-content" class="lg:hidden flex items-center justify-between w-full px-4 py-2 bg-gray-100 dark:bg-gray-800 rounded font-medium text-sm transition-colors hover:bg-gray-200 dark:hover:bg-gray-700">
-              <span>Show filters</span>
-              <svg class="w-4 h-4 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-            </button>
-            <div id="sidebar-content" class="hidden lg:flex flex-col gap-6">
-              <div id="sidebar-filter-dropdown" class="relative">
+            <!-- Browse / Filter List -->
+            <div
+              id="sidebar-content"
+              class="hidden lg:flex flex-col flex-1 min-h-0 mt-3 pt-3 lg:mt-0 lg:pt-5 border-t border-gray-200/70 dark:border-white/[0.08]"
+            >
+              <div id="sidebar-filter-dropdown" class="relative shrink-0 mb-3">
                 <button
                   type="button"
                   id="sidebar-filter-trigger"
@@ -622,206 +956,599 @@
                   aria-expanded="false"
                   aria-controls="sidebar-filter-menu"
                   aria-label="Filter category"
-                  class="w-full flex items-center justify-between gap-2 bg-white dark:bg-[#121212] border border-gray-200 dark:border-gray-800 rounded px-3 py-2 text-sm font-medium text-gray-900 dark:text-gray-200 hover:border-gray-400 dark:hover:border-gray-600 focus:outline-none focus:border-black dark:focus:border-white transition-colors"
+                  class="w-full flex items-center justify-between gap-2 bg-gray-100/90 dark:bg-[#1a1a1a] hover:bg-gray-200/70 dark:hover:bg-[#242424] rounded-xl px-3.5 py-2 text-[13px] font-medium text-gray-900 dark:text-[#f1f1f1] focus:outline-none focus-visible:ring-2 focus-visible:ring-black dark:focus-visible:ring-white transition-colors"
                 >
-                  <span class="truncate"><span class="text-gray-500 dark:text-gray-400 font-normal">Filter by:</span> <span id="sidebar-filter-label">Artists</span></span>
-                  <svg id="sidebar-filter-chevron" class="w-4 h-4 text-gray-500 dark:text-gray-400 shrink-0 transition-transform duration-150" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                  <span class="truncate">
+                    <span class="text-gray-500 dark:text-[#999999] font-normal"
+                      >Browse:</span
+                    >
+                    <span id="sidebar-filter-label" class="ml-1">Artists</span>
+                  </span>
+                  <svg
+                    id="sidebar-filter-chevron"
+                    class="w-3.5 h-3.5 text-gray-500 dark:text-[#aaaaaa] shrink-0 transition-transform duration-150"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2.2"
+                      d="M19 9l-7 7-7-7"
+                    ></path>
+                  </svg>
                 </button>
                 <div
                   id="sidebar-filter-menu"
                   role="listbox"
                   aria-label="Filter category"
-                  class="hidden absolute left-0 right-0 top-full mt-1.5 bg-white dark:bg-[#121212] border border-gray-200 dark:border-gray-800 shadow-xl rounded-lg py-1 z-30"
+                  class="hidden absolute left-0 right-0 top-full mt-1.5 bg-white dark:bg-[#181818] border border-gray-200/80 dark:border-white/10 shadow-2xl rounded-xl py-1.5 z-40"
                 >
-                  <button type="button" role="option" data-value="channels" aria-selected="true" class="dropdown-option w-full flex items-center justify-between gap-3 px-3 py-2 text-sm text-left transition-colors">
+                  <button
+                    type="button"
+                    role="option"
+                    data-value="channels"
+                    aria-selected="true"
+                    class="dropdown-option w-full flex items-center justify-between gap-3 px-3.5 py-2 text-[13.5px] text-left transition-colors"
+                  >
                     <span>Artists</span>
                     <svg class="check-icon w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
                   </button>
-                  <button type="button" role="option" data-value="albums" aria-selected="false" class="dropdown-option w-full flex items-center justify-between gap-3 px-3 py-2 text-sm text-left transition-colors">
+                  <button
+                    type="button"
+                    role="option"
+                    data-value="albums"
+                    aria-selected="false"
+                    class="dropdown-option w-full flex items-center justify-between gap-3 px-3.5 py-2 text-[13.5px] text-left transition-colors"
+                  >
                     <span>Albums</span>
                     <svg class="check-icon w-4 h-4 shrink-0 opacity-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
                   </button>
-                  <button type="button" role="option" data-value="years" aria-selected="false" class="dropdown-option w-full flex items-center justify-between gap-3 px-3 py-2 text-sm text-left transition-colors">
+                  <button
+                    type="button"
+                    role="option"
+                    data-value="years"
+                    aria-selected="false"
+                    class="dropdown-option w-full flex items-center justify-between gap-3 px-3.5 py-2 text-[13.5px] text-left transition-colors"
+                  >
                     <span>Years</span>
                     <svg class="check-icon w-4 h-4 shrink-0 opacity-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
                   </button>
-                  <button type="button" role="option" data-value="labels" aria-selected="false" class="dropdown-option w-full flex items-center justify-between gap-3 px-3 py-2 text-sm text-left transition-colors">
+                  <button
+                    type="button"
+                    role="option"
+                    data-value="labels"
+                    aria-selected="false"
+                    class="dropdown-option w-full flex items-center justify-between gap-3 px-3.5 py-2 text-[13.5px] text-left transition-colors"
+                  >
                     <span>Labels</span>
                     <svg class="check-icon w-4 h-4 shrink-0 opacity-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
                   </button>
-                  <button type="button" role="option" data-value="copyrights" aria-selected="false" class="dropdown-option w-full flex items-center justify-between gap-3 px-3 py-2 text-sm text-left transition-colors">
+                  <button
+                    type="button"
+                    role="option"
+                    data-value="copyrights"
+                    aria-selected="false"
+                    class="dropdown-option w-full flex items-center justify-between gap-3 px-3.5 py-2 text-[13.5px] text-left transition-colors"
+                  >
                     <span>Copyrights</span>
                     <svg class="check-icon w-4 h-4 shrink-0 opacity-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
                   </button>
                 </div>
               </div>
-              <div id="sidebar-list-container" class="space-y-4 max-h-[80vh] overflow-y-auto overscroll-contain pr-2 pb-12">
+
+              <div
+                id="sidebar-list-container"
+                class="flex flex-col gap-0.5 max-h-[52vh] lg:max-h-none lg:flex-1 lg:min-h-0 overflow-y-auto overscroll-contain -mx-1.5 px-1.5 pb-3 lg:pb-20"
+              >
                 <!-- Sidebar list will be injected here -->
               </div>
             </div>
+          </aside>
+
+          <!-- Main Content Workspace -->
+          <div class="flex-1 min-w-0 px-3 sm:px-5 lg:px-7 py-4 lg:py-6">
+            <div
+              id="empty-state"
+              class="hidden py-24 text-center border border-dashed border-gray-200 dark:border-white/10 rounded-2xl mx-1"
+            >
+              <p class="text-sm text-gray-500 dark:text-[#aaaaaa]">
+                No results found.
+              </p>
+            </div>
+
+            <div id="grid-top-spacer" aria-hidden="true"></div>
+            <div
+              id="video-grid"
+              class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-x-3 gap-y-4 sm:gap-x-4 sm:gap-y-5"
+            >
+              <!-- Video cards will be injected here -->
+            </div>
+            <div id="grid-bottom-spacer" aria-hidden="true"></div>
+
+            <div
+              id="infinite-scroll-sentinel"
+              class="hidden py-12 text-center text-gray-500 dark:text-[#aaaaaa] text-sm"
+            >
+              Loading more...
+            </div>
           </div>
-          
-          <!-- Main Content -->
-          <div class="flex-1 min-w-0">
-
-        <div
-          id="empty-state"
-          class="hidden py-20 text-center border border-dashed border-gray-200 dark:border-gray-800 rounded"
-        >
-          <p class="text-gray-500">No results found.</p>
-        </div>
-
-        <div id="grid-top-spacer" aria-hidden="true"></div>
-        <div
-          id="video-grid"
-          class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-10"
-        >
-          <!-- Video cards will be injected here -->
-        </div>
-        <div id="grid-bottom-spacer" aria-hidden="true"></div>
-        </div> <!-- End Main Content -->
-      </div> <!-- End flex layout -->
-
-      <div
-          id="infinite-scroll-sentinel"
-          class="hidden py-12 text-center text-gray-500 text-sm"
-        >
-          Loading more...
         </div>
       </div>
     </main>
-      <!-- YouTube Player -->
-      <div id="ytplayer-host" aria-hidden="true" class="fixed bottom-0 left-0 w-px h-px opacity-0 pointer-events-none overflow-hidden z-10">
-        <div id="ytplayer"></div>
-      </div>
-      
-      <!-- Bottom Player UI -->
-      <div id="bottom-player" class="invisible fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-[#121212] border-t border-gray-200 dark:border-gray-800 transition-transform duration-300 translate-y-full shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] overflow-hidden cursor-pointer">
-        
-        <!-- Background Color Sampling -->
-        <div id="bottom-player-bg" class="absolute inset-0 bg-cover bg-center opacity-100 blur-[20px] scale-[1.2] pointer-events-none transition-all duration-1000 z-0"></div>
-        <div class="absolute inset-0 bg-white/80 dark:bg-black/60 pointer-events-none z-0"></div>
 
-        <!-- Progress Bar -->
-        <div class="group/seek absolute top-0 left-0 right-0 h-2 cursor-pointer z-20 flex items-start" id="bottom-player-progress-container">
-          <div class="w-full h-[3px] group-hover/seek:h-1.5 bg-gray-200 dark:bg-gray-800 overflow-hidden transition-all">
-            <div id="bottom-player-progress-bar" class="h-full bg-red-600 w-0 pointer-events-none transition-all duration-100 ease-linear"></div>
-          </div>
-        </div>
+    <!-- YouTube Player (keep positive z-index so fixed layer never triggers WebKit Overlap compositing on <main>) -->
+    <div
+      id="ytplayer-host"
+      aria-hidden="true"
+      class="fixed bottom-0 left-0 w-px h-px opacity-0 pointer-events-none overflow-hidden z-10"
+    >
+      <div id="ytplayer"></div>
+    </div>
 
-        <div class="relative z-10 flex items-center justify-between px-4 sm:px-6 py-2 h-[72px]">
-          <!-- Left: Track Info -->
-          <div id="bottom-player-track-info" class="flex items-center justify-start gap-3 shrink-0 w-1/3 cursor-pointer min-w-0 relative z-10">
-            <img id="player-thumbnail" alt="" class="w-10 h-10 sm:w-12 sm:h-12 object-cover rounded shadow-sm shrink-0 bg-gray-200 dark:bg-gray-800" />
-            <div class="min-w-0 text-left flex flex-col justify-center max-w-[200px]">
-              <h4 id="player-title" class="text-sm font-bold text-gray-900 dark:text-white truncate drop-shadow-sm"></h4>
-              <p id="player-artist" class="text-xs text-gray-600 dark:text-gray-200 truncate drop-shadow-sm"></p>
-            </div>
-          </div>
-
-          <!-- Center: Controls -->
-          <div class="flex items-center gap-2 sm:gap-4 shrink-0 w-1/3 justify-center">
-            <span class="text-xs text-gray-500 hidden lg:block mr-2 w-10 text-right font-medium drop-shadow-sm"><span id="player-time-current">0:00</span></span>
-            <button id="player-prev" type="button" title="Previous track" aria-label="Previous track" class="p-2 text-gray-800 dark:text-gray-200 hover:text-black dark:hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="19 20 9 12 19 4 19 20"></polygon><line x1="5" y1="19" x2="5" y2="5"></line></svg>
-            </button>
-            <button id="player-play-pause" type="button" title="Play or pause" aria-label="Play or pause" class="w-10 h-10 rounded-full bg-black dark:bg-white text-white dark:text-black flex items-center justify-center hover:scale-105 transition-transform shrink-0" disabled>
-              <svg id="player-icon-play" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden ml-1"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-              <svg id="player-icon-pause" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
-              <svg id="player-icon-loading" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="animate-spin"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg>
-            </button>
-            <button id="player-next" type="button" title="Next track" aria-label="Next track" class="p-2 text-gray-800 dark:text-gray-200 hover:text-black dark:hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg>
-            </button>
-            <span class="text-xs text-gray-500 hidden lg:block ml-2 w-10 text-left font-medium drop-shadow-sm"><span id="player-time-total">-:--</span></span>
-          </div>
-
-          <!-- Right: Actions -->
-          <div class="flex items-center gap-1 sm:gap-2 shrink-0 w-1/3 justify-end">
-            <button id="player-shuffle" type="button" title="Toggle shuffle" aria-label="Toggle shuffle" aria-pressed="false" class="p-2 rounded-full text-gray-400 dark:text-gray-500 hover:text-black dark:hover:text-white transition-colors">
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="16 3 21 3 21 8"></polyline>
-                <line x1="4" y1="20" x2="21" y2="3"></line>
-                <polyline points="21 16 21 21 16 21"></polyline>
-                <line x1="15" y1="15" x2="21" y2="21"></line>
-                <line x1="4" y1="4" x2="9" y2="9"></line>
-              </svg>
-            </button>
-            <button id="player-close" type="button" title="Close player" aria-label="Close player" class="p-2 text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors">
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Full Screen Player UI -->
-      <div id="full-screen-player" class="invisible fixed inset-0 z-[60] bg-white dark:bg-[#121212] transition-transform duration-500 translate-y-full flex flex-col overflow-hidden">
-        <!-- Blurred Background -->
-        <div id="fs-player-bg" class="absolute inset-0 bg-cover bg-center opacity-60 dark:opacity-40 blur-[100px] scale-150 pointer-events-none transition-all duration-1000"></div>
-        <!-- Gradient Overlay for Text Readability -->
-        <div class="absolute inset-0 bg-gradient-to-t from-white/90 via-white/30 to-transparent dark:from-black/90 dark:via-black/30 dark:to-transparent pointer-events-none z-0"></div>
-        
-        <div class="relative z-10 flex flex-col h-full p-6 sm:p-12 max-w-[100vh] mx-auto w-full">
-          <!-- Header -->
-          <div class="flex justify-between items-center mb-8 sm:mb-12">
-            <button id="fs-player-close" type="button" title="Minimize player" aria-label="Minimize player" class="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-black dark:hover:text-white transition-colors">
-              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-            </button>
-            <button id="fs-player-shuffle" type="button" title="Toggle shuffle" aria-label="Toggle shuffle" aria-pressed="false" class="p-2.5 -mr-2 rounded-full text-gray-400 dark:text-gray-500 hover:text-black dark:hover:text-white transition-colors">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="16 3 21 3 21 8"></polyline>
-                <line x1="4" y1="20" x2="21" y2="3"></line>
-                <polyline points="21 16 21 21 16 21"></polyline>
-                <line x1="15" y1="15" x2="21" y2="21"></line>
-                <line x1="4" y1="4" x2="9" y2="9"></line>
-              </svg>
-            </button>
-          </div>
-
-          <!-- Art -->
-          <div class="flex-1 w-full min-h-0 mb-8 flex flex-col items-center justify-center">
-            <img id="fs-player-thumbnail" alt="" class="h-full max-w-full aspect-square object-cover rounded-2xl shadow-2xl bg-gray-200 dark:bg-gray-800 cursor-pointer hover:opacity-90 transition-opacity" title="Play or pause" />
-          </div>
-
-          <!-- Info & Controls -->
-          <div class="shrink-0 mb-8 sm:mb-12 w-full max-w-md mx-auto">
-            <div class="mb-6 text-center drop-shadow-md">
-              <h2 id="fs-player-title" class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white truncate mb-2"></h2>
-              <p id="fs-player-artist" class="text-lg text-gray-600 dark:text-gray-300 truncate"></p>
-            </div>
-
-            <!-- Progress Bar -->
-            <div class="mb-8 px-2 flex flex-col gap-2">
-              <input type="range" id="fs-player-progress" aria-label="Seek progress" min="0" max="100" value="0" class="w-full h-1.5 bg-gray-300 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-black dark:accent-white">
-              <div class="flex justify-between text-xs text-gray-600 dark:text-gray-400 font-mono">
-                <span id="fs-player-time-current">0:00</span>
-                <span id="fs-player-time-total">-:--</span>
-              </div>
-            </div>
-
-            <div class="flex items-center justify-center gap-8">
-              <button id="fs-player-prev" type="button" title="Previous track" aria-label="Previous track" class="p-3 text-gray-800 dark:text-gray-200 hover:text-black dark:hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
-                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="19 20 9 12 19 4 19 20"></polygon><line x1="5" y1="19" x2="5" y2="5"></line></svg>
-              </button>
-              <button id="fs-player-play-pause" type="button" title="Play or pause" aria-label="Play or pause" class="w-20 h-20 rounded-full bg-black dark:bg-white text-white dark:text-black flex items-center justify-center hover:scale-105 transition-transform shadow-xl shrink-0 disabled:opacity-50 disabled:cursor-not-allowed">
-                <svg id="fs-player-icon-play" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden ml-2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-                <svg id="fs-player-icon-pause" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
-                <svg id="fs-player-icon-loading" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="animate-spin"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg>
-              </button>
-              <button id="fs-player-next" type="button" title="Next track" aria-label="Next track" class="p-3 text-gray-800 dark:text-gray-200 hover:text-black dark:hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
-                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-    <footer class="py-8 border-t border-gray-50 dark:border-gray-900 mt-12">
+    <!-- Bottom Player UI -->
+    <div
+      id="bottom-player"
+      class="invisible fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-[#121212] border-t border-gray-200/80 dark:border-white/10 transition-transform duration-300 translate-y-full shadow-[0_-8px_24px_rgba(0,0,0,0.12)] dark:shadow-[0_-8px_28px_rgba(0,0,0,0.6)] overflow-hidden cursor-pointer"
+    >
+      <!-- Background Color Sampling -->
       <div
-        class="max-w-6xl mx-auto px-6 flex justify-between items-center text-xs text-gray-500"
+        id="bottom-player-bg"
+        class="absolute inset-0 bg-cover bg-center opacity-100 blur-[20px] scale-[1.2] pointer-events-none transition-all duration-1000 z-0"
+      ></div>
+      <div
+        class="absolute inset-0 bg-white/85 dark:bg-[#0f0f0f]/80 pointer-events-none z-0"
+      ></div>
+
+      <!-- Progress Bar -->
+      <div
+        class="group/seek absolute top-0 left-0 right-0 h-2 cursor-pointer z-20 flex items-start"
+        id="bottom-player-progress-container"
+      >
+        <div
+          class="w-full h-[3px] group-hover/seek:h-1.5 bg-gray-200 dark:bg-white/15 overflow-hidden transition-all"
+        >
+          <div
+            id="bottom-player-progress-bar"
+            class="h-full bg-red-600 w-0 pointer-events-none transition-all duration-100 ease-linear"
+          ></div>
+        </div>
+      </div>
+
+      <div
+        class="relative z-10 flex items-center justify-between px-4 sm:px-6 lg:px-8 py-2 h-[72px]"
+      >
+        <!-- Left: Track Info -->
+        <div
+          id="bottom-player-track-info"
+          class="flex items-center justify-start gap-3 shrink-0 w-1/3 cursor-pointer min-w-0 relative z-10"
+        >
+          <img
+            id="player-thumbnail"
+            alt=""
+            class="w-11 h-11 sm:w-12 sm:h-12 object-cover rounded-lg shadow-sm shrink-0 bg-gray-200 dark:bg-[#242424]"
+          />
+          <div class="min-w-0 text-left flex flex-col justify-center max-w-[240px]">
+            <h4
+              id="player-title"
+              class="text-[13.5px] sm:text-sm font-semibold text-gray-950 dark:text-white truncate"
+            ></h4>
+            <p
+              id="player-artist"
+              class="text-xs text-gray-600 dark:text-[#aaaaaa] truncate"
+            ></p>
+          </div>
+        </div>
+
+        <!-- Center: Controls -->
+        <div class="flex items-center gap-2 sm:gap-4 shrink-0 w-1/3 justify-center">
+          <span
+            class="text-xs text-gray-500 dark:text-[#999999] hidden lg:block mr-1.5 w-10 text-right font-medium tabular-nums"
+            ><span id="player-time-current">0:00</span></span
+          >
+          <button
+            id="player-prev"
+            type="button"
+            title="Previous track"
+            aria-label="Previous track"
+            class="p-2 text-gray-800 dark:text-gray-200 hover:text-black dark:hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="19"
+              height="19"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <polygon points="19 20 9 12 19 4 19 20"></polygon>
+              <line x1="5" y1="19" x2="5" y2="5"></line>
+            </svg>
+          </button>
+          <button
+            id="player-play-pause"
+            type="button"
+            title="Play or pause"
+            aria-label="Play or pause"
+            class="w-10 h-10 rounded-full bg-gray-950 dark:bg-white text-white dark:text-black flex items-center justify-center hover:scale-105 transition-transform shrink-0"
+            disabled
+          >
+            <svg
+              id="player-icon-play"
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="hidden ml-0.5"
+            >
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+            <svg
+              id="player-icon-pause"
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="hidden"
+            >
+              <rect x="6" y="4" width="4" height="16"></rect>
+              <rect x="14" y="4" width="4" height="16"></rect>
+            </svg>
+            <svg
+              id="player-icon-loading"
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="animate-spin"
+            >
+              <line x1="12" y1="2" x2="12" y2="6"></line>
+              <line x1="12" y1="18" x2="12" y2="22"></line>
+              <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
+              <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
+              <line x1="2" y1="12" x2="6" y2="12"></line>
+              <line x1="18" y1="12" x2="22" y2="12"></line>
+              <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
+              <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
+            </svg>
+          </button>
+          <button
+            id="player-next"
+            type="button"
+            title="Next track"
+            aria-label="Next track"
+            class="p-2 text-gray-800 dark:text-gray-200 hover:text-black dark:hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="19"
+              height="19"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <polygon points="5 4 15 12 5 20 5 4"></polygon>
+              <line x1="19" y1="5" x2="19" y2="19"></line>
+            </svg>
+          </button>
+          <span
+            class="text-xs text-gray-500 dark:text-[#999999] hidden lg:block ml-1.5 w-10 text-left font-medium tabular-nums"
+            ><span id="player-time-total">-:--</span></span
+          >
+        </div>
+
+        <!-- Right: Actions -->
+        <div class="flex items-center gap-1 sm:gap-1.5 shrink-0 w-1/3 justify-end">
+          <button
+            id="player-shuffle"
+            type="button"
+            title="Toggle shuffle"
+            aria-label="Toggle shuffle"
+            aria-pressed="false"
+            class="p-2 rounded-full text-gray-400 dark:text-gray-500 hover:text-black dark:hover:text-white transition-colors"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="17"
+              height="17"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <polyline points="16 3 21 3 21 8"></polyline>
+              <line x1="4" y1="20" x2="21" y2="3"></line>
+              <polyline points="21 16 21 21 16 21"></polyline>
+              <line x1="15" y1="15" x2="21" y2="21"></line>
+              <line x1="4" y1="4" x2="9" y2="9"></line>
+            </svg>
+          </button>
+          <button
+            id="player-close"
+            type="button"
+            title="Close player"
+            aria-label="Close player"
+            class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="19"
+              height="19"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Full Screen Player UI -->
+    <div
+      id="full-screen-player"
+      class="invisible fixed inset-0 z-[60] bg-white dark:bg-[#0d0d0d] transition-transform duration-500 translate-y-full flex flex-col overflow-hidden"
+    >
+      <!-- Blurred Background -->
+      <div
+        id="fs-player-bg"
+        class="absolute inset-0 bg-cover bg-center opacity-60 dark:opacity-40 blur-[100px] scale-150 pointer-events-none transition-all duration-1000"
+      ></div>
+      <!-- Gradient Overlay for Text Readability -->
+      <div
+        class="absolute inset-0 bg-gradient-to-t from-white/90 via-white/30 to-transparent dark:from-black/90 dark:via-black/30 dark:to-transparent pointer-events-none z-0"
+      ></div>
+
+      <div
+        class="relative z-10 flex flex-col h-full p-6 sm:p-12 max-w-[100vh] mx-auto w-full"
+      >
+        <!-- Header -->
+        <div class="flex justify-between items-center mb-8 sm:mb-12">
+          <button
+            id="fs-player-close"
+            type="button"
+            title="Minimize player"
+            aria-label="Minimize player"
+            class="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-black dark:hover:text-white transition-colors"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="32"
+              height="32"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </button>
+          <button
+            id="fs-player-shuffle"
+            type="button"
+            title="Toggle shuffle"
+            aria-label="Toggle shuffle"
+            aria-pressed="false"
+            class="p-2.5 -mr-2 rounded-full text-gray-400 dark:text-gray-500 hover:text-black dark:hover:text-white transition-colors"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <polyline points="16 3 21 3 21 8"></polyline>
+              <line x1="4" y1="20" x2="21" y2="3"></line>
+              <polyline points="21 16 21 21 16 21"></polyline>
+              <line x1="15" y1="15" x2="21" y2="21"></line>
+              <line x1="4" y1="4" x2="9" y2="9"></line>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Art -->
+        <div
+          class="flex-1 w-full min-h-0 mb-8 flex flex-col items-center justify-center"
+        >
+          <img
+            id="fs-player-thumbnail"
+            alt=""
+            class="h-full max-w-full aspect-square object-cover rounded-2xl shadow-2xl bg-gray-200 dark:bg-[#222222] cursor-pointer hover:opacity-90 transition-opacity"
+            title="Play or pause"
+          />
+        </div>
+
+        <!-- Info & Controls -->
+        <div class="shrink-0 mb-8 sm:mb-12 w-full max-w-md mx-auto">
+          <div class="mb-6 text-center drop-shadow-md">
+            <h2
+              id="fs-player-title"
+              class="text-2xl sm:text-3xl font-bold tracking-tight text-gray-950 dark:text-white truncate mb-2"
+            ></h2>
+            <p
+              id="fs-player-artist"
+              class="text-base sm:text-lg text-gray-600 dark:text-gray-300 truncate"
+            ></p>
+          </div>
+
+          <!-- Progress Bar -->
+          <div class="mb-8 px-2 flex flex-col gap-2">
+            <input
+              type="range"
+              id="fs-player-progress"
+              aria-label="Seek progress"
+              min="0"
+              max="100"
+              value="0"
+              class="w-full h-1.5 bg-gray-300 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-black dark:accent-white"
+            />
+            <div
+              class="flex justify-between text-xs text-gray-600 dark:text-gray-400 tabular-nums"
+            >
+              <span id="fs-player-time-current">0:00</span>
+              <span id="fs-player-time-total">-:--</span>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-center gap-8">
+            <button
+              id="fs-player-prev"
+              type="button"
+              title="Previous track"
+              aria-label="Previous track"
+              class="p-3 text-gray-800 dark:text-gray-200 hover:text-black dark:hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="32"
+                height="32"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polygon points="19 20 9 12 19 4 19 20"></polygon>
+                <line x1="5" y1="19" x2="5" y2="5"></line>
+              </svg>
+            </button>
+            <button
+              id="fs-player-play-pause"
+              type="button"
+              title="Play or pause"
+              aria-label="Play or pause"
+              class="w-20 h-20 rounded-full bg-gray-950 dark:bg-white text-white dark:text-black flex items-center justify-center hover:scale-105 transition-transform shadow-xl shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg
+                id="fs-player-icon-play"
+                xmlns="http://www.w3.org/2000/svg"
+                width="32"
+                height="32"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="hidden ml-1.5"
+              >
+                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+              </svg>
+              <svg
+                id="fs-player-icon-pause"
+                xmlns="http://www.w3.org/2000/svg"
+                width="32"
+                height="32"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="hidden"
+              >
+                <rect x="6" y="4" width="4" height="16"></rect>
+                <rect x="14" y="4" width="4" height="16"></rect>
+              </svg>
+              <svg
+                id="fs-player-icon-loading"
+                xmlns="http://www.w3.org/2000/svg"
+                width="32"
+                height="32"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="animate-spin"
+              >
+                <line x1="12" y1="2" x2="12" y2="6"></line>
+                <line x1="12" y1="18" x2="12" y2="22"></line>
+                <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
+                <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
+                <line x1="2" y1="12" x2="6" y2="12"></line>
+                <line x1="18" y1="12" x2="22" y2="12"></line>
+                <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
+                <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
+              </svg>
+            </button>
+            <button
+              id="fs-player-next"
+              type="button"
+              title="Next track"
+              aria-label="Next track"
+              class="p-3 text-gray-800 dark:text-gray-200 hover:text-black dark:hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="32"
+                height="32"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polygon points="5 4 15 12 5 20 5 4"></polygon>
+                <line x1="19" y1="5" x2="19" y2="19"></line>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <footer
+      class="mt-auto py-5 border-t border-gray-200/70 dark:border-white/10"
+    >
+      <div
+        class="px-4 sm:px-6 lg:px-8 flex justify-between items-center text-xs text-gray-400 dark:text-[#777777]"
       >
         <div class="flex gap-4">
-          <a href="privacy.html" class="hover:text-black dark:hover:text-white transition-colors">Privacy</a>
+          <a
+            href="privacy.html"
+            class="hover:text-black dark:hover:text-white transition-colors"
+            >Privacy</a
+          >
           <a
             href="https://github.com/jimmyorr/dislikes"
             target="_blank"
@@ -829,12 +1556,16 @@
             class="hover:text-black dark:hover:text-white transition-colors"
             >GitHub</a
           >
-          <button id="footer-reset-button" class="hover:text-black dark:hover:text-white transition-colors">
+          <button
+            id="footer-reset-button"
+            type="button"
+            class="hover:text-black dark:hover:text-white transition-colors"
+          >
             Reset app
           </button>
         </div>
-        <div class="flex gap-4 items-center">
-          <span>© 2026</span>
+        <div class="flex gap-3 items-center tabular-nums">
+          <span>&copy; 2026</span>
           <span id="app-version"></span>
         </div>
       </div>
@@ -843,18 +1574,26 @@
     <!-- Fast Scrubber -->
     <div
       id="fast-scrubber"
-      class="hidden fixed right-1 sm:right-2 top-24 bottom-6 z-40 flex-col items-center select-none transition-[bottom,opacity] duration-200"
+      class="hidden fixed right-1 sm:right-2 top-36 sm:top-28 lg:top-20 bottom-6 z-40 flex-col items-center select-none transition-[bottom,opacity] duration-200"
     >
       <div
         id="scrubber-tooltip"
         aria-hidden="true"
-        class="pointer-events-none opacity-0 scale-95 transition-[opacity,transform] duration-150 absolute right-full mr-2.5 top-6 -translate-y-1/2 bg-black dark:bg-white text-white dark:text-black rounded-lg shadow-xl px-3 py-1.5 whitespace-nowrap flex flex-col items-end"
+        class="pointer-events-none opacity-0 scale-95 transition-[opacity,transform] duration-150 absolute right-full mr-2.5 top-6 -translate-y-1/2 bg-gray-950 dark:bg-white text-white dark:text-black rounded-xl shadow-xl px-3 py-1.5 whitespace-nowrap flex flex-col items-end"
       >
-        <span id="scrubber-tooltip-primary" class="text-sm font-bold leading-tight"></span>
-        <span id="scrubber-tooltip-sub" class="text-[11px] opacity-75 leading-tight max-w-[180px] truncate"></span>
+        <span
+          id="scrubber-tooltip-primary"
+          class="text-sm font-bold leading-tight tabular-nums"
+        ></span>
+        <span
+          id="scrubber-tooltip-sub"
+          class="text-[11px] opacity-75 leading-tight max-w-[180px] truncate"
+        ></span>
       </div>
 
-      <div class="h-full flex flex-col items-center bg-white/95 dark:bg-[#141414]/95 border border-gray-200 dark:border-gray-800 rounded-full shadow-md py-1 px-1 min-w-[24px]">
+      <div
+        class="h-full flex flex-col items-center bg-white/95 dark:bg-[#181818]/95 border border-gray-200/80 dark:border-white/10 rounded-full shadow-md py-1 px-1 min-w-[24px]"
+      >
         <button
           id="scrubber-top-btn"
           type="button"
@@ -862,7 +1601,19 @@
           aria-label="Scroll to top"
           class="w-full h-5 flex items-center justify-center text-gray-400 hover:text-black dark:hover:text-white transition-colors shrink-0"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6" /></svg>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="m18 15-6-6-6 6" />
+          </svg>
         </button>
 
         <div
@@ -874,7 +1625,7 @@
           aria-valuemin="1"
           aria-valuemax="1"
           aria-valuenow="1"
-          style="touch-action: none;"
+          style="touch-action: none"
           class="relative flex-1 w-full flex flex-col cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-black dark:focus-visible:ring-white rounded-full my-0.5"
         >
           <div
@@ -882,7 +1633,10 @@
             aria-hidden="true"
             class="pointer-events-none absolute left-0 right-0 top-0 h-3.5 -translate-y-1/2 rounded-full bg-black/10 dark:bg-white/15 ring-1 ring-black/25 dark:ring-white/30 transition-colors duration-100"
           ></div>
-          <div id="scrubber-checkpoints" class="relative z-10 flex-1 flex flex-col justify-between items-center w-full"></div>
+          <div
+            id="scrubber-checkpoints"
+            class="relative z-10 flex-1 flex flex-col justify-between items-center w-full"
+          ></div>
         </div>
 
         <button
@@ -892,8 +1646,38 @@
           aria-label="Scroll to bottom"
           class="w-full h-5 flex items-center justify-center text-gray-400 hover:text-black dark:hover:text-white transition-colors shrink-0"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="m6 9 6 6 6-6" />
+          </svg>
         </button>
+      </div>
+    </div>
+
+    <!-- Drag-and-Drop JSON Overlay -->
+    <div
+      id="drop-overlay"
+      aria-hidden="true"
+      class="hidden fixed inset-0 z-[80] bg-white/90 dark:bg-[#0a0a0a]/90 backdrop-blur-sm pointer-events-none items-center justify-center p-6"
+    >
+      <div
+        class="rounded-3xl border-2 border-dashed border-gray-900 dark:border-white px-8 py-10 text-center max-w-sm"
+      >
+        <p class="text-lg font-bold tracking-tight text-gray-950 dark:text-white">
+          Drop JSON file to load
+        </p>
+        <p class="text-xs text-gray-500 dark:text-[#aaaaaa] mt-1">
+          Supports likes.json and dislikes.json exports
+        </p>
       </div>
     </div>
 
@@ -902,53 +1686,76 @@
       id="toast"
       role="status"
       aria-live="polite"
-      class="fixed bottom-6 left-1/2 -translate-x-1/2 translate-y-2 opacity-0 pointer-events-none z-[70] px-4 py-2 rounded-full shadow-lg text-xs font-medium bg-black text-white dark:bg-white dark:text-black transition-all duration-200 max-w-[90vw] truncate"
+      class="fixed bottom-6 left-1/2 -translate-x-1/2 translate-y-2 opacity-0 pointer-events-none z-[70] px-4 py-2 rounded-full shadow-lg text-xs font-medium bg-gray-950 text-white dark:bg-white dark:text-black transition-all duration-200 max-w-[90vw] truncate"
     ></div>
 
     <!-- Templates -->
     <template id="video-card-template">
-      <div class="video-card group flex flex-col gap-3">
+      <div
+        class="video-card group flex flex-col gap-2 p-2 rounded-xl transition-colors duration-150 md:hover:bg-gray-100/90 md:dark:hover:bg-[#1c1c1c]"
+      >
         <button
           type="button"
           aria-label="Play track"
-          class="video-play-btn block relative w-full aspect-video [.compact-mode_&]:aspect-square group/btn overflow-hidden rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          class="video-play-btn block relative w-full aspect-video [.compact-mode_&]:aspect-square group/btn overflow-hidden rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-black dark:focus-visible:ring-white bg-gray-100 dark:bg-[#1e1e1e]"
         >
           <img
-            class="video-thumbnail w-full h-full object-cover bg-gray-100 dark:bg-gray-800 transition-transform duration-300 group-hover/btn:scale-105"
+            class="video-thumbnail w-full h-full object-cover transition-transform duration-300 group-hover/btn:scale-105"
             loading="lazy"
             decoding="async"
             alt=""
           />
-          <div class="absolute inset-0 bg-black/0 group-hover/btn:bg-black/20 transition-colors flex items-center justify-center">
-            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white opacity-0 group-hover/btn:opacity-100 transition-opacity scale-75 group-hover/btn:scale-100 duration-300 drop-shadow-lg"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+          <div
+            class="absolute inset-0 bg-black/0 group-hover/btn:bg-black/40 transition-colors flex items-center justify-center"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="42"
+              height="42"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="text-white opacity-0 group-hover/btn:opacity-100 transition-all scale-90 group-hover/btn:scale-100 duration-200 drop-shadow-lg"
+            >
+              <polygon points="6 4 20 12 6 20 6 4"></polygon>
+            </svg>
           </div>
           <div
-            class="deleted-overlay hidden absolute inset-0 bg-white/90 dark:bg-black/90 items-center justify-center text-[10px] font-bold text-gray-500 dark:text-gray-400"
+            class="deleted-overlay hidden absolute inset-0 bg-gray-100/95 dark:bg-[#161616]/95 items-center justify-center text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-[#888888]"
           >
-            UNAVAILABLE
+            Unavailable
           </div>
         </button>
-        <div class="flex flex-col min-w-0 mt-2 gap-1 relative">
-          <div class="flex items-start gap-2">
-            <a target="_blank" rel="noopener noreferrer" class="video-link hover:underline min-w-0">
-              <h3
-                class="video-title text-[16px] font-medium text-gray-900 dark:text-gray-100 line-clamp-2 leading-tight min-h-[2.5em]"
-              ></h3>
-            </a>
-          </div>
-          <div class="flex flex-col gap-0.5">
-            <span class="channel-title text-[14px] text-gray-500 dark:text-gray-400 truncate block"></span>
-            <span class="dynamic-metadata text-[12px] text-gray-500 dark:text-gray-400 block"></span>
-          </div>
+        <div class="flex flex-col min-w-0 gap-0.5 px-0.5">
+          <a
+            target="_blank"
+            rel="noopener noreferrer"
+            class="video-link hover:underline min-w-0 decoration-gray-400 dark:decoration-gray-500"
+          >
+            <h3
+              class="video-title text-[14.5px] font-medium text-gray-900 dark:text-[#f1f1f1] line-clamp-2 leading-[1.32]"
+            ></h3>
+          </a>
+          <span
+            class="channel-title text-[13px] text-gray-500 dark:text-[#aaaaaa] truncate block leading-snug"
+          ></span>
+          <span
+            class="dynamic-metadata text-[11.5px] text-gray-400 dark:text-[#7c7c7c] tabular-nums block leading-snug"
+          ></span>
         </div>
       </div>
     </template>
 
     <template id="skeleton-template">
-      <div class="flex flex-col gap-3">
-        <div class="skeleton w-full aspect-video [.compact-mode_&]:aspect-square rounded-sm"></div>
-        <div class="flex flex-col gap-2">
-          <div class="skeleton h-4 w-5/6"></div>
+      <div class="flex flex-col gap-2.5 p-2">
+        <div
+          class="skeleton w-full aspect-video [.compact-mode_&]:aspect-square rounded-lg"
+        ></div>
+        <div class="flex flex-col gap-1.5 pt-0.5">
+          <div class="skeleton h-3.5 w-5/6"></div>
           <div class="skeleton h-3 w-1/2"></div>
         </div>
       </div>
@@ -960,7 +1767,9 @@
         if (e) e.preventDefault();
         if (!confirm("Reset all application data and sign out?")) return;
 
-        const btn = (e && e.currentTarget) || document.getElementById("footer-reset-button");
+        const btn =
+          (e && e.currentTarget) ||
+          document.getElementById("footer-reset-button");
         const originalText = btn ? btn.textContent : "";
         if (btn) {
           btn.textContent = "Resetting...";
@@ -1000,17 +1809,20 @@
           if (el) el.onclick = emergencyReset;
         },
       );
-
     </script>
-    <script src="version.js?v=2.0.8"></script>
-    <script src="app.js?v=2.0.8"></script>
+    <script src="version.js?v=2.0.9"></script>
+    <script src="app.js?v=2.0.9"></script>
     <script>
       if ("serviceWorker" in navigator) {
         // Reload at most once when a genuinely newer SW_VERSION activates over an older running page
         navigator.serviceWorker.addEventListener("message", (event) => {
           const nextVersion =
             event.data && event.data.type === "SW_ACTIVATED" && event.data.version;
-          if (!nextVersion || typeof APP_VERSION === "undefined" || nextVersion === APP_VERSION) {
+          if (
+            !nextVersion ||
+            typeof APP_VERSION === "undefined" ||
+            nextVersion === APP_VERSION
+          ) {
             return;
           }
           try {

@@ -14,6 +14,7 @@ const state = {
   theme: localStorage.getItem("dislikes-theme") || "system",
   compactMode: localStorage.getItem("dislikes-compact") !== null ? localStorage.getItem("dislikes-compact") === "true" : true,
   musicOnly: localStorage.getItem("dislikes-music-only") !== null ? localStorage.getItem("dislikes-music-only") === "true" : true,
+  hiddenGems: localStorage.getItem("dislikes-hidden-gems") === "true",
   unavailableOnly: localStorage.getItem("dislikes-unavailable-only") === "true",
   videos: [],
   filteredVideos: [],
@@ -29,7 +30,6 @@ const state = {
   mode: localStorage.getItem("dislikes-mode") || "like", // 'dislike' or 'like'
   iconCache: {},
   sidebarCategory: "channels",
-  activeFilter: null,
   forceRefetch: false,
   sidebarBaseVideos: [],
   ytPlayer: null,
@@ -44,16 +44,20 @@ const state = {
   shuffleHistory: [],
   shuffleHistoryPos: -1,
   toastTimeout: null,
+  heroAnimFrame: null,
+  lastHeroAnimSignature: "",
 };
 
 // --- DOM Elements ---
 const dom = {
+  appHeader: document.getElementById("app-header"),
+  topbarAppControls: document.getElementById("topbar-app-controls"),
   authIndicator: document.getElementById("auth-indicator"),
-  authStatusText: document.getElementById("auth-status-text"),
   authButton: document.getElementById("auth-button"),
   authText: document.getElementById("auth-text"),
   heroAuthButton: document.getElementById("hero-auth-button"),
   heroDemoButton: document.getElementById("hero-demo-button"),
+  heroUploadButton: document.getElementById("hero-upload-button"),
   signoutButton: document.getElementById("signout-button"),
 
   viewWelcome: document.getElementById("view-welcome"),
@@ -63,9 +67,9 @@ const dom = {
   errorMessage: document.getElementById("error-message"),
   errorRetryButton: document.getElementById("error-retry-button"),
 
+  resultsHeroCount: document.getElementById("results-hero-count"),
   resultsCount: document.getElementById("results-count"),
-  activeFilterBadge: document.getElementById("active-filter-badge"),
-  activeFilterLabel: document.getElementById("active-filter-label"),
+  libraryChipsRow: document.getElementById("library-chips-row"),
   searchInput: document.getElementById("search-input"),
   searchClearButton: document.getElementById("search-clear-button"),
   sortDropdown: document.getElementById("sort-dropdown"),
@@ -73,12 +77,15 @@ const dom = {
   sortLabel: document.getElementById("sort-label"),
   sortChevron: document.getElementById("sort-chevron"),
   sortMenu: document.getElementById("sort-menu"),
+  hiddenGemsButton: document.getElementById("hidden-gems-button"),
   shufflePlayButton: document.getElementById("shuffle-play-button"),
 
   emptyState: document.getElementById("empty-state"),
   gridTopSpacer: document.getElementById("grid-top-spacer"),
   videoGrid: document.getElementById("video-grid"),
   gridBottomSpacer: document.getElementById("grid-bottom-spacer"),
+
+  libraryActionsGroup: document.getElementById("library-actions-group"),
   copyIdsButton: document.getElementById("copy-ids-button"),
   exportJsonButton: document.getElementById("export-json-button"),
   uploadJsonButton: document.getElementById("upload-json-button"),
@@ -141,6 +148,7 @@ const dom = {
   scrubberTrack: document.getElementById("scrubber-track"),
   scrubberThumb: document.getElementById("scrubber-thumb"),
   scrubberCheckpoints: document.getElementById("scrubber-checkpoints"),
+  dropOverlay: document.getElementById("drop-overlay"),
   toast: document.getElementById("toast"),
 
   videoTemplate: document.getElementById("video-card-template"),
@@ -156,6 +164,7 @@ const dom = {
   themeColorMeta: document.getElementById("theme-color-meta"),
   compactToggle: document.getElementById("compact-toggle"),
   musicToggle: document.getElementById("music-toggle"),
+  hiddenGemsToggle: document.getElementById("hidden-gems-toggle"),
   unavailableToggle: document.getElementById("unavailable-toggle"),
 
   favicon: document.getElementById("favicon"),
@@ -177,7 +186,7 @@ function showToast(message, type = "info") {
   const isError = type === "error";
   dom.toast.classList.toggle("bg-red-600", isError);
   dom.toast.classList.toggle("text-white", true);
-  dom.toast.classList.toggle("bg-black", !isError);
+  dom.toast.classList.toggle("bg-gray-950", !isError);
   dom.toast.classList.toggle("dark:bg-white", !isError);
   dom.toast.classList.toggle("dark:text-black", !isError);
 
@@ -232,12 +241,12 @@ function updateThemeToggleUI(theme) {
     btn.setAttribute("aria-checked", String(isActive));
     btn.tabIndex = isActive ? 0 : -1;
     btn.classList.toggle("bg-white", isActive);
-    btn.classList.toggle("dark:bg-[#121212]", isActive);
+    btn.classList.toggle("dark:bg-[#383838]", isActive);
     btn.classList.toggle("text-black", isActive);
     btn.classList.toggle("dark:text-white", isActive);
     btn.classList.toggle("shadow-sm", isActive);
     btn.classList.toggle("text-gray-500", !isActive);
-    btn.classList.toggle("dark:text-gray-400", !isActive);
+    btn.classList.toggle("dark:text-[#aaaaaa]", !isActive);
     btn.classList.toggle("hover:text-black", !isActive);
     btn.classList.toggle("dark:hover:text-white", !isActive);
   });
@@ -253,16 +262,16 @@ function setupCustomDropdown({ container, trigger, menu, chevron, labelEl, getVa
     getOptions().forEach((opt) => {
       const isSelected = opt.dataset.value === currentValue;
       opt.setAttribute("aria-selected", String(isSelected));
-      opt.classList.add("focus:outline-none", "focus:bg-gray-100", "dark:focus:bg-gray-800");
+      opt.classList.add("focus:outline-none", "focus:bg-gray-100", "dark:focus:bg-white/10");
       opt.classList.toggle("font-medium", isSelected);
       opt.classList.toggle("text-black", isSelected);
       opt.classList.toggle("dark:text-white", isSelected);
-      opt.classList.toggle("bg-gray-50", isSelected);
-      opt.classList.toggle("dark:bg-white/5", isSelected);
+      opt.classList.toggle("bg-gray-100/80", isSelected);
+      opt.classList.toggle("dark:bg-white/[0.08]", isSelected);
       opt.classList.toggle("text-gray-700", !isSelected);
-      opt.classList.toggle("dark:text-gray-300", !isSelected);
-      opt.classList.toggle("hover:bg-gray-50", !isSelected);
-      opt.classList.toggle("dark:hover:bg-gray-800", !isSelected);
+      opt.classList.toggle("dark:text-[#cccccc]", !isSelected);
+      opt.classList.toggle("hover:bg-gray-100/70", !isSelected);
+      opt.classList.toggle("dark:hover:bg-white/[0.06]", !isSelected);
 
       const check = opt.querySelector(".check-icon");
       if (check) check.classList.toggle("opacity-0", !isSelected);
@@ -374,6 +383,10 @@ function setMobileFiltersOpen(isOpen) {
   }
   dom.sidebarContent.classList.toggle("hidden", !isOpen);
   dom.sidebarContent.classList.toggle("flex", isOpen);
+  if (dom.libraryActionsGroup) {
+    dom.libraryActionsGroup.classList.toggle("hidden", !isOpen);
+    dom.libraryActionsGroup.classList.toggle("flex", isOpen);
+  }
   dom.mobileFilterToggle.setAttribute("aria-expanded", String(isOpen));
   const labelEl = dom.mobileFilterToggle.querySelector("span");
   const iconEl = dom.mobileFilterToggle.querySelector("svg");
@@ -381,13 +394,122 @@ function setMobileFiltersOpen(isOpen) {
   if (iconEl) iconEl.classList.toggle("rotate-180", isOpen);
 }
 
+function updateHiddenGemsUI() {
+  const on = Boolean(state.hiddenGems);
+  if (dom.hiddenGemsToggle) {
+    dom.hiddenGemsToggle.checked = on;
+  }
+  if (dom.hiddenGemsButton) {
+    dom.hiddenGemsButton.setAttribute("aria-pressed", String(on));
+    dom.hiddenGemsButton.classList.toggle("bg-gray-950", on);
+    dom.hiddenGemsButton.classList.toggle("text-white", on);
+    dom.hiddenGemsButton.classList.toggle("dark:bg-white", on);
+    dom.hiddenGemsButton.classList.toggle("dark:text-black", on);
+    dom.hiddenGemsButton.classList.toggle("bg-gray-100", !on);
+    dom.hiddenGemsButton.classList.toggle("dark:bg-[#212121]", !on);
+    dom.hiddenGemsButton.classList.toggle("text-gray-700", !on);
+    dom.hiddenGemsButton.classList.toggle("dark:text-[#e5e5e5]", !on);
+    dom.hiddenGemsButton.classList.toggle("hover:bg-gray-200/70", !on);
+    dom.hiddenGemsButton.classList.toggle("dark:hover:bg-[#2d2d2d]", !on);
+  }
+}
+
+function setHiddenGems(enabled) {
+  const next = Boolean(enabled);
+  if (next === state.hiddenGems) return;
+  state.hiddenGems = next;
+  localStorage.setItem("dislikes-hidden-gems", String(next));
+  updateHiddenGemsUI();
+  filterVideos();
+  render();
+}
+
+function updateHeroCountDisplay(targetCount, animateSignature = null) {
+  if (!dom.resultsHeroCount) return;
+  if (state.heroAnimFrame) {
+    cancelAnimationFrame(state.heroAnimFrame);
+    state.heroAnimFrame = null;
+  }
+  if (typeof targetCount !== "number" || isNaN(targetCount)) {
+    dom.resultsHeroCount.textContent = String(targetCount);
+    return;
+  }
+
+  const fmt = (n) => new Intl.NumberFormat().format(n);
+  const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+
+  if (
+    animateSignature &&
+    animateSignature !== state.lastHeroAnimSignature &&
+    targetCount > 0 &&
+    !reducedMotion
+  ) {
+    state.lastHeroAnimSignature = animateSignature;
+    const duration = 500;
+    let startTs = null;
+    const step = (ts) => {
+      if (!startTs) startTs = ts;
+      const p = Math.min(1, (ts - startTs) / duration);
+      const easeOut = p === 1 ? 1 : 1 - Math.pow(2, -10 * p);
+      dom.resultsHeroCount.textContent = fmt(Math.round(easeOut * targetCount));
+      if (p < 1) {
+        state.heroAnimFrame = requestAnimationFrame(step);
+      } else {
+        state.heroAnimFrame = null;
+        dom.resultsHeroCount.textContent = fmt(targetCount);
+      }
+    };
+    state.heroAnimFrame = requestAnimationFrame(step);
+  } else {
+    dom.resultsHeroCount.textContent = fmt(targetCount);
+  }
+}
+
+function tryRestoreCustomUpload() {
+  try {
+    const raw = localStorage.getItem("yt_dislikes_custom_upload");
+    if (!raw) return false;
+    const parsed = JSON.parse(raw);
+    if (!parsed || !Array.isArray(parsed.videos) || parsed.videos.length === 0) {
+      localStorage.removeItem("yt_dislikes_custom_upload");
+      return false;
+    }
+    if (parsed.mode === "like" || parsed.mode === "dislike") {
+      state.mode = parsed.mode;
+    }
+    const normalized = normalizeImportedDataset(parsed.videos);
+    if (!normalized.length) return false;
+    state.dataSource = "upload";
+    state.videos = normalized;
+    state.nextPageToken = null;
+    state.totalResults = normalized.length;
+    state.error = null;
+    filterVideos();
+    return true;
+  } catch {
+    localStorage.removeItem("yt_dislikes_custom_upload");
+    return false;
+  }
+}
+
 function init() {
   console.log(`Dislikes v${APP_VERSION}`);
   const verEl = document.getElementById("app-version");
   if (verEl) verEl.textContent = `v${APP_VERSION}`;
 
+  const params = new URLSearchParams(window.location.search || "");
+  const modeParam = (params.get("mode") || "").toLowerCase();
+  if (modeParam === "like" || modeParam === "dislike") {
+    state.mode = modeParam;
+  }
+  const wantDemo =
+    params.get("demo") === "1" ||
+    params.get("demo") === "true" ||
+    params.get("source") === "demo";
+
   applyTheme(state.theme);
   updateThemeToggleUI(state.theme);
+  updateHiddenGemsUI();
 
   if (dom.compactToggle) {
     dom.compactToggle.checked = state.compactMode;
@@ -398,7 +520,16 @@ function init() {
   setupMediaSessionHandlers();
   initYTPlayer();
   initGis();
-  render();
+
+  if (wantDemo) {
+    render();
+    loadDemoData();
+  } else {
+    if (!loadToken()) {
+      tryRestoreCustomUpload();
+    }
+    render();
+  }
 
   // If it's taking too long (e.g. 8 seconds), show the troubleshooting link
   setTimeout(() => {
@@ -424,13 +555,17 @@ function initGis() {
             return;
           }
           saveToken(resp);
+          localStorage.removeItem("yt_dislikes_custom_upload");
           state.accessToken = resp.access_token;
           state.isAuthenticated = true;
           state.dataSource = "youtube";
           state.videos = [];
           state.filteredVideos = [];
           state.sidebarBaseVideos = [];
-          state.activeFilter = null;
+          state.searchTerm = "";
+          state.debouncedSearchTerm = "";
+          dom.searchInput.value = "";
+          updateSearchClearButton();
           state.nextPageToken = null;
           state.totalResults = null;
           state.error = null;
@@ -702,6 +837,9 @@ function setupEventListeners() {
   if (dom.heroDemoButton) {
     dom.heroDemoButton.addEventListener("click", loadDemoData);
   }
+  if (dom.heroUploadButton) {
+    dom.heroUploadButton.addEventListener("click", () => dom.uploadJsonInput?.click());
+  }
   dom.signoutButton.addEventListener("click", handleSignout);
 
   if (dom.errorRetryButton) {
@@ -735,6 +873,11 @@ function setupEventListeners() {
 
   if (dom.shufflePlayButton) {
     dom.shufflePlayButton.addEventListener("click", startShufflePlay);
+  }
+  if (dom.hiddenGemsButton) {
+    dom.hiddenGemsButton.addEventListener("click", () => {
+      setHiddenGems(!state.hiddenGems);
+    });
   }
   if (dom.playerShuffle) {
     dom.playerShuffle.addEventListener("click", toggleShuffleMode);
@@ -843,37 +986,28 @@ function setupEventListeners() {
     },
   });
 
-  // Sidebar item clicks
+  // Sidebar item clicks -> populate search input directly (cowneck/music style)
   dom.sidebarListContainer.addEventListener("click", (e) => {
     const filterItem = e.target.closest(".sidebar-filter-item");
-    if (filterItem) {
-      const type = filterItem.dataset.type;
-      const value = filterItem.dataset.value;
+    if (!filterItem) return;
+    const query = filterItem.dataset.query || "";
+    if (!query) return;
 
-      if (state.activeFilter && state.activeFilter.type === type && state.activeFilter.value === value) {
-        state.activeFilter = null;
-      } else {
-        state.activeFilter = { type, value };
-      }
-      
-      filterVideos();
-      render();
-      
-      // On mobile, automatically close the filters after selecting one
-      if (window.innerWidth < 1024) {
-        setMobileFiltersOpen(false);
-      }
+    const currentLower = state.debouncedSearchTerm.trim().toLowerCase();
+    const isSame = currentLower !== "" && currentLower === query.trim().toLowerCase();
+    applySearchQuery(isSame ? "" : query);
+
+    if (window.scrollY > 80) {
+      window.scrollTo({ top: 0, behavior: "auto" });
+      virtualGrid.lastScrollY = 0;
+    }
+
+    // On mobile, automatically close the filters after selecting one
+    if (window.innerWidth < 1024) {
+      setMobileFiltersOpen(false);
     }
   });
 
-  if (dom.activeFilterBadge) {
-    dom.activeFilterBadge.addEventListener("click", () => {
-      state.activeFilter = null;
-      filterVideos();
-      render();
-    });
-  }
-  
   // Mobile filter toggle
   if (dom.mobileFilterToggle) {
     dom.mobileFilterToggle.addEventListener("click", () => {
@@ -890,12 +1024,7 @@ function setupEventListeners() {
 
   if (dom.searchClearButton) {
     dom.searchClearButton.addEventListener("click", () => {
-      dom.searchInput.value = "";
-      state.searchTerm = "";
-      state.debouncedSearchTerm = "";
-      updateSearchClearButton();
-      filterVideos();
-      render();
+      applySearchQuery("");
       dom.searchInput.focus();
     });
   }
@@ -921,6 +1050,44 @@ function setupEventListeners() {
   dom.clearCacheButton.addEventListener("click", handleClearCache);
   dom.loadAllButton.addEventListener("click", handleLoadAll);
 
+  // Drag-and-drop JSON upload anywhere in the window
+  let dragDepth = 0;
+  const setDropOverlayVisible = (visible) => {
+    if (!dom.dropOverlay) return;
+    dom.dropOverlay.classList.toggle("hidden", !visible);
+    dom.dropOverlay.classList.toggle("flex", visible);
+  };
+  const hasDraggedFiles = (e) => {
+    const types = e.dataTransfer?.types;
+    return Boolean(types && Array.from(types).includes("Files"));
+  };
+  window.addEventListener("dragenter", (e) => {
+    if (!hasDraggedFiles(e)) return;
+    e.preventDefault();
+    dragDepth++;
+    setDropOverlayVisible(true);
+  });
+  window.addEventListener("dragover", (e) => {
+    if (!hasDraggedFiles(e)) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+  });
+  window.addEventListener("dragleave", (e) => {
+    if (!hasDraggedFiles(e)) return;
+    e.preventDefault();
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (dragDepth === 0) setDropOverlayVisible(false);
+  });
+  window.addEventListener("drop", (e) => {
+    if (!hasDraggedFiles(e)) return;
+    e.preventDefault();
+    dragDepth = 0;
+    setDropOverlayVisible(false);
+    const file = e.dataTransfer?.files?.[0];
+    if (file) {
+      loadUploadedJsonFile(file);
+    }
+  });
 
   // Infinite Scroll Observer (for loading next YouTube API pages)
   const observer = new IntersectionObserver(
@@ -1219,6 +1386,7 @@ function setupEventListeners() {
       virtualGrid.rowHeight = 0;
       scrubberState.renderedSignature = "";
       if (state.filteredVideos.length > 0 && !dom.viewContent.classList.contains("hidden")) {
+        syncScrubberTopOffset();
         renderVirtualGrid(true);
         renderScrubberCheckpoints();
         syncScrubberFromScroll();
@@ -1243,12 +1411,12 @@ function setupEventListeners() {
     state.debouncedSearchTerm = "";
     dom.searchInput.value = "";
     updateSearchClearButton();
-    state.activeFilter = null;
 
     if (state.isAuthenticated) {
       state.dataSource = "youtube";
       fetchVideos();
     } else {
+      localStorage.removeItem("yt_dislikes_custom_upload");
       state.dataSource = null;
       closePlayer();
     }
@@ -1331,7 +1499,7 @@ function setupEventListeners() {
     });
   }
 
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
     if (state.theme === "system") {
       applyTheme("system");
     }
@@ -1354,6 +1522,14 @@ function setupEventListeners() {
     filterVideos();
     render();
   });
+
+  // Hidden Gems Logic
+  if (dom.hiddenGemsToggle) {
+    dom.hiddenGemsToggle.checked = state.hiddenGems;
+    dom.hiddenGemsToggle.addEventListener("change", (e) => {
+      setHiddenGems(e.target.checked);
+    });
+  }
 
   // Unavailable Only Logic
   dom.unavailableToggle.checked = state.unavailableOnly;
@@ -1401,6 +1577,7 @@ function handleSignout() {
     }
     localStorage.removeItem("yt_dislikes_token");
   }
+  localStorage.removeItem("yt_dislikes_custom_upload");
 
   // Reset state
   state.accessToken = null;
@@ -1409,7 +1586,6 @@ function handleSignout() {
   state.videos = [];
   state.filteredVideos = [];
   state.sidebarBaseVideos = [];
-  state.activeFilter = null;
   state.nextPageToken = null;
   state.totalResults = null;
   state.error = null;
@@ -1438,20 +1614,54 @@ function handleClearCache() {
   fetchVideos();
 }
 
+function parseViews(viewVal) {
+  if (viewVal === undefined || viewVal === null) return 0;
+  if (typeof viewVal === "number") return isNaN(viewVal) ? 0 : viewVal;
+  const numStr = String(viewVal).replace(/[^0-9.KMBkmb]/g, "");
+  let multiplier = 1;
+  if (/k/i.test(numStr)) multiplier = 1_000;
+  else if (/m/i.test(numStr)) multiplier = 1_000_000;
+  else if (/b/i.test(numStr)) multiplier = 1_000_000_000;
+  const val = parseFloat(numStr.replace(/[KMBkmb]/g, ""));
+  return isNaN(val) ? 0 : Math.round(val * multiplier);
+}
+
 function isArtTrackVideo(v) {
   return Boolean(v?.artist?.endsWith(" - Topic") || v?.label);
 }
 
-function normalizeStoredVideo(v) {
-  if (
-    v &&
-    isArtTrackVideo(v) &&
-    v.published_at &&
-    !v.published_at.endsWith("T00:00:00Z")
-  ) {
-    return { ...v, published_at: null };
-  }
-  return v;
+function normalizeStoredVideo(v, assumeAllMusic = false, index = 0) {
+  if (!v || typeof v !== "object") return v;
+  const artTrack = isArtTrackVideo(v);
+  const publishedAt =
+    artTrack && v.published_at && !String(v.published_at).endsWith("T00:00:00Z")
+      ? null
+      : v.published_at || null;
+  const isMusic =
+    typeof v.is_music === "boolean" ? v.is_music : Boolean(assumeAllMusic || artTrack);
+
+  return {
+    ...v,
+    views: parseViews(v.views),
+    comments: Number(v.comments) || 0,
+    published_at: publishedAt,
+    is_deleted: Boolean(v.is_deleted),
+    is_music: isMusic,
+    _origIdx: typeof v._origIdx === "number" ? v._origIdx : index,
+  };
+}
+
+function normalizeImportedDataset(rawArray) {
+  if (!Array.isArray(rawArray)) return [];
+  const valid = rawArray.filter(
+    (item) =>
+      item &&
+      typeof item === "object" &&
+      item.video_id &&
+      (!item.title || !String(item.title).includes("TrackUniquenessId")),
+  );
+  const hasExplicitMusicFlag = valid.some((item) => typeof item.is_music === "boolean");
+  return valid.map((item, idx) => normalizeStoredVideo(item, !hasExplicitMusicFlag, idx));
 }
 
 function loadFromCache(mode = state.mode) {
@@ -1460,7 +1670,7 @@ function loadFromCache(mode = state.mode) {
     if (data) {
       const parsed = JSON.parse(data);
       if (parsed && Array.isArray(parsed.videos)) {
-        parsed.videos = parsed.videos.map(normalizeStoredVideo);
+        parsed.videos = parsed.videos.map((v, idx) => normalizeStoredVideo(v, false, idx));
       }
       return parsed;
     }
@@ -1681,9 +1891,13 @@ async function fetchVideos(pageToken = null) {
       }
 
       if (isLoadMore) {
-        state.videos = [...state.videos, ...items.map(slimVideo)];
+        const baseIdx = state.videos.length;
+        state.videos = [
+          ...state.videos,
+          ...items.map((it, idx) => ({ ...slimVideo(it), _origIdx: baseIdx + idx })),
+        ];
       } else {
-        state.videos = items.map(slimVideo);
+        state.videos = items.map((it, idx) => ({ ...slimVideo(it), _origIdx: idx }));
       }
 
       state.nextPageToken = nextToken;
@@ -1774,16 +1988,13 @@ async function handleCopyIds() {
     await navigator.clipboard.writeText(ids);
     showToast(`Copied ${state.filteredVideos.length.toLocaleString()} video IDs`);
 
-    // Visual feedback
-    const originalBg = dom.copyIdsButton.innerHTML;
+    const originalHtml = dom.copyIdsButton.innerHTML;
     dom.copyIdsButton.innerHTML = `
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green-500"><polyline points="20 6 9 17 4 12"/></svg>
-        `;
-    dom.copyIdsButton.classList.add("border-green-500");
+      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="text-emerald-500"><polyline points="20 6 9 17 4 12"/></svg>
+    `;
 
     setTimeout(() => {
-      dom.copyIdsButton.innerHTML = originalBg;
-      dom.copyIdsButton.classList.remove("border-green-500");
+      dom.copyIdsButton.innerHTML = originalHtml;
     }, 2000);
   } catch (err) {
     console.error("Failed to copy IDs:", err);
@@ -1808,44 +2019,48 @@ async function handleExportJson() {
   downloadAnchorNode.remove();
   setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
 
-  // Visual feedback
-  const originalBg = dom.exportJsonButton.innerHTML;
+  showToast(`Exported ${exportData.length.toLocaleString()} videos`);
+
+  const originalHtml = dom.exportJsonButton.innerHTML;
   dom.exportJsonButton.innerHTML = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green-500"><polyline points="20 6 9 17 4 12"/></svg>
+    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="text-emerald-500"><polyline points="20 6 9 17 4 12"/></svg>
   `;
-  dom.exportJsonButton.classList.add("border-green-500");
 
   setTimeout(() => {
-    dom.exportJsonButton.innerHTML = originalBg;
-    dom.exportJsonButton.classList.remove("border-green-500");
+    dom.exportJsonButton.innerHTML = originalHtml;
   }, 2000);
 }
 
 async function loadDemoData() {
-  const originalText = dom.heroDemoButton.textContent;
-  dom.heroDemoButton.textContent = "Loading...";
-  dom.heroDemoButton.disabled = true;
+  const originalText = dom.heroDemoButton ? dom.heroDemoButton.textContent : "View a demo";
+  if (dom.heroDemoButton) {
+    dom.heroDemoButton.textContent = "Loading...";
+    dom.heroDemoButton.disabled = true;
+  }
 
   try {
-    const response = await fetch('likes.json');
+    const response = await fetch("likes.json");
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     const data = await response.json();
-    
+
     if (Array.isArray(data)) {
       invalidateActiveFetch();
-      const normalized = data.map(normalizeStoredVideo);
-      state.mode = 'like';
-      state.dataSource = 'demo';
+      const normalized = normalizeImportedDataset(data);
+      state.mode = "like";
+      state.dataSource = "demo";
       state.videos = normalized;
       state.nextPageToken = null;
       state.totalResults = normalized.length;
       state.error = null;
-      state.activeFilter = null;
+      state.searchTerm = "";
+      state.debouncedSearchTerm = "";
+      dom.searchInput.value = "";
+      updateSearchClearButton();
       localStorage.removeItem("dislikes-data-like");
       localStorage.removeItem("dislikes-data-like-timestamp");
-      
+
       filterVideos();
       render();
     } else {
@@ -1855,14 +2070,24 @@ async function loadDemoData() {
     showToast("Error loading demo data", "error");
     console.error(err);
   } finally {
-    dom.heroDemoButton.textContent = originalText;
-    dom.heroDemoButton.disabled = false;
+    if (dom.heroDemoButton) {
+      dom.heroDemoButton.textContent = originalText;
+      dom.heroDemoButton.disabled = false;
+    }
   }
 }
 
-function handleUploadJson(event) {
-  const file = event.target.files[0];
+function loadUploadedJsonFile(file) {
   if (!file) return;
+
+  const lowerName = (file.name || "").toLowerCase();
+  if (lowerName.includes("dislike")) {
+    state.mode = "dislike";
+    localStorage.setItem("dislikes-mode", "dislike");
+  } else if (lowerName.includes("like")) {
+    state.mode = "like";
+    localStorage.setItem("dislikes-mode", "like");
+  }
 
   const reader = new FileReader();
   reader.onload = (e) => {
@@ -1870,16 +2095,31 @@ function handleUploadJson(event) {
       const data = JSON.parse(e.target.result);
       if (Array.isArray(data)) {
         invalidateActiveFetch();
-        const normalized = data.map(normalizeStoredVideo);
+        const normalized = normalizeImportedDataset(data);
+        if (normalized.length === 0) {
+          showToast("JSON file contained no valid videos", "error");
+          return;
+        }
         state.dataSource = "upload";
         state.videos = normalized;
         state.nextPageToken = null;
         state.totalResults = normalized.length;
         state.error = null;
-        state.activeFilter = null;
+        state.searchTerm = "";
+        state.debouncedSearchTerm = "";
+        dom.searchInput.value = "";
+        updateSearchClearButton();
         localStorage.removeItem(`dislikes-data-${state.mode}`);
         localStorage.removeItem(`dislikes-data-${state.mode}-timestamp`);
-        
+        try {
+          localStorage.setItem(
+            "yt_dislikes_custom_upload",
+            JSON.stringify({ mode: state.mode, videos: normalized }),
+          );
+        } catch {
+          /* ignore quota limits on oversized files */
+        }
+
         filterVideos();
         render();
         showToast(`Loaded ${normalized.length.toLocaleString()} videos`);
@@ -1892,8 +2132,13 @@ function handleUploadJson(event) {
     }
   };
   reader.readAsText(file);
-  
-  // Reset the input so the same file can be uploaded again if needed
+}
+
+function handleUploadJson(event) {
+  const file = event.target.files?.[0];
+  if (file) {
+    loadUploadedJsonFile(file);
+  }
   event.target.value = "";
 }
 
@@ -1920,25 +2165,40 @@ function getVideoYear(publishedAt) {
   return new Date(publishedAt).getUTCFullYear();
 }
 
-function formatActiveFilterLabel(filter) {
-  if (!filter) return "";
-  switch (filter.type) {
-    case "channel":
-      return `Artist: ${filter.value}`;
-    case "album": {
-      const [artist, dateStr] = filter.value.split("|");
-      const yr = dateStr ? dateStr.slice(0, 4) : "";
-      return yr ? `Album: ${artist} (${yr})` : `Album: ${artist}`;
-    }
-    case "year":
-      return `Year: ${filter.value}`;
-    case "label":
-      return `Label: ${filter.value}`;
-    case "copyright":
-      return `Copyright: ${filter.value}`;
-    default:
-      return filter.value;
+function applySearchQuery(nextQuery) {
+  const normalized = String(nextQuery || "");
+  state.searchTerm = normalized;
+  state.debouncedSearchTerm = normalized;
+  if (dom.searchInput) {
+    dom.searchInput.value = normalized;
   }
+  updateSearchClearButton();
+  filterVideos();
+  render();
+}
+
+function matchesVideoSearch(v, lowerQuery) {
+  const title = (v.title || "").toLowerCase();
+  if (title.includes(lowerQuery)) return true;
+
+  const isDeleted = checkIfDeleted(v);
+  const cleanArtist = (
+    isDeleted && !v.artist ? "Unavailable" : cleanArtistName(v.artist)
+  ).toLowerCase();
+  if (cleanArtist.includes(lowerQuery)) return true;
+
+  if (v.label && v.label.toLowerCase().includes(lowerQuery)) return true;
+  if (v.copyright && v.copyright.toLowerCase().includes(lowerQuery)) return true;
+
+  if (v.published_at) {
+    const datePart = String(v.published_at).split("T")[0];
+    const yearStr = String(getVideoYear(v.published_at));
+    if (datePart.includes(lowerQuery) || yearStr === lowerQuery) return true;
+    if (`${cleanArtist} ${yearStr}` === lowerQuery || `${cleanArtist} ${datePart}` === lowerQuery) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function filterVideos() {
@@ -1952,47 +2212,18 @@ function filterVideos() {
     results = results.filter((v) => v.is_music);
   }
 
-  // Search
+  if (state.hiddenGems) {
+    results = results.filter((v) => !checkIfDeleted(v) && (Number(v.views) || 0) < 100_000);
+  }
+
+  // Keep the left nav browsable across the full collection (cowneck/music style)
+  state.sidebarBaseVideos = results;
+
+  // Unified search (typed query or left-nav selection)
   const trimmedSearch = state.debouncedSearchTerm.trim();
   if (trimmedSearch) {
     const lower = trimmedSearch.toLowerCase();
-    results = results.filter(
-      (v) =>
-        (v.title || "").toLowerCase().includes(lower) ||
-        cleanArtistName(v.artist).toLowerCase().includes(lower),
-    );
-  }
-
-  // Save the base list for sidebar analytics (so other options don't disappear)
-  state.sidebarBaseVideos = results;
-
-  // Sidebar Filters
-  if (state.activeFilter) {
-    const { type, value } = state.activeFilter;
-    if (type === "channel") {
-      results = results.filter((v) => {
-        const isDeleted = checkIfDeleted(v);
-        const chName = isDeleted && !v.artist ? "Unavailable" : cleanArtistName(v.artist);
-        return chName === value;
-      });
-    } else if (type === "album") {
-      // value is "artist|YYYY-MM-DD"
-      const [artist, dateStr] = value.split("|");
-      results = results.filter((v) => {
-        if (!v.published_at || !v.artist) return false;
-        if (cleanArtistName(v.artist) !== artist) return false;
-        return v.published_at.split("T")[0] === dateStr;
-      });
-    } else if (type === "year") {
-      results = results.filter((v) => {
-        if (!v.published_at) return false;
-        return getVideoYear(v.published_at).toString() === value;
-      });
-    } else if (type === "label") {
-      results = results.filter((v) => v.label === value);
-    } else if (type === "copyright") {
-      results = results.filter((v) => v.copyright === value);
-    }
+    results = results.filter((v) => matchesVideoSearch(v, lower));
   }
 
   // Sort
@@ -2014,6 +2245,12 @@ function filterVideos() {
         return b.comments - a.comments;
       case "views-high":
         return b.views - a.views;
+      case "views-low": {
+        const aDel = checkIfDeleted(a);
+        const bDel = checkIfDeleted(b);
+        if (aDel !== bDel) return aDel ? 1 : -1;
+        return (a.views || 0) - (b.views || 0);
+      }
       case "channel-az": {
         const artistCompare = cleanArtistName(a.artist).localeCompare(
           cleanArtistName(b.artist),
@@ -2021,19 +2258,16 @@ function filterVideos() {
           { sensitivity: "base" },
         );
         if (artistCompare !== 0) return artistCompare;
-        
-        // Truncate to just the day (YYYY-MM-DD)
+
         const dateA = a.published_at ? a.published_at.split("T")[0] : "";
         const dateB = b.published_at ? b.published_at.split("T")[0] : "";
-        
+
         if (dateA !== dateB) {
           if (!dateA) return 1;
           if (!dateB) return -1;
-          // Sort chronologically by date
           return new Date(dateA) - new Date(dateB);
         }
-        
-        // If uploaded on the same day, sort by title (useful if tracks have track numbers)
+
         return (a.title || "").localeCompare(b.title || "", undefined, {
           sensitivity: "base",
         });
@@ -2079,22 +2313,45 @@ function applyTheme(theme) {
   } else if (theme === "system") {
     isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
   }
-  
+
   document.documentElement.classList.toggle("dark", isDark);
   if (dom.themeColorMeta) {
     dom.themeColorMeta.setAttribute("content", isDark ? "#0a0a0a" : "#ffffff");
   }
 }
 
+const COMPACT_GRID_CLASSES = [
+  "grid-cols-2",
+  "sm:grid-cols-3",
+  "md:grid-cols-4",
+  "xl:grid-cols-5",
+  "2xl:grid-cols-6",
+  "gap-x-2",
+  "gap-y-3",
+  "sm:gap-x-3",
+  "sm:gap-y-4",
+];
+
+const STANDARD_GRID_CLASSES = [
+  "grid-cols-1",
+  "sm:grid-cols-2",
+  "lg:grid-cols-3",
+  "2xl:grid-cols-4",
+  "gap-x-3",
+  "gap-y-4",
+  "sm:gap-x-4",
+  "sm:gap-y-5",
+];
+
 function applyCompactMode(isCompact) {
   if (isCompact) {
     document.body.classList.add("compact-mode");
-    dom.videoGrid.classList.remove("grid-cols-1", "sm:grid-cols-2", "lg:grid-cols-3", "gap-x-6", "gap-y-10");
-    dom.videoGrid.classList.add("grid-cols-2", "sm:grid-cols-3", "md:grid-cols-4", "xl:grid-cols-6", "gap-x-4", "gap-y-6");
+    dom.videoGrid.classList.remove(...STANDARD_GRID_CLASSES);
+    dom.videoGrid.classList.add(...COMPACT_GRID_CLASSES);
   } else {
     document.body.classList.remove("compact-mode");
-    dom.videoGrid.classList.remove("grid-cols-2", "sm:grid-cols-3", "md:grid-cols-4", "xl:grid-cols-6", "gap-x-4", "gap-y-6");
-    dom.videoGrid.classList.add("grid-cols-1", "sm:grid-cols-2", "lg:grid-cols-3", "gap-x-6", "gap-y-10");
+    dom.videoGrid.classList.remove(...COMPACT_GRID_CLASSES);
+    dom.videoGrid.classList.add(...STANDARD_GRID_CLASSES);
   }
 
   virtualGrid.cols = 0;
@@ -2102,7 +2359,10 @@ function applyCompactMode(isCompact) {
   virtualGrid.renderedVersion = -1;
   virtualGrid.listVersion++;
 
-  if (state.filteredVideos.length > 0 && !dom.viewContent.classList.contains("hidden")) {
+  if (
+    state.filteredVideos.length > 0 &&
+    !dom.viewContent.classList.contains("hidden")
+  ) {
     renderVirtualGrid(true);
     syncScrubberFromScroll();
   }
@@ -2156,11 +2416,13 @@ function getGridColumns() {
   }
   const w = window.innerWidth || 1280;
   if (state.compactMode) {
-    if (w >= 1280) return 6;
+    if (w >= 1536) return 6;
+    if (w >= 1280) return 5;
     if (w >= 768) return 4;
     if (w >= 640) return 3;
     return 2;
   }
+  if (w >= 1536) return 4;
   if (w >= 1024) return 3;
   if (w >= 640) return 2;
   return 1;
@@ -2170,7 +2432,7 @@ function getRowStride() {
   if (virtualGrid.rowHeight > 0) {
     return virtualGrid.rowHeight + virtualGrid.rowGap;
   }
-  return state.compactMode ? 240 : 320;
+  return state.compactMode ? 236 : 300;
 }
 
 function teardownCardImage(card) {
@@ -2300,14 +2562,21 @@ function acquireVideoCard(video, index, deferThumbnail = false) {
     links[i].href = watchHref;
   }
 
-  titleEl.innerHTML = highlightMatch(title, state.debouncedSearchTerm);
-
+  const trimmedTerm = state.debouncedSearchTerm.trim();
   const chName = cleanArtistName(video.artist || "Unknown channel");
+  const isExactArtistFilter =
+    trimmedTerm !== "" && chName.toLowerCase() === trimmedTerm.toLowerCase();
+
+  titleEl.innerHTML = highlightMatch(title, trimmedTerm);
+
+  const renderedCh = isExactArtistFilter
+    ? escapeHtml(chName)
+    : highlightMatch(chName, trimmedTerm);
   const chId = video.channel_id;
   if (chId && !isDeleted) {
-    channelEl.innerHTML = `<a href="${baseUrl}/channel/${encodeURIComponent(chId)}" target="_blank" rel="noopener noreferrer" class="hover:text-black dark:hover:text-white hover:underline">${highlightMatch(chName, state.debouncedSearchTerm)}</a>`;
+    channelEl.innerHTML = `<a href="${baseUrl}/channel/${encodeURIComponent(chId)}" target="_blank" rel="noopener noreferrer" class="hover:text-black dark:hover:text-white hover:underline">${renderedCh}</a>`;
   } else {
-    channelEl.innerHTML = highlightMatch(chName, state.debouncedSearchTerm);
+    channelEl.innerHTML = renderedCh;
   }
 
   metadataEl.textContent = isDeleted ? "No stats" : getDynamicMetadata(video);
@@ -2431,7 +2700,7 @@ function renderVirtualGrid(force = false, anchorRow = null, deferThumbnails = fa
       if (measuredH > 0) {
         virtualGrid.rowHeight = measuredH;
         const cs = window.getComputedStyle ? window.getComputedStyle(dom.videoGrid) : null;
-        virtualGrid.rowGap = (cs && parseFloat(cs.rowGap)) || (state.compactMode ? 24 : 40);
+        virtualGrid.rowGap = (cs && parseFloat(cs.rowGap)) || (state.compactMode ? 16 : 20);
       }
     }
   }
@@ -2557,7 +2826,8 @@ function buildScrubberCheckpoints(videos = state.filteredVideos, sortBy = state.
         label = !isNaN(yr) ? String(yr) : "—";
         break;
       }
-      case "views-high": {
+      case "views-high":
+      case "views-low": {
         label = pickTier(v.views, VIEW_TIERS);
         break;
       }
@@ -2619,6 +2889,7 @@ function formatScrubberTooltip(checkpoint, video, index, total) {
       return { primary: String(yr), sub };
     }
     case "views-high":
+    case "views-low":
       return {
         primary: `${compact(video.views)} views`,
         sub: video.title || "",
@@ -2875,9 +3146,16 @@ function scrollToVideoIndex(targetIndex, edge = null, deferThumbnails = false) {
     return;
   }
 
-  const rowTopDocY = Math.max(0, gridTopDocY + targetRow * stride - 16);
+  const headerH = dom.appHeader?.offsetHeight || 64;
+  const rowTopDocY = Math.max(0, gridTopDocY + targetRow * stride - headerH - 12);
   window.scrollTo({ top: rowTopDocY, behavior: "auto" });
   virtualGrid.lastScrollY = rowTopDocY;
+}
+
+function syncScrubberTopOffset() {
+  if (!dom.fastScrubber || !dom.appHeader) return;
+  const headerH = Math.ceil(dom.appHeader.getBoundingClientRect().height || 65);
+  dom.fastScrubber.style.top = `${Math.max(74, headerH + 10)}px`;
 }
 
 function updateScrubberVisibility(hasAppData) {
@@ -2890,8 +3168,11 @@ function updateScrubberVisibility(hasAppData) {
   );
   dom.fastScrubber.classList.toggle("hidden", !shouldShow);
   dom.fastScrubber.classList.toggle("flex", shouldShow);
-  dom.videoGrid.classList.toggle("pr-5", shouldShow);
-  dom.videoGrid.classList.toggle("sm:pr-0", shouldShow);
+  dom.videoGrid.classList.toggle("pr-6", shouldShow);
+  dom.videoGrid.classList.toggle("sm:pr-7", shouldShow);
+  if (shouldShow) {
+    syncScrubberTopOffset();
+  }
 }
 
 function scheduleScrubberLayoutRefresh() {
@@ -2899,12 +3180,13 @@ function scheduleScrubberLayoutRefresh() {
   scrubberState.layoutRaf = requestAnimationFrame(() => {
     scrubberState.layoutRaf = null;
     scrubberState.renderedSignature = "";
+    syncScrubberTopOffset();
     renderScrubberCheckpoints();
     syncScrubberFromScroll();
   });
 }
 
-// --- Fetching Data ---
+// --- Rendering ---
 
 function render() {
   const isReady = state.gisInited;
@@ -2944,6 +3226,12 @@ function render() {
 
   document.title = isDislike ? "Dislikes" : "Likes";
   updateFavicon(state.mode);
+  updateHiddenGemsUI();
+
+  if (dom.topbarAppControls) {
+    dom.topbarAppControls.classList.toggle("hidden", !hasAppData);
+    dom.topbarAppControls.classList.toggle("flex", hasAppData);
+  }
 
   // Auth & Session Views
   if (hasAppData) {
@@ -2953,28 +3241,31 @@ function render() {
     dom.authIndicator.classList.remove("hidden");
     dom.authIndicator.classList.add("flex");
 
-    if (state.isAuthenticated && state.dataSource === "youtube") {
-      if (dom.authStatusText) dom.authStatusText.textContent = "Authenticated";
+    const canRefreshYoutube = Boolean(state.isAuthenticated && state.dataSource === "youtube");
+    dom.clearCacheButton.classList.toggle("hidden", !canRefreshYoutube);
+    dom.clearCacheButton.classList.toggle("inline-flex", canRefreshYoutube);
+
+    if (canRefreshYoutube) {
       dom.signoutButton.textContent = "Sign out";
       dom.authButton.classList.add("hidden");
-      dom.clearCacheButton.classList.remove("hidden");
+      dom.authButton.classList.remove("sm:inline-flex");
     } else if (state.dataSource === "demo") {
-      if (dom.authStatusText) dom.authStatusText.textContent = "Demo";
       dom.signoutButton.textContent = "Exit demo";
-      dom.authButton.classList.toggle("hidden", state.isAuthenticated);
-      dom.clearCacheButton.classList.add("hidden");
+      dom.authButton.classList.add("hidden");
+      dom.authButton.classList.toggle("sm:inline-flex", !state.isAuthenticated);
+      dom.authButton.classList.toggle("items-center", !state.isAuthenticated);
     } else {
-      if (dom.authStatusText) dom.authStatusText.textContent = "Local file";
       dom.signoutButton.textContent = state.isAuthenticated ? "Sign out" : "Close file";
-      dom.authButton.classList.toggle("hidden", state.isAuthenticated);
-      dom.clearCacheButton.classList.add("hidden");
+      dom.authButton.classList.add("hidden");
+      dom.authButton.classList.toggle("sm:inline-flex", !state.isAuthenticated);
+      dom.authButton.classList.toggle("items-center", !state.isAuthenticated);
     }
   } else {
     dom.viewWelcome.classList.remove("hidden");
     dom.viewContent.classList.add("hidden");
     dom.authIndicator.classList.add("hidden");
     dom.authIndicator.classList.remove("flex");
-    dom.authButton.classList.remove("hidden");
+    dom.authButton.classList.remove("hidden", "sm:inline-flex", "items-center");
   }
 
   // Error
@@ -2987,48 +3278,60 @@ function render() {
     dom.errorContainer.classList.remove("flex");
   }
 
-  // Active Sidebar Filter Chip
-  if (dom.activeFilterBadge && dom.activeFilterLabel) {
-    if (state.activeFilter) {
-      dom.activeFilterLabel.textContent = formatActiveFilterLabel(state.activeFilter);
-      dom.activeFilterBadge.classList.remove("hidden");
-      dom.activeFilterBadge.classList.add("inline-flex");
-    } else {
-      dom.activeFilterBadge.classList.add("hidden");
-      dom.activeFilterBadge.classList.remove("inline-flex");
-    }
-  }
-
-  // Results Count
-  let countText = "";
+  // Library Stats Hero Count & Subtitle
   const currentCount = state.filteredVideos.length;
   const totalCount = state.totalResults;
   const fmt = (n) => new Intl.NumberFormat().format(n);
 
+  let countText = "";
+  const noun = state.musicOnly
+    ? currentCount === 1
+      ? "music track"
+      : "music tracks"
+    : currentCount === 1
+      ? "video"
+      : "videos";
+
   if (state.loading && !isLoadMore) {
-    countText = "Loading...";
-  } else if (!trimmedSearch && !state.musicOnly && !state.unavailableOnly && !state.activeFilter) {
-    if (state.nextPageToken) {
-      if (totalCount && totalCount > currentCount) {
-        countText = `${fmt(currentCount)} of about ${fmt(totalCount)} loaded`;
-      } else {
-        countText = `${fmt(currentCount)} loaded`;
-      }
-    } else {
-      countText = `All ${fmt(currentCount)} loaded`;
-    }
+    updateHeroCountDisplay("—");
+    countText = "Loading library...";
   } else {
-    const modifiers = [];
-    if (state.unavailableOnly) modifiers.push("unavailable");
-    if (state.musicOnly) modifiers.push("music");
-    const modsStr = modifiers.length > 0 && !trimmedSearch ? " " + modifiers.join(" ") : "";
-    countText = `Found ${fmt(currentCount)}${modsStr} videos`;
+    const animSig =
+      !trimmedSearch && !state.hiddenGems && !state.unavailableOnly && !state.nextPageToken
+        ? `${state.dataSource}:${state.mode}:${state.videos.length}`
+        : null;
+    updateHeroCountDisplay(currentCount, animSig);
+
+    if (state.nextPageToken && !trimmedSearch && !state.hiddenGems && !state.unavailableOnly) {
+      if (totalCount && totalCount > state.videos.length) {
+        countText = `of ~${fmt(totalCount)} loaded`;
+      } else {
+        countText = "Loaded so far";
+      }
+    } else if (trimmedSearch || state.hiddenGems || state.unavailableOnly) {
+      if (state.unavailableOnly && !trimmedSearch) {
+        countText = `Unavailable ${noun}`;
+      } else if (state.hiddenGems && !trimmedSearch) {
+        countText = `Hidden gem ${noun}`;
+      } else {
+        countText = `Matching ${noun}`;
+      }
+    } else if (state.musicOnly) {
+      countText = isDislike ? "Disliked music" : "Liked music";
+    } else {
+      countText = isDislike ? "Disliked videos" : "Liked videos";
+    }
   }
 
   dom.resultsCount.textContent = countText;
 
   // Load All Button State
-  if (state.nextPageToken && !trimmedSearch) {
+  const showLoadAll = Boolean(state.nextPageToken && !trimmedSearch);
+  if (dom.libraryChipsRow) {
+    dom.libraryChipsRow.classList.toggle("hidden", !showLoadAll);
+    dom.libraryChipsRow.classList.toggle("flex", showLoadAll);
+  }
+  if (showLoadAll) {
     dom.loadAllButton.classList.remove("hidden");
     dom.loadAllButton.classList.add("inline-flex");
     if (state.isFetchAll) {
@@ -3048,7 +3351,7 @@ function render() {
   renderSidebar();
   updateScrubberVisibility(hasAppData);
 
-  // Loading & Empty States
+  // Gallery View
   if (hasAppData) {
     if (state.loading && !isLoadMore) {
       dom.emptyState.classList.add("hidden");
@@ -3077,7 +3380,7 @@ function updateSentinel() {
   if (state.isFetchAll) {
     dom.scrollSentinel.classList.remove("hidden");
     dom.scrollSentinel.innerHTML = `
-        <div class="loading-spinner inline-block w-4 h-4 border-2 border-gray-100 border-t-gray-400 rounded-full mr-2 align-middle"></div>
+        <div class="loading-spinner inline-block w-4 h-4 border-2 border-gray-200 dark:border-white/15 border-t-gray-600 dark:border-t-white rounded-full mr-2 align-middle"></div>
         <span>Loading all videos...</span>
     `;
     return;
@@ -3087,9 +3390,9 @@ function updateSentinel() {
     dom.scrollSentinel.classList.remove("hidden");
     if (state.loading && state.isLoadMore) {
       dom.scrollSentinel.innerHTML = `
-                  <div class="loading-spinner inline-block w-4 h-4 border-2 border-gray-100 border-t-gray-400 rounded-full mr-2 align-middle"></div>
-                  <span>Loading more...</span>
-              `;
+          <div class="loading-spinner inline-block w-4 h-4 border-2 border-gray-200 dark:border-white/15 border-t-gray-600 dark:border-t-white rounded-full mr-2 align-middle"></div>
+          <span>Loading more...</span>
+      `;
     } else {
       dom.scrollSentinel.textContent = "Scroll for more";
     }
@@ -3129,7 +3432,6 @@ function triggerCelebration() {
 function renderSkeletons() {
   resetVirtualGridDOM();
   dom.videoGrid.innerHTML = "";
-  // Show 12 skeleton cards (typical grid count)
   for (let i = 0; i < 12; i++) {
     const clone = dom.skeletonTemplate.content.cloneNode(true);
     dom.videoGrid.appendChild(clone);
@@ -3143,91 +3445,102 @@ function renderSidebar() {
   }
 
   const data = calculateAnalytics();
+  const activeQueryLower = state.debouncedSearchTerm.trim().toLowerCase();
   let html = "";
-  
+
+  const renderNameCountRow = (name, count) => {
+    const safeName = escapeHtml(name);
+    const isActive = activeQueryLower !== "" && activeQueryLower === name.trim().toLowerCase();
+    const rowClass = isActive
+      ? "bg-gray-950 text-white dark:bg-white dark:text-black"
+      : "text-gray-800 dark:text-[#e8e8e8] hover:bg-gray-100 dark:hover:bg-[#1e1e1e]";
+    const badgeClass = isActive
+      ? "bg-white/20 text-white dark:bg-black/15 dark:text-black"
+      : "bg-gray-100 text-gray-500 dark:bg-[#212121] dark:text-[#aaaaaa] group-hover:bg-gray-200/80 dark:group-hover:bg-[#2d2d2d]";
+
+    return `
+      <button type="button" class="sidebar-filter-item group w-full flex items-center justify-between gap-2.5 px-2.5 py-2 rounded-lg text-left cursor-pointer transition-colors ${rowClass}" data-query="${safeName}" title="${safeName}">
+        <span class="text-[13.5px] font-medium truncate">${safeName}</span>
+        <span class="text-[11.5px] font-medium tabular-nums px-2 py-0.5 rounded-full shrink-0 transition-colors ${badgeClass}">${count}</span>
+      </button>
+    `;
+  };
+
   if (state.sidebarCategory === "channels") {
-    html = data.topChannels.map((ch) => {
-      const isActive = state.activeFilter && state.activeFilter.type === "channel" && state.activeFilter.value === ch.name;
-      const bgClass = isActive ? "bg-gray-100 dark:bg-gray-800" : "hover:bg-gray-50 dark:hover:bg-gray-900";
-      const safeName = escapeHtml(ch.name);
-      
-      return `
-        <div class="sidebar-filter-item flex items-center gap-3 text-sm text-gray-900 dark:text-gray-100 p-1.5 rounded cursor-pointer transition-colors ${bgClass}" data-type="channel" data-value="${safeName}">
-            <span class="w-8 flex justify-center font-bold text-gray-700 bg-gray-100 dark:bg-gray-800 dark:text-gray-300 rounded text-[10px] py-1 shrink-0">${ch.count}</span>
-            <span class="truncate pr-2">${safeName}</span>
-        </div>
-      `;
-    }).join("");
+    html = data.topChannels.map((ch) => renderNameCountRow(ch.name, ch.count)).join("");
   } else if (state.sidebarCategory === "albums") {
-    html = data.topAlbums.map((album) => {
-      const val = `${album.artist}|${album.date}`;
-      const isActive = state.activeFilter && state.activeFilter.type === "album" && state.activeFilter.value === val;
-      const bgClass = isActive ? "bg-gray-100 dark:bg-gray-800" : "hover:bg-gray-50 dark:hover:bg-gray-900";
-      const safeVal = escapeHtml(val);
-      const safeArtist = escapeHtml(album.artist);
-      const safeThumb = escapeHtml(album.thumbnail);
-      
-      return `
-        <div class="sidebar-filter-item flex gap-3 items-center p-1.5 rounded cursor-pointer transition-colors ${bgClass}" data-type="album" data-value="${safeVal}">
-          <div class="shrink-0 relative group">
-             <img src="${safeThumb}" alt="${safeArtist}" loading="lazy" class="w-12 h-12 object-cover rounded border border-gray-200 dark:border-gray-800 shadow-sm transition-opacity">
-          </div>
-          <div class="flex flex-col gap-0.5 overflow-hidden">
-            <span class="text-[13px] font-medium text-gray-900 dark:text-gray-100 line-clamp-1">${safeArtist}</span>
-            <div class="flex items-center gap-2 text-[11px] text-gray-500">
-              <span class="truncate">${album.year}</span>
-              <span class="shrink-0">•</span>
-              <span class="shrink-0 font-bold">${album.count} tracks</span>
+    html = data.topAlbums
+      .map((album) => {
+        const query = album.sameYearCollision
+          ? `${album.artist} ${album.date}`
+          : `${album.artist} ${album.year}`;
+        const isActive =
+          activeQueryLower !== "" && activeQueryLower === query.trim().toLowerCase();
+        const safeQuery = escapeHtml(query);
+        const safeArtist = escapeHtml(album.artist);
+        const safeThumb = escapeHtml(album.thumbnail);
+        const rowClass = isActive
+          ? "bg-gray-950 text-white dark:bg-white dark:text-black"
+          : "text-gray-900 dark:text-[#f1f1f1] hover:bg-gray-100 dark:hover:bg-[#1e1e1e]";
+        const subClass = isActive
+          ? "text-white/75 dark:text-black/70"
+          : "text-gray-500 dark:text-[#999999]";
+        const badgeClass = isActive
+          ? "bg-white/20 text-white dark:bg-black/15 dark:text-black"
+          : "bg-gray-100 text-gray-500 dark:bg-[#212121] dark:text-[#aaaaaa] group-hover:bg-gray-200/80 dark:group-hover:bg-[#2d2d2d]";
+
+        return `
+          <button type="button" class="sidebar-filter-item group w-full flex items-center justify-between gap-2.5 p-2 rounded-lg text-left cursor-pointer transition-colors ${rowClass}" data-query="${safeQuery}" title="${safeArtist} (${album.year})">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <img src="${safeThumb}" alt="${safeArtist}" loading="lazy" decoding="async" class="w-10 h-10 object-cover rounded-md bg-gray-100 dark:bg-[#242424] shrink-0">
+              <div class="flex flex-col min-w-0">
+                <span class="text-[13.5px] font-medium truncate leading-snug">${safeArtist}</span>
+                <span class="text-[11.5px] ${subClass} tabular-nums leading-snug">${album.year}</span>
+              </div>
             </div>
-          </div>
-        </div>
-      `;
-    }).join("");
+            <span class="text-[11.5px] font-medium tabular-nums px-2 py-0.5 rounded-full shrink-0 transition-colors ${badgeClass}">${album.count}</span>
+          </button>
+        `;
+      })
+      .join("");
   } else if (state.sidebarCategory === "years") {
-    html = data.releaseYears.map((ry) => {
-      const isActive = state.activeFilter && state.activeFilter.type === "year" && state.activeFilter.value === ry.year.toString();
-      const bgClass = isActive ? "bg-gray-100 dark:bg-gray-800" : "hover:bg-gray-50 dark:hover:bg-gray-900";
-      const safeYear = escapeHtml(ry.year);
-      
-      return `
-        <div class="sidebar-filter-item flex items-center gap-3 text-sm text-gray-900 dark:text-gray-100 p-1.5 rounded cursor-pointer transition-colors ${bgClass}" data-type="year" data-value="${safeYear}">
-          <span class="w-10 font-mono text-gray-500 shrink-0">${safeYear}</span>
-          <div class="flex-1 bg-gray-200 dark:bg-gray-800 rounded-full h-1.5 overflow-hidden">
-            <div class="bg-gray-400 dark:bg-gray-500 h-full rounded-full" style="width: ${ry.percent}%"></div>
-          </div>
-          <span class="text-[10px] text-gray-500 font-mono whitespace-nowrap text-right shrink-0 min-w-[28px]">${ry.count}</span>
-        </div>
-      `;
-    }).join("");
+    html = data.releaseYears
+      .map((ry) => {
+        const yearStr = String(ry.year);
+        const safeYear = escapeHtml(yearStr);
+        const isActive = activeQueryLower !== "" && activeQueryLower === yearStr.toLowerCase();
+        const rowClass = isActive
+          ? "bg-gray-950 text-white dark:bg-white dark:text-black"
+          : "text-gray-800 dark:text-[#e8e8e8] hover:bg-gray-100 dark:hover:bg-[#1e1e1e]";
+        const trackClass = isActive
+          ? "bg-white/20 dark:bg-black/15"
+          : "bg-gray-100 dark:bg-[#212121]";
+        const barClass = isActive
+          ? "bg-white dark:bg-black"
+          : "bg-gray-400 dark:bg-[#666666]";
+        const countClass = isActive
+          ? "text-white/90 dark:text-black/80"
+          : "text-gray-500 dark:text-[#aaaaaa]";
+
+        return `
+          <button type="button" class="sidebar-filter-item group w-full flex items-center gap-3 px-2.5 py-2 rounded-lg text-left cursor-pointer transition-colors ${rowClass}" data-query="${safeYear}">
+            <span class="w-10 text-[13px] font-medium tabular-nums shrink-0">${safeYear}</span>
+            <div class="flex-1 ${trackClass} rounded-full h-1.5 overflow-hidden">
+              <div class="${barClass} h-full rounded-full transition-all" style="width: ${ry.percent}%"></div>
+            </div>
+            <span class="text-[11.5px] font-medium tabular-nums whitespace-nowrap text-right shrink-0 min-w-[28px] ${countClass}">${ry.count}</span>
+          </button>
+        `;
+      })
+      .join("");
   } else if (state.sidebarCategory === "labels") {
-    html = data.topLabels.map((lbl) => {
-      const isActive = state.activeFilter && state.activeFilter.type === "label" && state.activeFilter.value === lbl.name;
-      const bgClass = isActive ? "bg-gray-100 dark:bg-gray-800" : "hover:bg-gray-50 dark:hover:bg-gray-900";
-      const safeName = escapeHtml(lbl.name);
-      
-      return `
-        <div class="sidebar-filter-item flex items-center gap-3 text-sm text-gray-900 dark:text-gray-100 p-1.5 rounded cursor-pointer transition-colors ${bgClass}" data-type="label" data-value="${safeName}">
-            <span class="w-8 flex justify-center font-bold text-gray-700 bg-gray-100 dark:bg-gray-800 dark:text-gray-300 rounded text-[10px] py-1 shrink-0">${lbl.count}</span>
-            <span class="truncate pr-2">${safeName}</span>
-        </div>
-      `;
-    }).join("");
+    html = data.topLabels.map((lbl) => renderNameCountRow(lbl.name, lbl.count)).join("");
   } else if (state.sidebarCategory === "copyrights") {
-    html = data.topCopyrights.map((cpy) => {
-      const isActive = state.activeFilter && state.activeFilter.type === "copyright" && state.activeFilter.value === cpy.name;
-      const bgClass = isActive ? "bg-gray-100 dark:bg-gray-800" : "hover:bg-gray-50 dark:hover:bg-gray-900";
-      const safeName = escapeHtml(cpy.name);
-      
-      return `
-        <div class="sidebar-filter-item flex items-center gap-3 text-sm text-gray-900 dark:text-gray-100 p-1.5 rounded cursor-pointer transition-colors ${bgClass}" data-type="copyright" data-value="${safeName}">
-            <span class="w-8 flex justify-center font-bold text-gray-700 bg-gray-100 dark:bg-gray-800 dark:text-gray-300 rounded text-[10px] py-1 shrink-0">${cpy.count}</span>
-            <span class="truncate pr-2">${safeName}</span>
-        </div>
-      `;
-    }).join("");
+    html = data.topCopyrights.map((cpy) => renderNameCountRow(cpy.name, cpy.count)).join("");
   }
 
-  dom.sidebarListContainer.innerHTML = html || '<div class="text-gray-500 text-[12px] p-2">No data</div>';
+  dom.sidebarListContainer.innerHTML =
+    html || '<div class="text-gray-500 dark:text-[#888888] text-xs px-2.5 py-3">No data available</div>';
 }
 
 function calculateAnalytics() {
@@ -3266,12 +3579,12 @@ function calculateAnalytics() {
       const albumKey = `${chName}|${date}`;
       if (!albums[albumKey]) {
         albums[albumKey] = {
-           artist: chName,
-           date: date,
-           year: getVideoYear(v.published_at),
-           thumbnail: `https://i.ytimg.com/vi/${v.video_id}/mqdefault.jpg`,
-           video_id: v.video_id,
-           count: 0
+          artist: chName,
+          date: date,
+          year: getVideoYear(v.published_at),
+          thumbnail: `https://i.ytimg.com/vi/${v.video_id}/mqdefault.jpg`,
+          video_id: v.video_id,
+          count: 0,
         };
       }
       albums[albumKey].count++;
@@ -3304,11 +3617,18 @@ function calculateAnalytics() {
     }))
     .sort((a, b) => b.year - a.year);
 
-  const topAlbums = Object.values(albums)
-    // Only consider it an album if there's at least 3 tracks
+  const qualifyingAlbums = Object.values(albums)
     .filter((a) => a.count >= 3)
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 100);
+    .sort((a, b) => b.count - a.count);
+  const artistYearCounts = {};
+  qualifyingAlbums.forEach((a) => {
+    const k = `${a.artist}|${a.year}`;
+    artistYearCounts[k] = (artistYearCounts[k] || 0) + 1;
+  });
+  const topAlbums = qualifyingAlbums.slice(0, 100).map((a) => ({
+    ...a,
+    sameYearCollision: artistYearCounts[`${a.artist}|${a.year}`] > 1,
+  }));
 
   const topLabels = Object.entries(labels)
     .map(([name, count]) => ({ name, count }))
@@ -3332,6 +3652,7 @@ function getDynamicMetadata(video) {
 
   switch (state.sortBy) {
     case "views-high":
+    case "views-low":
       return `${compact(video.views)} views`;
     case "duration-long":
       return formatDuration(video.duration);
@@ -3346,7 +3667,6 @@ function getDynamicMetadata(video) {
     case "comments-most":
       return `${compact(video.comments)} comments`;
     default:
-      // For Recent, Channel, Title, Deleted, etc.
       return `${compact(video.views)} views`;
   }
 }
