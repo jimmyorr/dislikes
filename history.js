@@ -909,12 +909,13 @@ function whFingerprintHtml(agg, typical, type) {
       <span class="wh-fp-name">${name}</span>
       <span class="wh-fp-track"><span class="wh-fp-fill" style="width:${v}%"></span>${avg !== null ? `<span class="wh-fp-avg" style="left:${avg}%"></span>` : ""}</span>
       <span class="wh-num">${v}%</span>
+      <span class="wh-fp-desc">${escapeHtml(desc)}</span>
     </div>`;
   }).join("");
   return `<section class="wh-panel wh-fingerprint">
     <header class="wh-panel-head"><span class="wh-card-title">Listening fingerprint</span></header>
     ${rows}
-    <p class="wh-muted wh-small">${typical ? `Tick marks your typical ${type}.` : "Compared across your whole history."} Hover a row for what it measures.</p>
+    <p class="wh-muted wh-small">${typical ? `Tick marks your typical ${type}.` : "Compared across your whole history."}<span class="wh-hover-only"> Hover a row for what it measures.</span></p>
   </section>`;
 }
 
