@@ -82,7 +82,7 @@
       gtag("config", "G-6RNVL7JZVJ");
     </script>
 
-    <link rel="stylesheet" href="styles.css?v=2.0.7" />
+    <link rel="stylesheet" href="styles.css?v=2.0.8" />
     <script>
       (function () {
         try {
@@ -671,12 +671,14 @@
           <p class="text-gray-500">No results found.</p>
         </div>
 
+        <div id="grid-top-spacer" aria-hidden="true"></div>
         <div
           id="video-grid"
           class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-10"
         >
           <!-- Video cards will be injected here -->
         </div>
+        <div id="grid-bottom-spacer" aria-hidden="true"></div>
         </div> <!-- End Main Content -->
       </div> <!-- End flex layout -->
 
@@ -689,12 +691,12 @@
       </div>
     </main>
       <!-- YouTube Player -->
-      <div id="ytplayer-host" aria-hidden="true" class="fixed bottom-0 left-0 w-px h-px opacity-[0.001] pointer-events-none overflow-hidden -z-10">
+      <div id="ytplayer-host" aria-hidden="true" class="fixed bottom-0 left-0 w-px h-px opacity-0 pointer-events-none overflow-hidden z-10">
         <div id="ytplayer"></div>
       </div>
       
       <!-- Bottom Player UI -->
-      <div id="bottom-player" class="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-[#121212] border-t border-gray-200 dark:border-gray-800 transition-transform duration-300 translate-y-full shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] overflow-hidden cursor-pointer">
+      <div id="bottom-player" class="invisible fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-[#121212] border-t border-gray-200 dark:border-gray-800 transition-transform duration-300 translate-y-full shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] overflow-hidden cursor-pointer">
         
         <!-- Background Color Sampling -->
         <div id="bottom-player-bg" class="absolute inset-0 bg-cover bg-center opacity-100 blur-[20px] scale-[1.2] pointer-events-none transition-all duration-1000 z-0"></div>
@@ -753,7 +755,7 @@
       </div>
 
       <!-- Full Screen Player UI -->
-      <div id="full-screen-player" class="fixed inset-0 z-[60] bg-white dark:bg-[#121212] transition-transform duration-500 translate-y-full flex flex-col overflow-hidden">
+      <div id="full-screen-player" class="invisible fixed inset-0 z-[60] bg-white dark:bg-[#121212] transition-transform duration-500 translate-y-full flex flex-col overflow-hidden">
         <!-- Blurred Background -->
         <div id="fs-player-bg" class="absolute inset-0 bg-cover bg-center opacity-60 dark:opacity-40 blur-[100px] scale-150 pointer-events-none transition-all duration-1000"></div>
         <!-- Gradient Overlay for Text Readability -->
@@ -852,7 +854,7 @@
         <span id="scrubber-tooltip-sub" class="text-[11px] opacity-75 leading-tight max-w-[180px] truncate"></span>
       </div>
 
-      <div class="h-full flex flex-col items-center bg-white/85 dark:bg-[#141414]/85 backdrop-blur-md border border-gray-200/80 dark:border-gray-800/90 rounded-full shadow-md py-1 px-1 min-w-[24px]">
+      <div class="h-full flex flex-col items-center bg-white/95 dark:bg-[#141414]/95 border border-gray-200 dark:border-gray-800 rounded-full shadow-md py-1 px-1 min-w-[24px]">
         <button
           id="scrubber-top-btn"
           type="button"
@@ -1000,8 +1002,8 @@
       );
 
     </script>
-    <script src="version.js?v=2.0.7"></script>
-    <script src="app.js?v=2.0.7"></script>
+    <script src="version.js?v=2.0.8"></script>
+    <script src="app.js?v=2.0.8"></script>
     <script>
       if ("serviceWorker" in navigator) {
         // Reload at most once when a genuinely newer SW_VERSION activates over an older running page

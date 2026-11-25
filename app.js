@@ -76,7 +76,9 @@ const dom = {
   shufflePlayButton: document.getElementById("shuffle-play-button"),
 
   emptyState: document.getElementById("empty-state"),
+  gridTopSpacer: document.getElementById("grid-top-spacer"),
   videoGrid: document.getElementById("video-grid"),
+  gridBottomSpacer: document.getElementById("grid-bottom-spacer"),
   copyIdsButton: document.getElementById("copy-ids-button"),
   exportJsonButton: document.getElementById("export-json-button"),
   uploadJsonButton: document.getElementById("upload-json-button"),
@@ -675,8 +677,8 @@ function closePlayer() {
   state.currentVideoIndex = -1;
   state.currentVideoId = null;
   state.pendingVideoId = null;
-  dom.bottomPlayer.classList.add("translate-y-full");
-  dom.fsPlayer.classList.add("translate-y-full");
+  dom.bottomPlayer.classList.add("translate-y-full", "invisible");
+  dom.fsPlayer.classList.add("translate-y-full", "invisible");
   document.body.style.paddingBottom = "0px";
   document.body.style.overflow = "";
   if (dom.fastScrubber) {
@@ -746,20 +748,20 @@ function setupEventListeners() {
     if (e.target.closest("button") || e.target.closest("input") || e.target.closest("a") || e.target.closest("#bottom-player-progress-container")) {
       return;
     }
-    dom.fsPlayer.classList.remove("translate-y-full");
+    dom.fsPlayer.classList.remove("translate-y-full", "invisible");
     // Make sure we stop body scrolling while full screen is open
     document.body.style.overflow = "hidden";
   });
 
   dom.fsPlayerClose.addEventListener("click", () => {
-    dom.fsPlayer.classList.add("translate-y-full");
+    dom.fsPlayer.classList.add("translate-y-full", "invisible");
     document.body.style.overflow = "";
   });
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       if (!dom.fsPlayer.classList.contains("translate-y-full")) {
-        dom.fsPlayer.classList.add("translate-y-full");
+        dom.fsPlayer.classList.add("translate-y-full", "invisible");
         document.body.style.overflow = "";
       } else if (isAnyPopoverOpen()) {
         const activeEl = document.activeElement;
@@ -2135,7 +2137,13 @@ const scrubberState = {
 };
 
 function getOverscanRows() {
-  return (window.innerWidth || 1280) < 768 ? 2 : 4;
+  return (window.innerWidth || 1280) < 768 ? 1 : 3;
+}
+
+function getGridOriginDocY() {
+  const anchor = dom.gridTopSpacer || dom.videoGrid;
+  if (!anchor?.getBoundingClientRect) return 0;
+  return anchor.getBoundingClientRect().top + (window.scrollY || 0);
 }
 
 function getGridColumns() {
@@ -2178,7 +2186,7 @@ function releaseVideoCard(card) {
   teardownCardImage(card);
   if (card.remove) card.remove();
   else if (card.parentNode) card.parentNode.removeChild(card);
-  if (virtualGrid.cardPool.length < 48) {
+  if (virtualGrid.cardPool.length < 36) {
     virtualGrid.cardPool.push(card);
   }
 }
@@ -2195,10 +2203,8 @@ function resetVirtualGridDOM() {
   virtualGrid.startRow = -1;
   virtualGrid.endRow = -1;
   virtualGrid.renderedVersion = -1;
-  if (dom.videoGrid) {
-    dom.videoGrid.style.paddingTop = "0px";
-    dom.videoGrid.style.paddingBottom = "0px";
-  }
+  if (dom.gridTopSpacer) dom.gridTopSpacer.style.height = "0px";
+  if (dom.gridBottomSpacer) dom.gridBottomSpacer.style.height = "0px";
 }
 
 function hydrateCardThumbnail(card, video) {
@@ -2230,6 +2236,7 @@ function hydrateVisibleThumbnails() {
     clearTimeout(virtualGrid.hydrateTimer);
     virtualGrid.hydrateTimer = null;
   }
+  if (scrubberState.isDragging) return;
   for (const [idx, card] of virtualGrid.renderedCards.entries()) {
     if (card?._refs?.img?.dataset?.pendingSrc) {
       const video = state.filteredVideos[idx];
@@ -2238,7 +2245,8 @@ function hydrateVisibleThumbnails() {
   }
 }
 
-function scheduleThumbnailHydration(delayMs = 120) {
+function scheduleThumbnailHydration(delayMs = 140) {
+  if (scrubberState.isDragging) return;
   if (virtualGrid.hydrateTimer) {
     clearTimeout(virtualGrid.hydrateTimer);
   }
@@ -2279,7 +2287,7 @@ function acquireVideoCard(video, index, deferThumbnail = false) {
   playBtn.disabled = Boolean(isDeleted);
   playBtn.classList.toggle("cursor-not-allowed", Boolean(isDeleted));
 
-  if (deferThumbnail) {
+  if (deferThumbnail || scrubberState.isDragging) {
     img.onerror = null;
     img.removeAttribute("src");
     img.dataset.pendingSrc = thumbnail;
@@ -2342,9 +2350,9 @@ function renderVirtualGrid(force = false, anchorRow = null, deferThumbnails = fa
   if (typeof anchorRow === "number") {
     visStartRow = Math.min(totalRows - 1, Math.max(0, anchorRow));
     visEndRow = Math.min(totalRows, visStartRow + Math.ceil(viewportH / stride) + 1);
-  } else if (dom.videoGrid.getBoundingClientRect) {
+  } else {
     const scrollY = window.scrollY || 0;
-    const gridTopDocY = dom.videoGrid.getBoundingClientRect().top + scrollY;
+    const gridTopDocY = getGridOriginDocY();
     const relTop = Math.max(0, scrollY - gridTopDocY);
     const relBottom = Math.max(0, scrollY + viewportH - gridTopDocY);
     visStartRow = Math.min(totalRows - 1, Math.max(0, Math.floor(relTop / stride)));
@@ -2356,11 +2364,11 @@ function renderVirtualGrid(force = false, anchorRow = null, deferThumbnails = fa
 
   if (!force && virtualGrid.startRow >= 0) {
     const topCovered =
-      virtualGrid.startRow === 0 ? nextStartRow === 0 : visStartRow >= virtualGrid.startRow + 1;
+      virtualGrid.startRow === 0 ? nextStartRow === 0 : visStartRow >= virtualGrid.startRow;
     const bottomCovered =
-      virtualGrid.endRow === totalRows ? nextEndRow === totalRows : visEndRow <= virtualGrid.endRow - 1;
+      virtualGrid.endRow === totalRows ? nextEndRow === totalRows : visEndRow <= virtualGrid.endRow;
     if (topCovered && bottomCovered) {
-      if (!deferThumbnails) hydrateVisibleThumbnails();
+      if (!deferThumbnails && !scrubberState.isDragging) hydrateVisibleThumbnails();
       return;
     }
   }
@@ -2429,13 +2437,16 @@ function renderVirtualGrid(force = false, anchorRow = null, deferThumbnails = fa
   }
 
   const finalStride = getRowStride();
-  dom.videoGrid.style.paddingTop = `${nextStartRow * finalStride}px`;
-  dom.videoGrid.style.paddingBottom = `${Math.max(0, totalRows - nextEndRow) * finalStride}px`;
+  const topH = nextStartRow * finalStride;
+  const bottomRows = Math.max(0, totalRows - nextEndRow);
+  const bottomH = bottomRows * finalStride;
+  if (dom.gridTopSpacer) dom.gridTopSpacer.style.height = `${topH}px`;
+  if (dom.gridBottomSpacer) dom.gridBottomSpacer.style.height = `${bottomH}px`;
   virtualGrid.startRow = nextStartRow;
   virtualGrid.endRow = nextEndRow;
 
-  if (deferThumbnails) {
-    scheduleThumbnailHydration(150);
+  if (deferThumbnails || scrubberState.isDragging) {
+    scheduleThumbnailHydration(160);
   } else {
     hydrateVisibleThumbnails();
   }
@@ -2823,9 +2834,7 @@ function syncScrubberFromScroll() {
 
   const cols = virtualGrid.cols || getGridColumns();
   const stride = getRowStride();
-  const gridTopDocY = dom.videoGrid.getBoundingClientRect
-    ? dom.videoGrid.getBoundingClientRect().top + scrollY
-    : 0;
+  const gridTopDocY = getGridOriginDocY();
   const probeY = Math.max(0, scrollY + viewportH * 0.25 - gridTopDocY);
   const currentRow = Math.max(0, Math.floor(probeY / stride));
   const itemIndex = Math.min(total - 1, currentRow * cols);
@@ -2855,9 +2864,7 @@ function scrollToVideoIndex(targetIndex, edge = null, deferThumbnails = false) {
 
   renderVirtualGrid(false, targetRow, deferThumbnails);
   const stride = getRowStride();
-  const gridTopDocY = dom.videoGrid.getBoundingClientRect
-    ? dom.videoGrid.getBoundingClientRect().top + (window.scrollY || 0)
-    : 0;
+  const gridTopDocY = getGridOriginDocY();
 
   if (edge === "bottom") {
     const totalRows = Math.ceil(total / cols);
@@ -3669,7 +3676,7 @@ function playVideo(
   state.currentVideoIndex = index;
   updatePrevNextButtons();
 
-  dom.bottomPlayer.classList.remove("translate-y-full");
+  dom.bottomPlayer.classList.remove("translate-y-full", "invisible");
   document.body.style.paddingBottom = "72px"; // Height of bottom player
   
   if (dom.fastScrubber) {
