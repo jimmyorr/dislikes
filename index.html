@@ -1064,6 +1064,7 @@
         margin-right: 16px;
       }
       .wh-clock-bars {
+        position: relative;
         display: flex;
         align-items: flex-end;
         gap: 3px;
@@ -1092,6 +1093,57 @@
       .wh-clock-ticks span {
         position: absolute;
         top: 4px;
+        white-space: nowrap;
+      }
+      /* "Now" on the Listening clock: the current hour's column is softly lit and a
+         thin hand marks the exact time, with a small dot that breathes at the top. */
+      .wh-clock-col-now {
+        border-radius: 4px 4px 0 0;
+        background: var(--wh-accent-soft);
+      }
+      .wh-clock-col-now .wh-bar {
+        opacity: 0.8;
+      }
+      .wh-clock-col-now .wh-bar-hot {
+        opacity: 1;
+      }
+      .wh-clock-hand {
+        display: none;
+        position: absolute;
+        top: -4px;
+        bottom: 0;
+        width: 0;
+        border-left: 1.5px solid var(--wh-fg);
+        pointer-events: none;
+        z-index: 1;
+      }
+      .wh-clock-hand::before {
+        content: "";
+        position: absolute;
+        top: -3px;
+        left: -4.75px;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--wh-accent);
+        box-shadow: 0 0 0 2px var(--wh-panel);
+        animation: wh-clock-breathe 2.4s ease-in-out infinite;
+      }
+      @keyframes wh-clock-breathe {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.35); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .wh-clock-hand::before { animation: none; }
+      }
+      .wh-clock-now-label {
+        display: none;
+        font-weight: 600;
+        color: var(--wh-fg);
+      }
+      .wh-clock-live .wh-clock-hand,
+      .wh-clock-live .wh-clock-now-label {
+        display: block;
       }
       .wh-fp-row {
         display: grid;

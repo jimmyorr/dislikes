@@ -1283,16 +1283,71 @@ function whClockHtml(agg) {
   const max = Math.max(1, ...agg.hours);
   const busiest = agg.hours.indexOf(Math.max(...agg.hours));
   const hourName = (h) => WH_HOUR_FMT.format(new Date(2000, 0, 1, h));
+  const now = new Date();
+  const nowHour = now.getHours();
   const bars = agg.hours
-    .map((c, h) => `<div class="wh-clock-col" title="${escapeHtml(`${hourName(h)}: ${whPlural(c, "play")}`)}"><span class="wh-bar ${h === busiest ? "wh-bar-hot" : ""}" style="height:${(c / max) * 100}%"></span></div>`)
+    .map((c, h) => `<div class="wh-clock-col${h === nowHour ? " wh-clock-col-now" : ""}" data-wh-hour="${h}" title="${escapeHtml(`${hourName(h)}: ${whPlural(c, "play")}`)}"><span class="wh-bar ${h === busiest ? "wh-bar-hot" : ""}" style="height:${(c / max) * 100}%"></span></div>`)
     .join("");
-  const ticks = [0, 6, 12, 18].map((h) => `<span style="left:${(h / 24) * 100}%">${escapeHtml(hourName(h))}</span>`).join("");
-  return `<section class="wh-panel wh-clock">
+  const ticks = [0, 6, 12, 18].map((h) => `<span data-wh-tick="${h}" style="left:${(h / 24) * 100}%">${escapeHtml(hourName(h))}</span>`).join("");
+  const html = `<section class="wh-panel wh-clock">
     <header class="wh-panel-head"><span class="wh-card-title">Listening clock</span><span class="wh-muted">Busiest hour ${escapeHtml(hourName(busiest))}, ${whPlural(agg.hours[busiest], "play")}</span></header>
-    <div class="wh-clock-bars">${bars}</div>
-    <div class="wh-clock-ticks">${ticks}</div>
+    <div class="wh-clock-bars"><span class="wh-clock-hand" aria-hidden="true"></span>${bars}</div>
+    <div class="wh-clock-ticks">${ticks}<span class="wh-clock-now-label"></span></div>
   </section>`;
+  whClockTickStart();
+  return html;
 }
+
+// The Listening clock has a "now" hand: a line at the current time of day, with the
+// current hour's column softly lit. It moves once a minute while a clock is on screen.
+const WH_CLOCK_TIME_FMT = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
+let whClockTimer = 0;
+
+function whClockTickStart() {
+  // The markup is inserted right after this returns, so place the hand on the next frame.
+  requestAnimationFrame(whClockTick);
+  if (!whClockTimer) whClockTimer = setInterval(whClockTick, 30 * 1000);
+}
+
+function whClockTick() {
+  const clocks = document.querySelectorAll(".wh-clock");
+  if (!clocks.length) {
+    clearInterval(whClockTimer);
+    whClockTimer = 0;
+    return;
+  }
+  if (document.hidden) return;
+  const now = new Date();
+  const h = now.getHours();
+  const frac = (h + now.getMinutes() / 60) / 24;
+  // Columns are 24 flex items with 3px gaps, so place the hand inside the current
+  // column rather than at a plain percentage of the full width.
+  const left = `calc((100% - 69px) * ${frac.toFixed(5)} + ${h * 3}px)`;
+  const label = WH_CLOCK_TIME_FMT.format(now);
+  for (const clock of clocks) {
+    const hand = clock.querySelector(".wh-clock-hand");
+    const tag = clock.querySelector(".wh-clock-now-label");
+    if (!hand || !tag) continue;
+    hand.style.left = left;
+    tag.textContent = label;
+    // Keep the label inside the card at the edges of the day.
+    tag.style.left = left;
+    tag.style.transform = `translateX(${frac < 0.08 ? "0" : frac > 0.92 ? "-100%" : "-50%"})`;
+    clock.classList.add("wh-clock-live");
+    for (const col of clock.querySelectorAll(".wh-clock-col")) {
+      col.classList.toggle("wh-clock-col-now", Number(col.dataset.whHour) === h);
+    }
+    // Hide the fixed hour ticks the now label would overlap.
+    for (const tick of clock.querySelectorAll("[data-wh-tick]")) {
+      const t = Number(tick.dataset.whTick) / 24;
+      tick.style.visibility = Math.abs(t - frac) < 0.11 || (t === 0 && frac > 0.95) ? "hidden" : "";
+    }
+  }
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && whClockTimer) whClockTick();
+});
 
 const WH_FINGERPRINT = [
   ["consistency", "Consistency", "Share of days you listened"],
